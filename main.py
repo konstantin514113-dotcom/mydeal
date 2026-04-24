@@ -48,13 +48,16 @@ def verify():
 @app.route("/webhook", methods=["POST"])
 def webhook():
     data = request.json
+    print("Incoming: " + str(data))
     try:
         messages = data["entry"][0]["changes"][0]["value"].get("messages", [])
         if not messages:
+            print("No messages")
             return "ok", 200
         msg = messages[0]
         from_number = msg["from"]
         text = msg.get("text", {}).get("body", "")
+        print("From: " + from_number + " Text: " + text)
         if not text:
             return "ok", 200
         response = client.messages.create(
@@ -65,6 +68,7 @@ def webhook():
         )
         reply = response.content[0].text
         send_whatsapp(from_number, reply)
+        print("Sent: " + reply)
     except Exception as e:
         print("Error: " + str(e))
     return "ok", 200
@@ -77,7 +81,7 @@ def home():
 
 @app.route("/privacy")
 def privacy():
-    return "Privacy Policy: We do not store or share your personal data. Messages are processed to provide automated responses only."
+    return "Privacy Policy: We do not store or share your personal data."
 
 
 if __name__ == "__main__":
