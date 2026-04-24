@@ -75,6 +75,11 @@ def home():
     return "MyDeal Jarvis rabotaet!"
 
 
+@app.route("/privacy")
+def privacy():
+    return "Privacy Policy: We do not store or share your personal data. Messages are processed to provide automated responses only."
+
+
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
