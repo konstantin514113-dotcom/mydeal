@@ -22,9 +22,6 @@ jarvis_enabled = True
 pause_until    = None   # datetime or None
 manual_mode    = False  # full manual — no auto replies
 
-# message_log: list of {ts: datetime, channel: str, phone: str}
-message_log = []
-
 schedule = {
     "Mon": {"enabled": True,  "open": "09:00", "close": "18:00"},
     "Tue": {"enabled": True,  "open": "09:00", "close": "18:00"},
@@ -35,7 +32,7 @@ schedule = {
     "Sun": {"enabled": False, "open": "10:00", "close": "14:00"},
 }
 
-# phone -> {channel, count, last_seen, last_text, mode: "jarvis"|"manual"}
+# phone -> {channel, timestamps: [datetime,...], last_seen, last_text, mode: "jarvis"|"manual"}
 clients = {}
 
 # ── System prompt ──────────────────────────────────────────────────────────
@@ -242,13 +239,17 @@ def login_required(f):
 # ── Stats helpers ──────────────────────────────────────────────────────────
 def count_for(channel, period):
     now = datetime.now()
-    if period == "today":
-        cutoff = now.replace(hour=0, minute=0, second=0, microsecond=0)
-    elif period == "week":
-        cutoff = now - timedelta(days=7)
-    else:
-        cutoff = now - timedelta(days=30)
-    return sum(1 for e in message_log if e["channel"] == channel and e["ts"] >= cutoff)
+    cutoffs = {
+        "today": now.replace(hour=0, minute=0, second=0, microsecond=0),
+        "week":  now - timedelta(days=7),
+        "month": now - timedelta(days=30),
+    }
+    cutoff = cutoffs.get(period, cutoffs["today"])
+    total = 0
+    for info in clients.values():
+        if info.get("channel") == channel:
+            total += sum(1 for ts in info.get("timestamps", []) if ts >= cutoff)
+    return total
 
 def jarvis_status():
     global jarvis_enabled, pause_until, manual_mode
@@ -362,7 +363,7 @@ def admin():
                 <div class="client-preview">{preview}</div>
               </div>
               <div class="client-meta">
-                <div class="client-count">{info.get('count',0)} сообщ.</div>
+                <div class="client-count">{len(info.get('timestamps',[]))} сообщ.</div>
                 <div class="client-time">{last_str}</div>
               </div>
               <label class="ios-toggle sm" title="Jarvis / ручной">
@@ -678,9 +679,10 @@ def send_whatsapp(to, text):
 
 def track_client(phone, channel, text):
     if phone not in clients:
-        clients[phone] = {"channel": channel, "count": 0, "last_seen": None, "last_text": "", "mode": "jarvis"}
-    clients[phone]["count"] += 1
-    clients[phone]["last_seen"] = datetime.now()
+        clients[phone] = {"channel": channel, "timestamps": [], "last_seen": None, "last_text": "", "mode": "jarvis"}
+    now = datetime.now()
+    clients[phone]["timestamps"].append(now)
+    clients[phone]["last_seen"] = now
     clients[phone]["last_text"] = text
 
 def should_reply(phone):
@@ -728,7 +730,6 @@ def webhook():
         if not text:
             return "ok", 200
 
-        message_log.append({"ts": datetime.now(), "channel": channel, "phone": phone})
         track_client(phone, channel, text)
         print(f"From: {phone} [{channel}] Text: {text}")
 
