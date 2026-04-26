@@ -11,7 +11,8 @@ client_ai = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
 
 WHATSAPP_TOKEN    = os.environ.get("WHATSAPP_TOKEN")
 WHATSAPP_PHONE_ID = os.environ.get("WHATSAPP_PHONE_ID")
-VERIFY_TOKEN      = os.environ.get("WHATSAPP_VERIFY_TOKEN")
+VERIFY_TOKEN           = os.environ.get("WHATSAPP_VERIFY_TOKEN")
+INSTAGRAM_VERIFY_TOKEN = os.environ.get("INSTAGRAM_VERIFY_TOKEN", "mydeal13")
 INSTAGRAM_TOKEN   = os.environ.get("INSTAGRAM_TOKEN", os.environ.get("WHATSAPP_TOKEN"))
 
 # ── State ──────────────────────────────────────────────────────────────────
@@ -724,7 +725,7 @@ def verify():
     mode      = request.args.get("hub.mode")
     token     = request.args.get("hub.verify_token")
     challenge = request.args.get("hub.challenge")
-    if mode == "subscribe" and token == VERIFY_TOKEN:
+    if mode == "subscribe" and token in (VERIFY_TOKEN, INSTAGRAM_VERIFY_TOKEN):
         return challenge, 200
     return "Forbidden", 403
 
