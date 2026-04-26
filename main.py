@@ -9,9 +9,10 @@ app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "rjgrooming-secret-2024")
 client_ai = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
 
-WHATSAPP_TOKEN   = os.environ.get("WHATSAPP_TOKEN")
+WHATSAPP_TOKEN    = os.environ.get("WHATSAPP_TOKEN")
 WHATSAPP_PHONE_ID = os.environ.get("WHATSAPP_PHONE_ID")
-VERIFY_TOKEN     = os.environ.get("WHATSAPP_VERIFY_TOKEN")
+VERIFY_TOKEN      = os.environ.get("WHATSAPP_VERIFY_TOKEN")
+INSTAGRAM_TOKEN   = os.environ.get("INSTAGRAM_TOKEN", os.environ.get("WHATSAPP_TOKEN"))
 
 # ── State ──────────────────────────────────────────────────────────────────
 conversation_history = {}
@@ -691,6 +692,12 @@ def send_whatsapp(to, text):
     data = {"messaging_product": "whatsapp", "to": to, "type": "text", "text": {"body": text}}
     requests.post(url, headers=headers, json=data)
 
+def send_instagram(to, text):
+    url = "https://graph.facebook.com/v18.0/me/messages"
+    headers = {"Authorization": "Bearer " + INSTAGRAM_TOKEN, "Content-Type": "application/json"}
+    data = {"recipient": {"id": to}, "message": {"text": text}}
+    requests.post(url, headers=headers, json=data)
+
 def track_client(phone, channel, text):
     if phone not in clients:
         clients[phone] = {"channel": channel, "timestamps": [], "last_seen": None, "last_text": "", "mode": "jarvis"}
@@ -721,54 +728,72 @@ def verify():
         return challenge, 200
     return "Forbidden", 403
 
+def handle_message(sender_id, text, channel):
+    track_client(sender_id, channel, text)
+    print(f"From: {sender_id} [{channel}] Text: {text}")
+
+    if not should_reply(sender_id):
+        print("Jarvis skipped reply")
+        return
+
+    if sender_id not in conversation_history:
+        conversation_history[sender_id] = []
+    history = conversation_history[sender_id]
+    history.append({"role": "user", "content": text})
+    if len(history) > MAX_HISTORY:
+        history = history[-MAX_HISTORY:]
+        conversation_history[sender_id] = history
+
+    response = client_ai.messages.create(
+        model="claude-sonnet-4-6",
+        max_tokens=1024,
+        system=SYSTEM_PROMPT,
+        messages=history
+    )
+    reply = response.content[0].text
+    history.append({"role": "assistant", "content": reply})
+
+    if channel == "instagram":
+        send_instagram(sender_id, reply)
+    else:
+        send_whatsapp(sender_id, reply)
+    print("Sent:", reply[:80])
+
 @app.route("/webhook", methods=["POST"])
 def webhook():
     data = request.json
-    print("Incoming:", str(data)[:200])
+    print("Incoming:", str(data)[:300])
     try:
-        value    = data["entry"][0]["changes"][0]["value"]
-        channel  = "whatsapp"
-        metadata = str(value.get("metadata", {})).lower()
-        if "instagram" in metadata:
-            channel = "instagram"
-        elif "facebook" in metadata:
-            channel = "facebook"
+        obj = data.get("object", "")
+        entry = data.get("entry", [{}])[0]
 
+        # ── Instagram Direct ───────────────────────────────────────────
+        if obj == "instagram" or "messaging" in entry:
+            for msg_event in entry.get("messaging", []):
+                sender_id = msg_event.get("sender", {}).get("id", "")
+                # skip messages sent by the page itself
+                recipient_id = msg_event.get("recipient", {}).get("id", "")
+                if sender_id == recipient_id:
+                    continue
+                msg = msg_event.get("message", {})
+                if msg.get("is_echo"):
+                    continue
+                text = msg.get("text", "")
+                if sender_id and text:
+                    handle_message(sender_id, text, "instagram")
+            return "ok", 200
+
+        # ── WhatsApp ───────────────────────────────────────────────────
+        value = entry.get("changes", [{}])[0].get("value", {})
         messages = value.get("messages", [])
         if not messages:
             return "ok", 200
-
-        msg  = messages[0]
+        msg = messages[0]
         phone = msg["from"]
-        text  = msg.get("text", {}).get("body", "")
-        if not text:
-            return "ok", 200
+        text = msg.get("text", {}).get("body", "")
+        if text:
+            handle_message(phone, text, "whatsapp")
 
-        track_client(phone, channel, text)
-        print(f"From: {phone} [{channel}] Text: {text}")
-
-        if not should_reply(phone):
-            print("Jarvis skipped reply")
-            return "ok", 200
-
-        if phone not in conversation_history:
-            conversation_history[phone] = []
-        history = conversation_history[phone]
-        history.append({"role": "user", "content": text})
-        if len(history) > MAX_HISTORY:
-            history = history[-MAX_HISTORY:]
-            conversation_history[phone] = history
-
-        response = client_ai.messages.create(
-            model="claude-sonnet-4-6",
-            max_tokens=1024,
-            system=SYSTEM_PROMPT,
-            messages=history
-        )
-        reply = response.content[0].text
-        history.append({"role": "assistant", "content": reply})
-        send_whatsapp(phone, reply)
-        print("Sent:", reply[:80])
     except Exception as e:
         print("Error:", str(e))
     return "ok", 200
