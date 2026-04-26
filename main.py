@@ -12,7 +12,6 @@ client_ai = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
 WHATSAPP_TOKEN   = os.environ.get("WHATSAPP_TOKEN")
 WHATSAPP_PHONE_ID = os.environ.get("WHATSAPP_PHONE_ID")
 VERIFY_TOKEN     = os.environ.get("WHATSAPP_VERIFY_TOKEN")
-ADMIN_PASSWORD   = os.environ.get("ADMIN_PASSWORD", "rjadmin2024")
 
 # ── State ──────────────────────────────────────────────────────────────────
 conversation_history = {}
@@ -231,8 +230,6 @@ SPA-уход (доп. к любой услуге): до 5 кг=от 15, 5–15 �
 def login_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
-        if not session.get("admin"):
-            return redirect("/admin/login")
         return f(*args, **kwargs)
     return decorated
 
@@ -276,47 +273,6 @@ CH_LINKS = {
 CH_COLOR = {"whatsapp":"#25D366","instagram":"#E1306C","facebook":"#1877F2","calls":"#FF9F0A"}
 CH_ICON  = {"whatsapp":"📱","instagram":"📸","facebook":"💬","calls":"📞"}
 
-@app.route("/admin/login", methods=["GET","POST"])
-def admin_login():
-    err = ""
-    if request.method == "POST":
-        if request.form.get("password") == ADMIN_PASSWORD:
-            session["admin"] = True
-            return redirect("/admin")
-        err = "Неверный пароль"
-    return f"""<!DOCTYPE html><html lang="ru"><head><meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>Jarvis Admin</title>
-<style>
-*{{box-sizing:border-box;margin:0;padding:0}}
-body{{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Display',sans-serif;
-  background:#000;color:#fff;min-height:100vh;display:flex;align-items:center;justify-content:center}}
-.box{{background:#1C1C1E;border-radius:20px;padding:36px 28px;width:320px;text-align:center}}
-.logo{{font-size:2.5rem;margin-bottom:8px}}
-h2{{font-size:1.3rem;font-weight:700;margin-bottom:4px}}
-p{{color:#8E8E93;font-size:.85rem;margin-bottom:24px}}
-input{{width:100%;background:#2C2C2E;border:none;color:#fff;padding:14px 16px;
-  border-radius:12px;font-size:1rem;margin-bottom:12px;outline:none;-webkit-appearance:none}}
-input:focus{{box-shadow:0 0 0 2px #30D158}}
-button{{width:100%;background:#30D158;border:none;color:#fff;padding:14px;
-  border-radius:12px;font-size:1rem;font-weight:600;cursor:pointer}}
-.err{{color:#FF453A;font-size:.82rem;margin-top:10px}}
-</style></head><body>
-<div class="box">
-  <div class="logo">🐾</div>
-  <h2>R&amp;J Grooming</h2>
-  <p>Jarvis Admin Panel</p>
-  <form method="POST">
-    <input type="password" name="password" placeholder="Пароль" autofocus>
-    <button type="submit">Войти</button>
-    {"<div class='err'>"+err+"</div>" if err else ""}
-  </form>
-</div></body></html>"""
-
-@app.route("/admin/logout")
-def admin_logout():
-    session.clear()
-    return redirect("/admin/login")
 
 @app.route("/admin")
 @login_required
@@ -483,7 +439,6 @@ body{{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Display',sans-serif;b
 
 <div class="topbar">
   <div class="topbar-title"><span>R&amp;J</span> Grooming · Jarvis</div>
-  <a href="/admin/logout" class="logout">Выйти</a>
 </div>
 
 <div class="wrap">
