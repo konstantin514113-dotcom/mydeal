@@ -355,8 +355,9 @@ def admin():
             last_str = last.strftime("%d.%m %H:%M") if isinstance(last, datetime) else "—"
             preview = (info.get("last_text","") or "")[:35]
             jarvis_on = "checked" if mode == "jarvis" else ""
+            ts_iso = last.isoformat() if isinstance(last, datetime) else ""
             clients_html += f"""
-            <div class="client-row">
+            <div class="client-row" data-phone="{phone}" data-ts="{ts_iso}">
               <a href="{link}{phone}" class="client-ch" style="color:{col}">{ico}</a>
               <div class="client-info">
                 <div class="client-phone">{phone}</div>
@@ -512,8 +513,11 @@ body{{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Display',sans-serif;b
   </div>
 
   <!-- Расписание -->
-  <div class="sec-title">Расписание работы</div>
-  <div class="card">
+  <div class="sec-title collapsible" onclick="toggleSection('sched')" style="cursor:pointer;display:flex;align-items:center;justify-content:space-between">
+    <span>Расписание работы</span>
+    <span id="sched-arrow" style="font-size:.9rem;transition:.2s">▾</span>
+  </div>
+  <div id="sched-section" class="card">
     {sched_html}
   </div>
 
@@ -528,6 +532,7 @@ body{{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Display',sans-serif;b
 <div class="toast" id="toast"></div>
 
 <script>
+// ── Toast ──────────────────────────────────────────────────────────────
 function toast(msg, color) {{
   const t = document.getElementById('toast');
   t.textContent = msg;
@@ -536,6 +541,7 @@ function toast(msg, color) {{
   setTimeout(() => t.classList.remove('show'), 2200);
 }}
 
+// ── Jarvis toggle ──────────────────────────────────────────────────────
 function toggleJarvis(on) {{
   fetch('/admin/api/toggle', {{method:'POST', headers:{{'Content-Type':'application/json'}},
     body: JSON.stringify({{enabled: on}})
@@ -545,8 +551,8 @@ function toggleJarvis(on) {{
   }});
 }}
 
-
-function saveSched(day, val) {{
+// ── Schedule ───────────────────────────────────────────────────────────
+function saveSched(day) {{
   const en    = document.querySelector(`#srow-${{day}} input[type=checkbox]`).checked;
   const open  = document.getElementById(`open-${{day}}`).value;
   const close = document.getElementById(`close-${{day}}`).value;
@@ -555,14 +561,93 @@ function saveSched(day, val) {{
   }}).then(r=>r.json()).then(d=>toast(d.message));
 }}
 
+function toggleSection(id) {{
+  const el = document.getElementById(id + '-section');
+  const arrow = document.getElementById(id + '-arrow');
+  const hidden = el.style.display === 'none';
+  el.style.display = hidden ? '' : 'none';
+  arrow.style.transform = hidden ? '' : 'rotate(-90deg)';
+}}
+
+// ── Client mode ────────────────────────────────────────────────────────
 function toggleClientMode(phone, jarvisOn) {{
   fetch('/admin/api/client-mode', {{method:'POST', headers:{{'Content-Type':'application/json'}},
     body: JSON.stringify({{phone, mode: jarvisOn ? 'jarvis' : 'manual'}})
   }}).then(r=>r.json()).then(d=>toast(d.message));
 }}
 
-// Auto-refresh every 20s
-setTimeout(()=>location.reload(), 20000);
+// ── Notification banner ────────────────────────────────────────────────
+let notifAudio = null;
+function playBeep() {{
+  try {{
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.frequency.value = 880;
+    osc.type = 'sine';
+    gain.gain.setValueAtTime(0.4, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
+    osc.start(); osc.stop(ctx.currentTime + 0.4);
+  }} catch(e) {{}}
+}}
+
+function showBanner(phone, text) {{
+  let b = document.getElementById('notif-banner');
+  if (!b) {{
+    b = document.createElement('div');
+    b.id = 'notif-banner';
+    b.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:9999;background:#1C3A2A;border-bottom:2px solid #30D158;padding:14px 20px;display:flex;align-items:center;gap:12px;cursor:pointer;transform:translateY(-100%);transition:.3s';
+    b.innerHTML = '<span style="font-size:1.4rem">💬</span><div style="flex:1"><div id="bn-phone" style="font-weight:700;font-size:.9rem;color:#30D158"></div><div id="bn-text" style="font-size:.82rem;color:#aaa;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"></div></div><span style="color:#666;font-size:1.2rem" onclick="closeBanner(event)">✕</span>';
+    b.addEventListener('click', () => location.reload());
+    document.body.appendChild(b);
+  }}
+  document.getElementById('bn-phone').textContent = phone;
+  document.getElementById('bn-text').textContent = text;
+  b.style.transform = 'translateY(0)';
+  setTimeout(() => {{ if(b) b.style.transform = 'translateY(-100%)'; }}, 8000);
+}}
+
+function closeBanner(e) {{
+  e.stopPropagation();
+  const b = document.getElementById('notif-banner');
+  if (b) b.style.transform = 'translateY(-100%)';
+}}
+
+// ── Auto-refresh with new message detection ────────────────────────────
+let lastMsgTs = {{}};  // phone -> last known timestamp string
+
+function initLastTs() {{
+  document.querySelectorAll('[data-phone][data-ts]').forEach(el => {{
+    lastMsgTs[el.dataset.phone] = el.dataset.ts;
+  }});
+}}
+
+function pollMessages() {{
+  fetch('/admin/api/messages')
+    .then(r => r.json())
+    .then(data => {{
+      let gotNew = false;
+      let newPhone = '', newText = '';
+      data.forEach(m => {{
+        const prev = lastMsgTs[m.phone];
+        if (!prev || m.ts > prev) {{
+          if (!gotNew) {{ newPhone = m.phone; newText = m.last_text; }}
+          gotNew = true;
+          lastMsgTs[m.phone] = m.ts;
+        }}
+      }});
+      if (gotNew) {{
+        playBeep();
+        showBanner(newPhone, newText);
+        setTimeout(() => location.reload(), 2000);
+      }}
+    }})
+    .catch(() => {{}});
+}}
+
+initLastTs();
+setInterval(pollMessages, 30000);
 </script>
 </body></html>"""
 
@@ -629,6 +714,20 @@ def api_client_mode():
         clients[phone]["mode"] = mode
     label = "Jarvis 🤖" if mode == "jarvis" else "Ручной ✋"
     return jsonify({"ok": True, "message": f"{phone}: {label}"})
+
+@app.route("/admin/api/messages")
+@login_required
+def api_messages():
+    result = []
+    for phone, info in clients.items():
+        last = info.get("last_seen")
+        result.append({
+            "phone": phone,
+            "ts": last.isoformat() if isinstance(last, datetime) else "",
+            "last_text": info.get("last_text", ""),
+            "channel": info.get("channel", "whatsapp"),
+        })
+    return jsonify(result)
 
 # ── WhatsApp ───────────────────────────────────────────────────────────────
 def send_whatsapp(to, text):
