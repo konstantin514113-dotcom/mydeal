@@ -733,8 +733,10 @@ def send_whatsapp(to, text):
     data = {"messaging_product": "whatsapp", "to": to, "type": "text", "text": {"body": text}}
     requests.post(url, headers=headers, json=data)
 
+INSTAGRAM_ACCOUNT_ID = "17841479914115449"
+
 def send_instagram(to, text):
-    url = "https://graph.facebook.com/v18.0/me/messages"
+    url = "https://graph.facebook.com/v18.0/" + INSTAGRAM_ACCOUNT_ID + "/messages"
     headers = {"Authorization": "Bearer " + INSTAGRAM_TOKEN, "Content-Type": "application/json"}
     data = {"recipient": {"id": to}, "message": {"text": text}}
     requests.post(url, headers=headers, json=data)
