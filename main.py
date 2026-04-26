@@ -442,11 +442,6 @@ body{{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Display',sans-serif;b
 .pause-banner{{background:rgba(255,159,10,.15);border:1px solid #FF9F0A44;border-radius:12px;padding:10px 16px;font-size:.85rem;color:#FF9F0A;text-align:center}}
 
 /* Quick buttons */
-.quick-grid{{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:14px}}
-.qbtn{{background:var(--card2);border:none;color:var(--text);padding:14px 12px;border-radius:12px;font-size:.82rem;font-weight:600;cursor:pointer;text-align:left;display:flex;flex-direction:column;gap:4px;-webkit-tap-highlight-color:transparent;transition:opacity .15s}}
-.qbtn:active{{opacity:.7}}
-.qbtn .qico{{font-size:1.4rem}}
-.qbtn .qsub{{font-size:.72rem;color:var(--sub);font-weight:400}}
 
 /* Counters */
 .cnt-grid{{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:14px}}
@@ -508,33 +503,6 @@ body{{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Display',sans-serif;b
     </label>
   </div>
 
-  <!-- Быстрые действия -->
-  <div class="sec-title">Быстрые действия</div>
-  <div class="card">
-    <div class="quick-grid">
-      <button class="qbtn" onclick="quickAction('pause1h')">
-        <span class="qico">⏸</span>
-        <span>Пауза 1 час</span>
-        <span class="qsub">Автовозобновление</span>
-      </button>
-      <button class="qbtn" onclick="quickAction('pausemorning')">
-        <span class="qico">🌙</span>
-        <span>До утра</span>
-        <span class="qsub">До 09:00</span>
-      </button>
-      <button class="qbtn" onclick="quickAction('manual')">
-        <span class="qico">✋</span>
-        <span>Ручной режим</span>
-        <span class="qsub">Отвечать самому</span>
-      </button>
-      <button class="qbtn" onclick="quickAction('resume')">
-        <span class="qico">▶️</span>
-        <span>Возобновить</span>
-        <span class="qsub">Снять все паузы</span>
-      </button>
-    </div>
-  </div>
-
   <!-- Счётчики -->
   <div class="sec-title">Обращения</div>
   <div class="card">
@@ -577,14 +545,6 @@ function toggleJarvis(on) {{
   }});
 }}
 
-function quickAction(action) {{
-  fetch('/admin/api/quick', {{method:'POST', headers:{{'Content-Type':'application/json'}},
-    body: JSON.stringify({{action}})
-  }}).then(r=>r.json()).then(d=>{{
-    toast(d.message, '#1a2a3d');
-    setTimeout(()=>location.reload(), 900);
-  }});
-}}
 
 function saveSched(day, val) {{
   const en    = document.querySelector(`#srow-${{day}} input[type=checkbox]`).checked;
