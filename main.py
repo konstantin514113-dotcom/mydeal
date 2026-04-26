@@ -19,9 +19,10 @@ INSTAGRAM_TOKEN   = os.environ.get("INSTAGRAM_TOKEN", os.environ.get("WHATSAPP_T
 conversation_history = {}
 MAX_HISTORY = 20
 
-jarvis_enabled = True
-pause_until    = None   # datetime or None
-manual_mode    = False  # full manual — no auto replies
+jarvis_enabled   = True
+instagram_enabled = True
+pause_until      = None
+manual_mode      = False
 
 schedule = {
     "Mon": {"enabled": True,  "open": "09:00", "close": "18:00"},
@@ -268,7 +269,7 @@ def jarvis_status():
 DAY_RU = {"Mon":"Пн","Tue":"Вт","Wed":"Ср","Thu":"Чт","Fri":"Пт","Sat":"Сб","Sun":"Вс"}
 CH_LINKS = {
     "whatsapp":  "https://wa.me/",
-    "instagram": "https://instagram.com/direct/inbox/",
+    "instagram": "https://instagram.com/rj_grooming",
     "facebook":  "https://www.facebook.com/messages/",
     "calls":     "tel:",
 }
@@ -334,16 +335,25 @@ def admin():
         clients_html = '<div class="empty">Пока нет клиентов</div>'
 
     # counters
+    def has_recent_msg(ch, minutes=5):
+        cutoff = datetime.now() - timedelta(minutes=minutes)
+        return any(
+            info.get("channel") == ch and
+            any(ts >= cutoff for ts in info.get("timestamps", []))
+            for info in clients.values()
+        )
+
     def cnt_block(ch):
         d = count_for(ch, "today")
         w = count_for(ch, "week")
         m = count_for(ch, "month")
-        col = CH_COLOR[ch]
-        ico = CH_ICON[ch]
+        col  = CH_COLOR[ch]
+        ico  = CH_ICON[ch]
         link = CH_LINKS.get(ch, "#")
-        mx = max(d, w, m, 1)
+        mx   = max(d, w, m, 1)
+        pulse_cls = " cnt-pulse" if has_recent_msg(ch) else ""
         return f"""
-        <a href="{link}" class="cnt-card" style="--accent:{col}" target="_blank" rel="noopener">
+        <a href="{link}" class="cnt-card{pulse_cls}" style="--accent:{col}" target="_blank" rel="noopener">
           <div class="cnt-header"><span>{ico}</span><span class="cnt-name">{ch.capitalize()}</span></div>
           <div class="cnt-row"><span class="cnt-label">Сегодня</span><span class="cnt-val">{d}</span><div class="cnt-bar"><div style="width:{d*100//mx}%;background:{col}"></div></div></div>
           <div class="cnt-row"><span class="cnt-label">Неделя</span><span class="cnt-val">{w}</span><div class="cnt-bar"><div style="width:{w*100//mx}%;background:{col}88"></div></div></div>
@@ -406,6 +416,8 @@ body{{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Display',sans-serif;b
 .cnt-grid{{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:14px}}
 .cnt-card{{background:var(--card2);border-radius:12px;padding:14px;text-decoration:none;color:var(--text);display:block;-webkit-tap-highlight-color:transparent;border:1px solid transparent;transition:.15s}}
 .cnt-card:active{{opacity:.75}}
+@keyframes redpulse{{0%,100%{{border-color:transparent;background:var(--card2)}}50%{{border-color:#FF453A;background:rgba(255,69,58,.13)}}}}
+.cnt-pulse{{animation:redpulse 1.2s ease-in-out infinite}}
 .cnt-header{{display:flex;align-items:center;gap:8px;margin-bottom:10px;font-size:.9rem;font-weight:600}}
 .cnt-name{{color:var(--accent)}}
 .cnt-row{{display:flex;align-items:center;gap:6px;margin-bottom:5px}}
@@ -460,6 +472,17 @@ body{{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Display',sans-serif;b
       <span class="ios-knob"></span>
     </label>
   </div>
+  <div class="status-card" style="background:{"rgba(225,48,108,.12)" if instagram_enabled else "rgba(99,99,102,.1)"};border-color:{"#E1306C44" if instagram_enabled else "#33333344"}">
+    <div class="status-dot" style="background:{"#E1306C" if instagram_enabled else "#636366"};box-shadow:{"0 0 8px #E1306C" if instagram_enabled else "none"}"></div>
+    <div class="status-info">
+      <div class="status-label" style="color:{"#E1306C" if instagram_enabled else "#636366"}">📸 Instagram {"Включён" if instagram_enabled else "Выключен"}</div>
+      <div class="status-sub">Jarvis {"отвечает в Direct" if instagram_enabled else "не отвечает в Direct"}</div>
+    </div>
+    <label class="ios-toggle">
+      <input type="checkbox" {"checked" if instagram_enabled else ""} onchange="toggleInstagram(this.checked)" style="">
+      <span class="ios-knob" style="{"" if not instagram_enabled else ""}"></span>
+    </label>
+  </div>
 
   <!-- Счётчики -->
   <div class="sec-title">Обращения</div>
@@ -499,6 +522,15 @@ function toast(msg, color) {{
 }}
 
 // ── Jarvis toggle ──────────────────────────────────────────────────────
+function toggleInstagram(on) {{
+  fetch('/admin/api/toggle-instagram', {{method:'POST', headers:{{'Content-Type':'application/json'}},
+    body: JSON.stringify({{enabled: on}})
+  }}).then(r=>r.json()).then(d=>{{
+    toast(d.message, on ? '#3d1a2a' : '#2a2a2a');
+    setTimeout(()=>location.reload(), 800);
+  }});
+}}
+
 function toggleJarvis(on) {{
   fetch('/admin/api/toggle', {{method:'POST', headers:{{'Content-Type':'application/json'}},
     body: JSON.stringify({{enabled: on}})
@@ -672,6 +704,14 @@ def api_client_mode():
     label = "Jarvis 🤖" if mode == "jarvis" else "Ручной ✋"
     return jsonify({"ok": True, "message": f"{phone}: {label}"})
 
+@app.route("/admin/api/toggle-instagram", methods=["POST"])
+@login_required
+def api_toggle_instagram():
+    global instagram_enabled
+    instagram_enabled = bool(request.get_json().get("enabled", True))
+    status = "включён ✅" if instagram_enabled else "выключен ❌"
+    return jsonify({"ok": True, "message": f"Instagram {status}"})
+
 @app.route("/admin/api/messages")
 @login_required
 def api_messages():
@@ -707,13 +747,15 @@ def track_client(phone, channel, text):
     clients[phone]["last_seen"] = now
     clients[phone]["last_text"] = text
 
-def should_reply(phone):
-    global jarvis_enabled, pause_until, manual_mode
+def should_reply(phone, channel="whatsapp"):
+    global jarvis_enabled, instagram_enabled, pause_until, manual_mode
     if manual_mode:
         return False
     if pause_until and datetime.now() < pause_until:
         return False
     if not jarvis_enabled:
+        return False
+    if channel == "instagram" and not instagram_enabled:
         return False
     if clients.get(phone, {}).get("mode") == "manual":
         return False
@@ -733,7 +775,7 @@ def handle_message(sender_id, text, channel):
     track_client(sender_id, channel, text)
     print(f"From: {sender_id} [{channel}] Text: {text}")
 
-    if not should_reply(sender_id):
+    if not should_reply(sender_id, channel):
         print("Jarvis skipped reply")
         return
 
