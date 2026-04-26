@@ -850,7 +850,99 @@ def home():
 
 @app.route("/privacy")
 def privacy():
-    return "Privacy Policy: We do not store or share your personal data."
+    return """<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Privacy Policy — R&amp;J Grooming</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f9f9f9;color:#1a1a1a;line-height:1.7}
+.wrap{max-width:680px;margin:0 auto;padding:48px 24px 80px}
+.logo{font-size:.85rem;font-weight:700;color:#2a7a3a;letter-spacing:.5px;text-transform:uppercase;margin-bottom:32px}
+h1{font-size:1.8rem;font-weight:700;margin-bottom:8px}
+.subtitle{color:#666;font-size:.95rem;margin-bottom:40px}
+h2{font-size:1rem;font-weight:700;margin:28px 0 8px;color:#1a1a1a}
+p{color:#444;font-size:.93rem;margin-bottom:12px}
+a{color:#2a7a3a;text-decoration:none}
+a:hover{text-decoration:underline}
+.footer{margin-top:48px;padding-top:20px;border-top:1px solid #e0e0e0;font-size:.82rem;color:#999}
+</style></head>
+<body><div class="wrap">
+  <div class="logo">R&amp;J Grooming · Tallinn</div>
+  <h1>Privacy Policy</h1>
+  <p class="subtitle">Last updated: April 2026</p>
+
+  <h2>1. About This Policy</h2>
+  <p>This Privacy Policy describes how the <strong>grooming automation</strong> application ("the Service") processes customer messages for <strong>R&amp;J Grooming</strong> salon located in Tallinn, Estonia.</p>
+
+  <h2>2. Data We Process</h2>
+  <p>The Service processes incoming customer messages received via <strong>Instagram Direct</strong> and <strong>WhatsApp Business API</strong>. This includes the message text and the sender's account identifier provided by the respective platform.</p>
+
+  <h2>3. Purpose of Processing</h2>
+  <p>Data is used exclusively for generating <strong>automatic responses</strong> to customer inquiries — such as information about services, pricing, and appointment booking for R&amp;J Grooming salon.</p>
+
+  <h2>4. Data Retention</h2>
+  <p>Conversation history is stored in server memory only for the duration of the active session and is cleared when the server restarts. No personal data is written to a persistent database.</p>
+
+  <h2>5. Third Parties</h2>
+  <p>Data is <strong>not shared with third parties</strong>. Message processing uses the Anthropic Claude API solely to generate responses; message content is not used for training or retained by Anthropic beyond the API call.</p>
+
+  <h2>6. Your Rights</h2>
+  <p>You may contact us at any time to request information about data processing or to ask that your conversation history be cleared.</p>
+
+  <h2>7. Contact</h2>
+  <p>For any privacy-related questions, please contact: <a href="mailto:konstantin514113@gmail.com">konstantin514113@gmail.com</a></p>
+
+  <div class="footer">R&amp;J Grooming · Tallinn, Estonia · <a href="/terms">Terms of Service</a></div>
+</div></body></html>"""
+
+@app.route("/terms")
+def terms():
+    return """<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Terms of Service — R&amp;J Grooming</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f9f9f9;color:#1a1a1a;line-height:1.7}
+.wrap{max-width:680px;margin:0 auto;padding:48px 24px 80px}
+.logo{font-size:.85rem;font-weight:700;color:#2a7a3a;letter-spacing:.5px;text-transform:uppercase;margin-bottom:32px}
+h1{font-size:1.8rem;font-weight:700;margin-bottom:8px}
+.subtitle{color:#666;font-size:.95rem;margin-bottom:40px}
+h2{font-size:1rem;font-weight:700;margin:28px 0 8px;color:#1a1a1a}
+p{color:#444;font-size:.93rem;margin-bottom:12px}
+a{color:#2a7a3a;text-decoration:none}
+a:hover{text-decoration:underline}
+.footer{margin-top:48px;padding-top:20px;border-top:1px solid #e0e0e0;font-size:.82rem;color:#999}
+</style></head>
+<body><div class="wrap">
+  <div class="logo">R&amp;J Grooming · Tallinn</div>
+  <h1>Terms of Service</h1>
+  <p class="subtitle">Last updated: April 2026</p>
+
+  <h2>1. The Service</h2>
+  <p>These Terms govern your use of the automated messaging service operated by <strong>R&amp;J Grooming</strong> salon in Tallinn, Estonia. The Service provides automated responses to customer messages sent via Instagram Direct and WhatsApp.</p>
+
+  <h2>2. Automated Processing</h2>
+  <p>By sending a message to R&amp;J Grooming via Instagram Direct or WhatsApp, you agree that your message will be <strong>processed automatically</strong> by an AI assistant in order to provide a timely response about services, pricing, and appointments.</p>
+
+  <h2>3. Accuracy of Information</h2>
+  <p>The automated assistant provides general information about salon services and pricing. For final confirmation of appointments or pricing, please contact the salon directly.</p>
+
+  <h2>4. Availability</h2>
+  <p>The Service is provided on an "as is" basis. R&amp;J Grooming does not guarantee uninterrupted availability of the automated assistant.</p>
+
+  <h2>5. Acceptable Use</h2>
+  <p>Users agree not to send spam, abusive, or unlawful content through the messaging channels. R&amp;J Grooming reserves the right to block users who violate this policy.</p>
+
+  <h2>6. Changes to Terms</h2>
+  <p>R&amp;J Grooming may update these Terms at any time. Continued use of the messaging service constitutes acceptance of the updated Terms.</p>
+
+  <h2>7. Contact</h2>
+  <p>For any questions regarding these Terms, please contact: <a href="mailto:konstantin514113@gmail.com">konstantin514113@gmail.com</a></p>
+
+  <div class="footer">R&amp;J Grooming · Tallinn, Estonia · <a href="/privacy">Privacy Policy</a></div>
+</div></body></html>"""
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
