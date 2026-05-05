@@ -89,7 +89,7 @@ def handle_message(sender_id, text, channel):
     return reply
 
 # ── BOOKING → GOOGLE CALENDAR ──────────────────────────────────────────────
-GOOGLE_SCRIPT = "https://script.google.com/macros/s/AKfycbycI5OJcUs61Pi25Ff4_Hr5xFi_IPImrYcPCfJ2Bfz4J5AX-cQ4yhO0p9Lvz0_xW82Bxg/exec"
+GOOGLE_SCRIPT = "https://script.google.com/macros/s/AKfycbysbub3f35BAWcrAjuBRUdmZWiVZVMw8A6mOsVv_rwidy9vb5Al5SGU2MUiEbNIwsWhCQ/exec"
 
 @app.route("/book", methods=["POST", "OPTIONS"])
 def book():
