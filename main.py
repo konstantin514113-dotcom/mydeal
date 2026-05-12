@@ -141,7 +141,7 @@ R&J Grooming
     except Exception as e:
         return f"Ошибка: {str(e)}", 500
 # ── BOOKING → GOOGLE CALENDAR ──────────────────────────────────────────────
-GOOGLE_SCRIPT = "https://script.google.com/macros/s/AKfycbxXDfEqUhP3YbEy6hH73jYb__Vdz6WvY_pVTy80GtkqZacOokFFr39mYlau1uaXDq23/exec"
+GOOGLE_SCRIPT =  "https://script.google.com/macros/s/AKfycbxcmrNg6AaE64nz9p4FXeGh5e5lK7J_L0KCeMvNlepdnhQ5c-5KIz5UMBSDz6Ct3d04/exec"
 
 @app.route("/book", methods=["POST", "OPTIONS"])
 def book():
