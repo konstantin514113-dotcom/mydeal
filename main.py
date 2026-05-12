@@ -142,6 +142,7 @@ def api_slots():
 def booking_app():
     import base64
     html = base64.b64decode(BOOKING_HTML_B64).decode("utf-8")
+    html = html.replace("https://dynamic-cooperation-production-dd95.up.railway.app/book", "/book")
     return html, 200, {"Content-Type": "text/html; charset=utf-8"}
 
 # ── WEBHOOKS ───────────────────────────────────────────────────────────────
