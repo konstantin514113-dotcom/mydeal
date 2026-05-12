@@ -4,7 +4,9 @@ import os
 import requests
 from datetime import datetime, timedelta
 from functools import wraps
-
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "rjgrooming-secret-2024")
 client_ai = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
@@ -87,7 +89,45 @@ def handle_message(sender_id, text, channel):
     else:
         send_whatsapp(sender_id, reply)
     return reply
+# ── EMAIL CONFIRMATION ──────────────────────
+@app.route("/confirm")
+def confirm():
+    name = request.args.get("name", "")
+    email = request.args.get("email", "")
+    date = request.args.get("date", "")
+    time = request.args.get("time", "")
+    service = request.args.get("service", "")
+    master = request.args.get("master", "")
+    if not email:
+        return "Email не указан", 400
+    try:
+        msg = MIMEMultipart()
+        msg["From"] = os.environ.get("GMAIL_USER")
+        msg["To"] = email
+        msg["Subject"] = "Подтверждение записи — R&J Grooming"
+        body = f"""Здравствуйте, {name}!
 
+Подтверждаем вашу запись в R&J Grooming:
+
+Дата: {date}
+Время: {time}
+Услуга: {service}
+Мастер: {master}
+
+Адрес: R&J Grooming, Tallinn
+Если нужно перенести — ответьте на это письмо.
+
+До встречи!
+R&J Grooming
+"""
+        msg.attach(MIMEText(body, "plain", "utf-8"))
+        server = smtplib.SMTP_SSL("smtp.gmail.com", 465)
+        server.login(os.environ.get("GMAIL_USER"), os.environ.get("GMAIL_PASS"))
+        server.send_message(msg)
+        server.quit()
+        return "<h2 style='font-family:sans-serif;text-align:center;margin-top:50px'>Письмо отправлено клиенту</h2>", 200
+    except Exception as e:
+        return f"Ошибка: {str(e)}", 500
 # ── BOOKING → GOOGLE CALENDAR ──────────────────────────────────────────────
 GOOGLE_SCRIPT = "https://script.google.com/macros/s/AKfycbxXDfEqUhP3YbEy6hH73jYb__Vdz6WvY_pVTy80GtkqZacOokFFr39mYlau1uaXDq23/exec"
 
