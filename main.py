@@ -121,11 +121,22 @@ def confirm():
 R&J Grooming
 """
         msg.attach(MIMEText(body, "plain", "utf-8"))
-        server = smtplib.SMTP("smtp.gmail.com", 587, timeout=15)
-        server.starttls()
-        server.login(os.environ.get("GMAIL_USER"), os.environ.get("GMAIL_PASS"))
-        server.send_message(msg)
-        server.quit()
+        resp = requests.post(
+            "https://api.resend.com/emails",
+            headers={
+                "Authorization": f"Bearer {os.environ.get('RESEND_API_KEY')}",
+                "Content-Type": "application/json"
+            },
+            json={
+                "from": "R&J Grooming <onboarding@resend.dev>",
+                "to": [email],
+                "subject": "Подтверждение записи — R&J Grooming",
+                "text": body
+            },
+            timeout=15
+        )
+        if resp.status_code >= 400:
+            return f"Ошибка Resend: {resp.text}", 500
         return "<h2 style='font-family:sans-serif;text-align:center;margin-top:50px'>Письмо отправлено клиенту</h2>", 200
     except Exception as e:
         return f"Ошибка: {str(e)}", 500
