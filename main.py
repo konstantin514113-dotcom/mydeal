@@ -121,7 +121,8 @@ def confirm():
 R&J Grooming
 """
         msg.attach(MIMEText(body, "plain", "utf-8"))
-        server = smtplib.SMTP_SSL("smtp.gmail.com", 465)
+        server = smtplib.SMTP("smtp.gmail.com", 587, timeout=15)
+        server.starttls()
         server.login(os.environ.get("GMAIL_USER"), os.environ.get("GMAIL_PASS"))
         server.send_message(msg)
         server.quit()
