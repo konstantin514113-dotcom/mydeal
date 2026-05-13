@@ -125,24 +125,26 @@ def confirm():
 <p style="color:#c9a84c;font-style:italic;">Ждём вас и вашего питомца!</p>
 </body></html>"""
 
+        payload = {
+        "from": "R&J Grooming <booking@rjgrooming.salon>",
+        "to": [email.strip()],
+        "subject": f"Запись в R&J Grooming подтверждена - {date} в {time}",
+        "html": body_html
+    }
     try:
         r = req_lib.post(
             "https://api.resend.com/emails",
             headers={"Authorization": f"Bearer {resend_api_key}", "Content-Type": "application/json"},
-            json={
-                "from": "R&J Grooming <booking@rjgrooming.salon>",
-                "to": [email],
-                "subject": f"Запись в R&J Grooming подтверждена — {date} в {time}",
-                "html": body_html
-            },
+            json=payload,
             timeout=10
         )
         if r.status_code == 200:
             return f"Письмо отправлено клиенту на {email}", 200
         else:
-            return f"Ошибка Resend: {r.status_code} {r.text}", 500
+            return f"Ошибка Resend: {r.status_code} {r.text}<br><br>Отправленный payload to={payload['to']}", 500
     except Exception as e:
         return f"Ошибка отправки: {str(e)}", 500
+
 # ── BOOKING → GOOGLE CALENDAR ──────────────────────────────────────────────
 GOOGLE_SCRIPT =  "https://script.google.com/macros/s/AKfycbwupVoCgve5oro_h64IHsm4cIekp5kdvCjkL40kz8AmHV5s6LDJkoctwTVtU6RyRDFCyA/exec"
 
