@@ -189,7 +189,6 @@ def api_slots():
         resp = jsonify({"slots": [], "error": str(e)})
     resp.headers["Access-Control-Allow-Origin"] = "*"
     return resp
-
 @app.route("/app")
 def booking_app():
     import base64
@@ -203,7 +202,73 @@ def booking_app():
         "booking.pet=document.getElementById('cPet').value;",
         "booking.pet=document.getElementById('cPet').value; booking.email=document.getElementById('cEmail').value;"
     )
+    anna_filter_script = """
+<script>
+(function(){
+  var ANNA_KEYS = ["француз","такса","джек","рассел","самоед","шелти","корги","лабрадор","чихуа"];
+  function annaCanGroom(breed){
+    if(!breed) return true;
+    var b = String(breed).toLowerCase();
+    if(b.indexOf("такса") !== -1){
+      if(b.indexOf("жёстк") !== -1 || b.indexOf("жестк") !== -1) return false;
+      if(b.indexOf("кроличь") !== -1) return false;
+      return true;
+    }
+    if(b.indexOf("джек") !== -1 || b.indexOf("рассел") !== -1){
+      if(b.indexOf("жёстк") !== -1 || b.indexOf("жестк") !== -1) return false;
+      if(b.indexOf("брокен") !== -1) return false;
+      return true;
+    }
+    for(var i=0; i<ANNA_KEYS.length; i++){
+      if(b.indexOf(ANNA_KEYS[i]) !== -1) return true;
+    }
+    return false;
+  }
+  function updateAnnaVisibility(){
+    var annaBtn = document.querySelector('.mbtn[data-master="Анна"]');
+    if(!annaBtn) return;
+    var b = (window.booking && window.booking.breed) ? window.booking.breed : "";
+    if(annaCanGroom(b)){
+      annaBtn.style.display = "";
+    } else {
+      annaBtn.style.display = "none";
+      if(window.booking && window.booking.master === "Анна"){
+        window.booking.master = "";
+        annaBtn.classList.remove("active");
+      }
+    }
+  }
+  function install(){
+    if(!window.booking){ setTimeout(install, 100); return; }
+    updateAnnaVisibility();
+    try{
+      var _breed = window.booking.breed;
+      Object.defineProperty(window.booking, "breed", {
+        get: function(){ return _breed; },
+        set: function(v){ _breed = v; updateAnnaVisibility(); },
+        configurable: true
+      });
+    }catch(e){
+      var last = window.booking.breed;
+      setInterval(function(){
+        if(window.booking.breed !== last){
+          last = window.booking.breed;
+          updateAnnaVisibility();
+        }
+      }, 300);
+    }
+  }
+  if(document.readyState === "loading"){
+    document.addEventListener("DOMContentLoaded", install);
+  } else {
+    install();
+  }
+})();
+</script>
+"""
+    html = html.replace("</body>", anna_filter_script + "</body>")
     return html, 200, {"Content-Type": "text/html; charset=utf-8"}
+
 
 # ── WEBHOOKS ───────────────────────────────────────────────────────────────
 @app.route("/webhook", methods=["GET"])
