@@ -144,7 +144,7 @@ def confirm():
     except Exception as e:
         return f"Ошибка отправки: {str(e)}", 500
 # ── BOOKING → GOOGLE CALENDAR ──────────────────────────────────────────────
-GOOGLE_SCRIPT =  "https://script.google.com/macros/s/AKfycbxcmrNg6AaE64nz9p4FXeGh5e5lK7J_L0KCeMvNlepdnhQ5c-5KIz5UMBSDz6Ct3d04/exec"
+GOOGLE_SCRIPT =  "https://script.google.com/macros/s/AKfycbwupVoCgve5oro_h64IHsm4cIekp5kdvCjkL40kz8AmHV5s6LDJkoctwTVtU6RyRDFCyA/exec"
 
 @app.route("/book", methods=["POST", "OPTIONS"])
 def book():
