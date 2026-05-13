@@ -125,7 +125,7 @@ def confirm():
 <p style="color:#c9a84c;font-style:italic;">Ждём вас и вашего питомца!</p>
 </body></html>"""
 
-     payload = {
+    payload = {
         "from": "R&J Grooming <booking@rjgrooming.salon>",
         "to": [email.strip()],
         "subject": f"Запись в R&J Grooming подтверждена - {date} в {time}",
@@ -144,7 +144,6 @@ def confirm():
             return f"Ошибка Resend: {r.status_code} {r.text}<br><br>Payload to={payload['to']}", 500
     except Exception as e:
         return f"Ошибка отправки: {str(e)}", 500
-
 GitHub: konstantin514113-dotcom/mydeal
 App URL: https://rjgrooming.up.railway.app/app
 Resend API key в Railway Variables: RESEND_API_KEY
