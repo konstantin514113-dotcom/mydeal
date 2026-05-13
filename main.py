@@ -125,7 +125,7 @@ def confirm():
 <p style="color:#c9a84c;font-style:italic;">Ждём вас и вашего питомца!</p>
 </body></html>"""
 
-        payload = {
+     payload = {
         "from": "R&J Grooming <booking@rjgrooming.salon>",
         "to": [email.strip()],
         "subject": f"Запись в R&J Grooming подтверждена - {date} в {time}",
@@ -141,9 +141,15 @@ def confirm():
         if r.status_code == 200:
             return f"Письмо отправлено клиенту на {email}", 200
         else:
-            return f"Ошибка Resend: {r.status_code} {r.text}<br><br>Отправленный payload to={payload['to']}", 500
+            return f"Ошибка Resend: {r.status_code} {r.text}<br><br>Payload to={payload['to']}", 500
     except Exception as e:
         return f"Ошибка отправки: {str(e)}", 500
+
+GitHub: konstantin514113-dotcom/mydeal
+App URL: https://rjgrooming.up.railway.app/app
+Resend API key в Railway Variables: RESEND_API_KEY
+Apps Script URL: https://script.google.com/macros/s/AKfycbwupVoCgve5oro_h64IHsm4cIekp5kdvCjkL40kz8AmHV5s6LDJkoctwTVtU6RyRDFCyA/exec
+Calendar ID: 50218a0d445e1be8f510d21128b82c0d33b6a78c57bb5a4ea9d14eb2fbcfeaa6@group.calendar.google.com
 
 # ── BOOKING → GOOGLE CALENDAR ──────────────────────────────────────────────
 GOOGLE_SCRIPT =  "https://script.google.com/macros/s/AKfycbwupVoCgve5oro_h64IHsm4cIekp5kdvCjkL40kz8AmHV5s6LDJkoctwTVtU6RyRDFCyA/exec"
