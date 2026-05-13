@@ -92,54 +92,57 @@ def handle_message(sender_id, text, channel):
 # ── EMAIL CONFIRMATION ──────────────────────
 @app.route("/confirm")
 def confirm():
-    name = request.args.get("name", "")
+    import requests as req_lib
     email = request.args.get("email", "")
+    name = request.args.get("name", "")
     date = request.args.get("date", "")
     time = request.args.get("time", "")
     service = request.args.get("service", "")
     master = request.args.get("master", "")
+    breed = request.args.get("breed", "")
+    pet = request.args.get("pet", "")
+
     if not email:
         return "Email не указан", 400
+
+    resend_api_key = os.environ.get("RESEND_API_KEY")
+    if not resend_api_key:
+        return "RESEND_API_KEY не настроен", 500
+
+    body_html = f"""<!DOCTYPE html>
+<html><body style="font-family:Arial,sans-serif;color:#222;max-width:600px;margin:0 auto;padding:20px;">
+<h2 style="color:#c9a84c;font-family:Georgia,serif;">Спасибо за запись, {name}!</h2>
+<p>Ваша запись в R&amp;J Grooming подтверждена.</p>
+<table style="border-collapse:collapse;width:100%;margin:16px 0;">
+  <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">Дата</td><td style="padding:8px;border-bottom:1px solid #eee;"><b>{date}</b></td></tr>
+  <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">Время</td><td style="padding:8px;border-bottom:1px solid #eee;"><b>{time}</b></td></tr>
+  <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">Услуга</td><td style="padding:8px;border-bottom:1px solid #eee;">{service}</td></tr>
+  <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">Мастер</td><td style="padding:8px;border-bottom:1px solid #eee;">{master}</td></tr>
+  <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">Порода</td><td style="padding:8px;border-bottom:1px solid #eee;">{breed}</td></tr>
+  <tr><td style="padding:8px;border-bottom:1px solid #eee;color:#666;">Кличка</td><td style="padding:8px;border-bottom:1px solid #eee;">{pet}</td></tr>
+</table>
+<p style="color:#666;font-size:14px;">Адрес: Allveelaeva 4, Tallinn<br>Телефон: +372 587 35456</p>
+<p style="color:#c9a84c;font-style:italic;">Ждём вас и вашего питомца!</p>
+</body></html>"""
+
     try:
-        msg = MIMEMultipart()
-        msg["From"] = os.environ.get("GMAIL_USER")
-        msg["To"] = email
-        msg["Subject"] = "Подтверждение записи — R&J Grooming"
-        body = f"""Здравствуйте, {name}!
-
-Подтверждаем вашу запись в R&J Grooming:
-
-Дата: {date}
-Время: {time}
-Услуга: {service}
-Мастер: {master}
-
-Адрес: R&J Grooming, Tallinn
-Если нужно перенести — ответьте на это письмо.
-
-До встречи!
-R&J Grooming
-"""
-        msg.attach(MIMEText(body, "plain", "utf-8"))
-        resp = requests.post(
+        r = req_lib.post(
             "https://api.resend.com/emails",
-            headers={
-                "Authorization": f"Bearer {os.environ.get('RESEND_API_KEY')}",
-                "Content-Type": "application/json"
-            },
+            headers={"Authorization": f"Bearer {resend_api_key}", "Content-Type": "application/json"},
             json={
                 "from": "R&J Grooming <onboarding@resend.dev>",
                 "to": [email],
-                "subject": "Подтверждение записи — R&J Grooming",
-                "text": body
+                "subject": f"Запись в R&J Grooming подтверждена — {date} в {time}",
+                "html": body_html
             },
-            timeout=15
+            timeout=10
         )
-        if resp.status_code >= 400:
-            return f"Ошибка Resend: {resp.text}", 500
-        return "<h2 style='font-family:sans-serif;text-align:center;margin-top:50px'>Письмо отправлено клиенту</h2>", 200
+        if r.status_code == 200:
+            return f"Письмо отправлено клиенту на {email}", 200
+        else:
+            return f"Ошибка Resend: {r.status_code} {r.text}", 500
     except Exception as e:
-        return f"Ошибка: {str(e)}", 500
+        return f"Ошибка отправки: {str(e)}", 500
 # ── BOOKING → GOOGLE CALENDAR ──────────────────────────────────────────────
 GOOGLE_SCRIPT =  "https://script.google.com/macros/s/AKfycbxcmrNg6AaE64nz9p4FXeGh5e5lK7J_L0KCeMvNlepdnhQ5c-5KIz5UMBSDz6Ct3d04/exec"
 
