@@ -130,7 +130,7 @@ def confirm():
             "https://api.resend.com/emails",
             headers={"Authorization": f"Bearer {resend_api_key}", "Content-Type": "application/json"},
             json={
-                "from": "R&J Grooming <onboarding@resend.dev>",
+                "from": "R&J Grooming <booking@rjgrooming.salon>",
                 "to": [email],
                 "subject": f"Запись в R&J Grooming подтверждена — {date} в {time}",
                 "html": body_html
