@@ -132,7 +132,6 @@ def confirm():
         "html": body_html
     }
     # Отправка email
-    email_result = "Email не отправлен"
     try:
         r = req_lib.post(
             "https://api.resend.com/emails",
@@ -141,40 +140,13 @@ def confirm():
             timeout=10
         )
         if r.status_code == 200:
-            email_result = f"Email отправлен на {email}"
+            return f"Письмо отправлено клиенту на {email}", 200
         else:
-            email_result = f"Ошибка email: {r.status_code} {r.text}"
+            return f"Ошибка Resend: {r.status_code} {r.text}<br><br>Payload to={payload['to']}", 500
     except Exception as e:
-        email_result = f"Ошибка email: {str(e)}"
+        return f"Ошибка отправки: {str(e)}", 500
 
-    # Отправка SMS через Twilio
-    sms_result = "SMS не отправлен"
-    phone = request.args.get("phone", "")
-    twilio_sid = os.environ.get("TWILIO_ACCOUNT_SID")
-    twilio_token = os.environ.get("TWILIO_AUTH_TOKEN")
-    twilio_phone = os.environ.get("TWILIO_PHONE", "+37266922128")
-    if phone and twilio_sid and twilio_token:
-        try:
-            # Форматируем номер
-            p = phone.strip().replace(" ", "").replace("-", "")
-            if not p.startswith("+"):
-                p = "+" + p
-            sms_body = f"R&J Grooming: запись подтверждена!\n{date} в {time}\nМастер: {master}\nАдрес: Allveelaeva 4, Tallinn"
-            sms_url = f"https://api.twilio.com/2010-04-01/Accounts/{twilio_sid}/Messages.json"
-            sms_resp = req_lib.post(
-                sms_url,
-                auth=(twilio_sid, twilio_token),
-                data={"From": twilio_phone, "To": p, "Body": sms_body},
-                timeout=10
-            )
-            if sms_resp.status_code == 201:
-                sms_result = f"SMS отправлен на {p}"
-            else:
-                sms_result = f"Ошибка SMS: {sms_resp.status_code} {sms_resp.text}"
-        except Exception as e:
-            sms_result = f"Ошибка SMS: {str(e)}"
-
-    return f"{email_result}<br>{sms_result}", 200
+    return email_result, 200
 
 # ── BOOKING → GOOGLE CALENDAR ──────────────────────────────────────────────
 GOOGLE_SCRIPT =  "https://script.google.com/macros/s/AKfycbwupVoCgve5oro_h64IHsm4cIekp5kdvCjkL40kz8AmHV5s6LDJkoctwTVtU6RyRDFCyA/exec"
