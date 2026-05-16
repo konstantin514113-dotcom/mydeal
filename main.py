@@ -93,7 +93,8 @@ def handle_message(sender_id, text, channel):
 @app.route("/confirm")
 def confirm():
     import requests as req_lib
-    email = request.args.get("email", "")
+    import urllib.parse
+    email = urllib.parse.unquote(request.args.get("email", ""))
     name = request.args.get("name", "")
     date = request.args.get("date", "")
     time = request.args.get("time", "")
