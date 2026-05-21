@@ -190,9 +190,12 @@ def book():
         return resp
     data = request.get_json()
     try:
-        requests.get(GOOGLE_SCRIPT, params=data, timeout=10)
+        print(f"BOOK DATA: {data}", flush=True)
+        r = requests.get(GOOGLE_SCRIPT, params=data, timeout=10)
+        print(f"GOOGLE SCRIPT RESPONSE: {r.text[:500]}", flush=True)
         resp = jsonify({"success": True})
     except Exception as e:
+        print(f"BOOK ERROR: {e}", flush=True)
         resp = jsonify({"success": False, "error": str(e)})
     resp.headers["Access-Control-Allow-Origin"] = "*"
     return resp
