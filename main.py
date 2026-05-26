@@ -2,6 +2,7 @@ from flask import Flask, request, jsonify
 import anthropic
 import os
 import requests
+from urllib.parse import unquote
 from datetime import datetime, timedelta
 from functools import wraps
 import smtplib
@@ -150,7 +151,7 @@ def confirm():
 
     # Отправка SMS через Twilio
     sms_result = "SMS не отправлен"
-    phone = request.args.get("phone", "")
+    phone = unquote(unquote(request.args.get("phone", "")))
     twilio_sid = os.environ.get("TWILIO_ACCOUNT_SID")
     twilio_token = os.environ.get("TWILIO_AUTH_TOKEN")
     twilio_phone = os.environ.get("TWILIO_PHONE", "+37266922128")
