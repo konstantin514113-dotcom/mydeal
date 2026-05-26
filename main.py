@@ -94,36 +94,34 @@ def handle_message(sender_id, text, channel):
 def confirm():
     import requests as req_lib
     import urllib.parse
-    import json
 
-    # Если передан id — получаем данные из Google Script
     booking_id = request.args.get("id", "")
+
     if booking_id:
         try:
-            google_script = os.environ.get("GOOGLE_SCRIPT", "")
-            r = req_lib.get(google_script, params={"action": "get", "id": booking_id}, timeout=10)
+            r = req_lib.get(GOOGLE_SCRIPT, params={"action": "get", "id": booking_id}, timeout=10)
             data = r.json()
-            email = data.get("email", "")
-            name = data.get("name", "")
-            date = data.get("date", "")
-            time = data.get("time", "")
+            email   = data.get("email", "")
+            name    = data.get("name", "")
+            date    = data.get("date", "")
+            time    = data.get("time", "")
             service = data.get("service", "")
-            master = data.get("master", "")
-            breed = data.get("breed", "")
-            pet = data.get("pet", "")
-            phone_raw = data.get("phone", "")
+            master  = data.get("master", "")
+            breed   = data.get("breed", "")
+            pet     = data.get("pet", "")
+            phone   = data.get("phone", "")
         except Exception as e:
             return f"Ошибка получения данных: {str(e)}", 500
     else:
-        email = urllib.parse.unquote(request.args.get("email", ""))
-        name = request.args.get("name", "")
-        date = request.args.get("date", "")
-        time = request.args.get("time", "")
+        email   = urllib.parse.unquote(request.args.get("email", ""))
+        name    = request.args.get("name", "")
+        date    = request.args.get("date", "")
+        time    = request.args.get("time", "")
         service = request.args.get("service", "")
-        master = request.args.get("master", "")
-        breed = request.args.get("breed", "")
-        pet = request.args.get("pet", "")
-        phone_raw = request.args.get("phone", "")
+        master  = request.args.get("master", "")
+        breed   = request.args.get("breed", "")
+        pet     = request.args.get("pet", "")
+        phone   = request.args.get("phone", "")
 
     if not email:
         return "Email не указан", 400
@@ -172,7 +170,6 @@ def confirm():
 
     # Отправка SMS через Twilio
     sms_result = "SMS не отправлен"
-    phone = phone_raw if booking_id else request.args.get("phone", "")
     twilio_sid = os.environ.get("TWILIO_ACCOUNT_SID")
     twilio_token = os.environ.get("TWILIO_AUTH_TOKEN")
     twilio_phone = os.environ.get("TWILIO_PHONE", "+37266922128")
