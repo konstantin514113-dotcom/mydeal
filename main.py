@@ -156,12 +156,10 @@ def confirm():
     twilio_phone = os.environ.get("TWILIO_PHONE", "+37266922128")
     if phone and twilio_sid and twilio_token:
         try:
-            # Форматируем номер (убираем двойное кодирование %2B от Safari)
-            import urllib.parse as _ul
-            p = _ul.unquote(_ul.unquote(phone)).strip().replace(" ", "").replace("-", "")
+            # Форматируем номер
+            p = phone.strip().replace(" ", "").replace("-", "")
             if not p.startswith("+"):
                 p = "+" + p
-            print(f"PHONE RAW: {phone!r} → DECODED: {p!r}", flush=True)
             sms_body = f"R&J Grooming: запись подтверждена!\n{date} в {time}\nМастер: {master}\nАдрес: Allveelaeva 4, Tallinn"
             sms_url = f"https://api.twilio.com/2010-04-01/Accounts/{twilio_sid}/Messages.json"
             sms_resp = req_lib.post(
@@ -180,7 +178,7 @@ def confirm():
     return f"{email_result}<br>{sms_result}", 200
 
 # ── BOOKING → GOOGLE CALENDAR ──────────────────────────────────────────────
-GOOGLE_SCRIPT =  "https://script.google.com/macros/s/AKfycbwupVoCgve5oro_h64IHsm4cIekp5kdvCjkL40kz8AmHV5s6LDJkoctwTVtU6RyRDFCyA/exec"
+GOOGLE_SCRIPT = os.environ.get("GOOGLE_SCRIPT", "")
 
 @app.route("/book", methods=["POST", "OPTIONS"])
 def book():
