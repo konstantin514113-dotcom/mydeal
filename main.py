@@ -199,7 +199,7 @@ def confirm():
     return f"{email_result}<br>{sms_result}", 200
 
 # ── BOOKING → GOOGLE CALENDAR ──────────────────────────────────────────────
-GOOGLE_SCRIPT =  "https://script.google.com/macros/s/AKfycbwupVoCgve5oro_h64IHsm4cIekp5kdvCjkL40kz8AmHV5s6LDJkoctwTVtU6RyRDFCyA/exec"
+GOOGLE_SCRIPT = os.environ.get("GOOGLE_SCRIPT", "")
 
 @app.route("/book", methods=["POST", "OPTIONS"])
 def book():
