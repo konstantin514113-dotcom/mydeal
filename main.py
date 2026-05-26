@@ -2,7 +2,6 @@ from flask import Flask, request, jsonify
 import anthropic
 import os
 import requests
-from urllib.parse import unquote
 from datetime import datetime, timedelta
 from functools import wraps
 import smtplib
@@ -95,14 +94,36 @@ def handle_message(sender_id, text, channel):
 def confirm():
     import requests as req_lib
     import urllib.parse
-    email = urllib.parse.unquote(request.args.get("email", ""))
-    name = request.args.get("name", "")
-    date = request.args.get("date", "")
-    time = request.args.get("time", "")
-    service = request.args.get("service", "")
-    master = request.args.get("master", "")
-    breed = request.args.get("breed", "")
-    pet = request.args.get("pet", "")
+    import json
+
+    # Если передан id — получаем данные из Google Script
+    booking_id = request.args.get("id", "")
+    if booking_id:
+        try:
+            google_script = os.environ.get("GOOGLE_SCRIPT", "")
+            r = req_lib.get(google_script, params={"action": "get", "id": booking_id}, timeout=10)
+            data = r.json()
+            email = data.get("email", "")
+            name = data.get("name", "")
+            date = data.get("date", "")
+            time = data.get("time", "")
+            service = data.get("service", "")
+            master = data.get("master", "")
+            breed = data.get("breed", "")
+            pet = data.get("pet", "")
+            phone_raw = data.get("phone", "")
+        except Exception as e:
+            return f"Ошибка получения данных: {str(e)}", 500
+    else:
+        email = urllib.parse.unquote(request.args.get("email", ""))
+        name = request.args.get("name", "")
+        date = request.args.get("date", "")
+        time = request.args.get("time", "")
+        service = request.args.get("service", "")
+        master = request.args.get("master", "")
+        breed = request.args.get("breed", "")
+        pet = request.args.get("pet", "")
+        phone_raw = request.args.get("phone", "")
 
     if not email:
         return "Email не указан", 400
@@ -151,16 +172,18 @@ def confirm():
 
     # Отправка SMS через Twilio
     sms_result = "SMS не отправлен"
-    phone = unquote(unquote(request.args.get("phone", "")))
+    phone = phone_raw if booking_id else request.args.get("phone", "")
     twilio_sid = os.environ.get("TWILIO_ACCOUNT_SID")
     twilio_token = os.environ.get("TWILIO_AUTH_TOKEN")
     twilio_phone = os.environ.get("TWILIO_PHONE", "+37266922128")
     if phone and twilio_sid and twilio_token:
         try:
-            # Форматируем номер
-            p = phone.strip().replace(" ", "").replace("-", "")
+            # Форматируем номер (убираем двойное кодирование %2B от Safari)
+            import urllib.parse as _ul
+            p = _ul.unquote(_ul.unquote(phone)).strip().replace(" ", "").replace("-", "")
             if not p.startswith("+"):
                 p = "+" + p
+            print(f"PHONE RAW: {phone!r} → DECODED: {p!r}", flush=True)
             sms_body = f"R&J Grooming: запись подтверждена!\n{date} в {time}\nМастер: {master}\nАдрес: Allveelaeva 4, Tallinn"
             sms_url = f"https://api.twilio.com/2010-04-01/Accounts/{twilio_sid}/Messages.json"
             sms_resp = req_lib.post(
@@ -179,7 +202,7 @@ def confirm():
     return f"{email_result}<br>{sms_result}", 200
 
 # ── BOOKING → GOOGLE CALENDAR ──────────────────────────────────────────────
-GOOGLE_SCRIPT = os.environ.get("GOOGLE_SCRIPT", "")
+GOOGLE_SCRIPT =  "https://script.google.com/macros/s/AKfycbwupVoCgve5oro_h64IHsm4cIekp5kdvCjkL40kz8AmHV5s6LDJkoctwTVtU6RyRDFCyA/exec"
 
 @app.route("/book", methods=["POST", "OPTIONS"])
 def book():
