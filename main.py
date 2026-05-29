@@ -455,30 +455,38 @@ def admin_whatsapp():
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
 <title>R&J Admin</title>
 <style>
-*{box-sizing:border-box;margin:0;padding:0}
-body{background:#1c1c18;color:#c8c2b8;font-family:'Montserrat',sans-serif;min-height:100vh;padding:24px 16px}
-h1{color:#c9a84c;font-size:1.4rem;font-weight:700;margin-bottom:24px;letter-spacing:.05em}
-h2{color:#c9a84c;font-size:1rem;font-weight:600;margin-bottom:12px;letter-spacing:.03em}
-.card{background:#26261f;border-radius:12px;padding:20px;margin-bottom:20px}
-.row{display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin-bottom:8px}
-.btn{padding:10px 20px;border:none;border-radius:8px;font-family:inherit;font-size:.85rem;font-weight:600;cursor:pointer;transition:.2s}
-.btn-gold{background:#c9a84c;color:#1c1c18}
-.btn-gold:hover{background:#e0bc5a}
-.badge{display:inline-block;padding:4px 10px;border-radius:20px;font-size:.75rem;font-weight:700}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+body{background:#1c1c18;color:#c8c2b8;font-family:'Montserrat',sans-serif;min-height:100vh;padding:20px 14px;font-size:16px;line-height:1.5}
+h1{color:#c9a84c;font-size:1.3rem;font-weight:700;margin-bottom:20px;letter-spacing:.04em}
+h2{color:#c9a84c;font-size:.95rem;font-weight:700;margin-bottom:14px;letter-spacing:.03em;text-transform:uppercase}
+.card{background:#26261f;border-radius:14px;padding:18px 16px;margin-bottom:16px}
+.bot-row{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+.bot-row:last-of-type{margin-bottom:0}
+.bot-label{font-size:.9rem;min-width:80px}
+.badge{display:inline-block;padding:5px 12px;border-radius:20px;font-size:.75rem;font-weight:700;min-width:52px;text-align:center}
 .on{background:#2a4a2a;color:#6fcf6f}
 .off{background:#4a2a2a;color:#cf6f6f}
-#msg{font-size:.8rem;color:#c9a84c;margin-top:8px;min-height:1em}
-table{width:100%;border-collapse:collapse;font-size:.8rem}
-th{text-align:left;padding:6px 8px;color:#a09880;border-bottom:1px solid #3a3a30;font-weight:600}
-td{padding:6px 8px;border-bottom:1px solid #2e2e26;vertical-align:top;word-break:break-word}
-tr:last-child td{border-bottom:none}
-.ch{font-size:.7rem;color:#888;text-transform:uppercase}
-select,textarea{width:100%;background:#1c1c18;border:1px solid #3a3a30;border-radius:8px;color:#c8c2b8;font-family:inherit;font-size:.85rem;padding:10px;margin-bottom:10px;resize:vertical}
-select:focus,textarea:focus{outline:none;border-color:#c9a84c}
-#sendMsg{min-height:1em;font-size:.8rem;color:#c9a84c;margin-top:6px}
+.btn{display:block;width:100%;min-height:48px;border:none;border-radius:10px;font-family:inherit;font-size:1rem;font-weight:700;cursor:pointer;transition:.15s;letter-spacing:.02em;padding:0 16px}
+.btn-gold{background:#c9a84c;color:#1c1c18}
+.btn-gold:active{background:#b89640}
+.btn-row{margin-top:14px}
+#msg{font-size:.85rem;color:#c9a84c;margin-top:10px;min-height:1.2em;text-align:center}
+.client-item{padding:12px 0;border-bottom:1px solid #2e2e26;display:flex;flex-direction:column;gap:3px}
+.client-item:last-child{border-bottom:none}
+.c-phone{font-size:1rem;font-weight:600;color:#e8e0d0}
+.c-text{font-size:.85rem;color:#a09880;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.c-meta{display:flex;gap:8px;align-items:center}
+.c-time{font-size:.75rem;color:#666}
+.c-ch{font-size:.7rem;color:#888;text-transform:uppercase;background:#2e2e26;padding:2px 7px;border-radius:10px}
+#clients-empty{font-size:.85rem;color:#666;text-align:center;padding:12px 0}
+select{width:100%;background:#1c1c18;border:1px solid #3a3a30;border-radius:10px;color:#c8c2b8;font-family:inherit;font-size:1rem;padding:14px 12px;margin-bottom:12px;appearance:none;-webkit-appearance:none}
+select:focus{outline:none;border-color:#c9a84c}
+textarea{width:100%;background:#1c1c18;border:1px solid #3a3a30;border-radius:10px;color:#c8c2b8;font-family:inherit;font-size:1rem;padding:14px 12px;margin-bottom:12px;resize:vertical;min-height:100px;line-height:1.5}
+textarea:focus{outline:none;border-color:#c9a84c}
+#sendMsg{font-size:.85rem;color:#c9a84c;margin-top:10px;min-height:1.2em;text-align:center}
 </style>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700&display=swap" rel="stylesheet">
 </head>
@@ -486,33 +494,30 @@ select:focus,textarea:focus{outline:none;border-color:#c9a84c}
 <h1>R&J Grooming — Admin</h1>
 
 <div class="card">
-  <h2>Статус ботов</h2>
-  <div class="row">
-    <span>Jarvis:</span>
+  <h2>Боты</h2>
+  <div class="bot-row">
+    <span class="bot-label">Jarvis</span>
     <span class="badge" id="jarvisBadge"></span>
-    <button class="btn btn-gold" id="jarvisBtn" onclick="toggleJarvis()"></button>
   </div>
-  <div class="row">
-    <span>Instagram:</span>
+  <div class="btn-row"><button class="btn btn-gold" id="jarvisBtn" onclick="toggleJarvis()"></button></div>
+  <div class="bot-row" style="margin-top:14px">
+    <span class="bot-label">Instagram</span>
     <span class="badge" id="igBadge"></span>
-    <button class="btn btn-gold" id="igBtn" onclick="toggleIg()"></button>
   </div>
+  <div class="btn-row"><button class="btn btn-gold" id="igBtn" onclick="toggleIg()"></button></div>
   <div id="msg"></div>
 </div>
 
 <div class="card">
   <h2>Клиенты</h2>
-  <table id="tbl">
-    <thead><tr><th>Телефон</th><th>Канал</th><th>Последнее сообщение</th><th>Время</th></tr></thead>
-    <tbody id="tbody"></tbody>
-  </table>
+  <div id="clientsList"><div id="clients-empty">Нет данных</div></div>
 </div>
 
 <div class="card">
-  <h2>Ручная отправка (WhatsApp)</h2>
+  <h2>Отправить сообщение</h2>
   <select id="selPhone"><option value="">— выбрать клиента —</option></select>
-  <textarea id="txtMsg" rows="3" placeholder="Текст сообщения..."></textarea>
-  <button class="btn btn-gold" onclick="sendManual()">Отправить</button>
+  <textarea id="txtMsg" placeholder="Текст сообщения..."></textarea>
+  <button class="btn btn-gold" onclick="sendManual()">Отправить в WhatsApp</button>
   <div id="sendMsg"></div>
 </div>
 
@@ -541,19 +546,23 @@ function toggleIg(){
 
 function loadClients(){
   fetch('/admin/api/messages').then(r=>r.json()).then(data=>{
-    var tbody=document.getElementById('tbody');
-    tbody.innerHTML='';
+    var list=document.getElementById('clientsList');
     var sel=document.getElementById('selPhone');
     var cur=sel.value;
     sel.innerHTML='<option value="">— выбрать клиента —</option>';
     data.sort(function(a,b){return b.ts.localeCompare(a.ts);});
+    if(!data.length){list.innerHTML='<div id="clients-empty">Нет клиентов</div>';return;}
+    list.innerHTML='';
     data.forEach(function(c){
-      var tr=document.createElement('tr');
-      var ts=c.ts?new Date(c.ts).toLocaleString('ru-RU',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}):'\\u2014';
-      tr.innerHTML='<td>'+esc(c.phone)+'</td><td><span class="ch">'+esc(c.channel||'wa')+'</span></td><td>'+esc(c.last_text||'')+'</td><td>'+ts+'</td>';
-      tbody.appendChild(tr);
+      var ts=c.ts?new Date(c.ts).toLocaleString('ru-RU',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}):'';
+      var div=document.createElement('div');
+      div.className='client-item';
+      div.innerHTML='<div class="c-phone">'+esc(c.phone)+'</div>'
+        +'<div class="c-text">'+esc(c.last_text||'—')+'</div>'
+        +'<div class="c-meta"><span class="c-ch">'+esc(c.channel||'wa')+'</span><span class="c-time">'+ts+'</span></div>';
+      list.appendChild(div);
       var opt=document.createElement('option');
-      opt.value=c.phone; opt.textContent=c.phone+(c.last_text?' — '+c.last_text.substring(0,30):'');
+      opt.value=c.phone; opt.textContent=c.phone+(c.last_text?' — '+c.last_text.substring(0,28):'');
       sel.appendChild(opt);
     });
     if(cur) sel.value=cur;
