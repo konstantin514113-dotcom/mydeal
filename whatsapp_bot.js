@@ -4,18 +4,22 @@
 // set Start Command to "node whatsapp_bot.js" and add env vars:
 //   ANTHROPIC_API_KEY  — your Anthropic key
 //   JARVIS_WA_ENABLED  — set to "false" to disable without stopping the process
+//   PORT               — Railway sets this automatically
 //
-// First run: scan the QR code printed in Railway logs via WhatsApp > Linked Devices.
-// Session is saved in .wwebjs_auth/ (persists across restarts if Railway volume is mounted).
+// First run: open the service URL in browser to see the QR code, then scan in
+// WhatsApp > Linked Devices. Session is saved in .wwebjs_auth/.
 
 'use strict';
 
+const http = require('http');
 const { Client, LocalAuth } = require('whatsapp-web.js');
-const qrcode = require('qrcode-terminal');
+const qrcodeTerminal = require('qrcode-terminal');
+const QRCode = require('qrcode');
 const Anthropic = require('@anthropic-ai/sdk');
 
 const ENABLED = process.env.JARVIS_WA_ENABLED !== 'false';
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
+const PORT = process.env.PORT || 3000;
 
 if (!ENABLED) {
   console.log('[Jarvis WA] Bot disabled (JARVIS_WA_ENABLED=false). Exiting.');
@@ -34,6 +38,74 @@ const SYSTEM_PROMPT =
   'Keep answers short — 1 to 3 sentences maximum. ' +
   'For booking appointments always send this link: https://rjgrooming.up.railway.app/app';
 
+// ── QR state ────────────────────────────────────────────────────────────────
+let currentQR = null;   // raw QR string from whatsapp-web.js
+let isReady = false;
+
+// ── HTTP server ──────────────────────────────────────────────────────────────
+const server = http.createServer(async (req, res) => {
+  if (req.method !== 'GET' || req.url !== '/') {
+    res.writeHead(404); res.end('Not found'); return;
+  }
+
+  if (isReady) {
+    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+    res.end(`<!DOCTYPE html><html><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Jarvis WA</title>
+<style>body{background:#1c1c18;color:#c8c2b8;font-family:sans-serif;display:flex;
+align-items:center;justify-content:center;min-height:100vh;margin:0;text-align:center}
+h2{color:#6fcf6f;font-size:1.4rem}</style></head>
+<body><div><h2>✅ WhatsApp подключён</h2><p>Jarvis активен и принимает сообщения.</p></div></body></html>`);
+    return;
+  }
+
+  if (!currentQR) {
+    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+    res.end(`<!DOCTYPE html><html><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="refresh" content="5">
+<title>Jarvis WA — ожидание</title>
+<style>body{background:#1c1c18;color:#c8c2b8;font-family:sans-serif;display:flex;
+align-items:center;justify-content:center;min-height:100vh;margin:0;text-align:center}
+p{color:#a09880}</style></head>
+<body><div><p>⏳ QR код ещё не готов, страница обновится автоматически…</p></div></body></html>`);
+    return;
+  }
+
+  try {
+    const pngDataUrl = await QRCode.toDataURL(currentQR, { width: 320, margin: 2 });
+    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+    res.end(`<!DOCTYPE html><html><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="refresh" content="30">
+<title>Jarvis WA — QR код</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#1c1c18;color:#c8c2b8;font-family:'Montserrat',sans-serif;
+display:flex;align-items:center;justify-content:center;min-height:100vh;padding:24px}
+.box{background:#26261f;border-radius:16px;padding:32px 24px;text-align:center;max-width:400px;width:100%}
+h2{color:#c9a84c;font-size:1.2rem;margin-bottom:8px}
+p{color:#a09880;font-size:.85rem;margin-bottom:20px;line-height:1.5}
+img{border-radius:12px;background:#fff;padding:12px;width:100%;max-width:280px}
+.note{margin-top:16px;font-size:.75rem;color:#666}
+</style></head>
+<body><div class="box">
+  <h2>Сканируй QR в WhatsApp</h2>
+  <p>WhatsApp → Связанные устройства → Привязать устройство</p>
+  <img src="${pngDataUrl}" alt="QR Code">
+  <div class="note">Страница обновляется каждые 30 секунд</div>
+</div></body></html>`);
+  } catch (err) {
+    res.writeHead(500); res.end('QR render error: ' + err.message);
+  }
+});
+
+server.listen(PORT, () => {
+  console.log(`[Jarvis WA] HTTP server listening on port ${PORT}`);
+});
+
+// ── WhatsApp client ──────────────────────────────────────────────────────────
 const client = new Client({
   authStrategy: new LocalAuth({ dataPath: '.wwebjs_auth' }),
   puppeteer: {
@@ -51,23 +123,30 @@ const client = new Client({
 });
 
 client.on('qr', (qr) => {
-  console.log('\n[Jarvis WA] Scan QR code in WhatsApp > Linked Devices:\n');
-  qrcode.generate(qr, { small: true });
+  currentQR = qr;
+  isReady = false;
+  console.log('[Jarvis WA] QR ready — open the service URL to scan.');
+  qrcodeTerminal.generate(qr, { small: true });
 });
 
 client.on('authenticated', () => {
   console.log('[Jarvis WA] Authenticated — session saved.');
+  currentQR = null;
 });
 
 client.on('auth_failure', (msg) => {
   console.error('[Jarvis WA] Auth failure:', msg);
+  currentQR = null;
 });
 
 client.on('ready', () => {
+  isReady = true;
+  currentQR = null;
   console.log('[Jarvis WA] Bot ready and listening.');
 });
 
 client.on('disconnected', (reason) => {
+  isReady = false;
   console.warn('[Jarvis WA] Disconnected:', reason);
 });
 
@@ -83,7 +162,6 @@ client.on('message', async (msg) => {
   const from = msg.from.replace('@c.us', '');
   console.log(`[Jarvis WA] ${from}: ${text.substring(0, 100)}`);
 
-  // re-check enabled flag at message time so env changes take effect without restart
   if (process.env.JARVIS_WA_ENABLED === 'false') {
     console.log('[Jarvis WA] Skipped (disabled via env).');
     return;
