@@ -435,6 +435,154 @@ def api_messages():
         result.append({"phone": phone, "ts": last.isoformat() if isinstance(last, datetime) else "", "last_text": info.get("last_text", ""), "channel": info.get("channel", "whatsapp")})
     return jsonify(result)
 
+@app.route("/admin/api/send", methods=["POST"])
+def api_send():
+    data = request.get_json() or {}
+    phone = data.get("phone", "").strip()
+    text = data.get("text", "").strip()
+    if not phone or not text:
+        return jsonify({"ok": False, "error": "phone and text required"}), 400
+    try:
+        send_whatsapp(phone, text)
+        return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+@app.route("/admin/whatsapp")
+def admin_whatsapp():
+    global jarvis_enabled, instagram_enabled
+    html = """<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>R&J Admin</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#1c1c18;color:#c8c2b8;font-family:'Montserrat',sans-serif;min-height:100vh;padding:24px 16px}
+h1{color:#c9a84c;font-size:1.4rem;font-weight:700;margin-bottom:24px;letter-spacing:.05em}
+h2{color:#c9a84c;font-size:1rem;font-weight:600;margin-bottom:12px;letter-spacing:.03em}
+.card{background:#26261f;border-radius:12px;padding:20px;margin-bottom:20px}
+.row{display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin-bottom:8px}
+.btn{padding:10px 20px;border:none;border-radius:8px;font-family:inherit;font-size:.85rem;font-weight:600;cursor:pointer;transition:.2s}
+.btn-gold{background:#c9a84c;color:#1c1c18}
+.btn-gold:hover{background:#e0bc5a}
+.badge{display:inline-block;padding:4px 10px;border-radius:20px;font-size:.75rem;font-weight:700}
+.on{background:#2a4a2a;color:#6fcf6f}
+.off{background:#4a2a2a;color:#cf6f6f}
+#msg{font-size:.8rem;color:#c9a84c;margin-top:8px;min-height:1em}
+table{width:100%;border-collapse:collapse;font-size:.8rem}
+th{text-align:left;padding:6px 8px;color:#a09880;border-bottom:1px solid #3a3a30;font-weight:600}
+td{padding:6px 8px;border-bottom:1px solid #2e2e26;vertical-align:top;word-break:break-word}
+tr:last-child td{border-bottom:none}
+.ch{font-size:.7rem;color:#888;text-transform:uppercase}
+select,textarea{width:100%;background:#1c1c18;border:1px solid #3a3a30;border-radius:8px;color:#c8c2b8;font-family:inherit;font-size:.85rem;padding:10px;margin-bottom:10px;resize:vertical}
+select:focus,textarea:focus{outline:none;border-color:#c9a84c}
+#sendMsg{min-height:1em;font-size:.8rem;color:#c9a84c;margin-top:6px}
+</style>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+<h1>R&J Grooming — Admin</h1>
+
+<div class="card">
+  <h2>Статус ботов</h2>
+  <div class="row">
+    <span>Jarvis:</span>
+    <span class="badge" id="jarvisBadge"></span>
+    <button class="btn btn-gold" id="jarvisBtn" onclick="toggleJarvis()"></button>
+  </div>
+  <div class="row">
+    <span>Instagram:</span>
+    <span class="badge" id="igBadge"></span>
+    <button class="btn btn-gold" id="igBtn" onclick="toggleIg()"></button>
+  </div>
+  <div id="msg"></div>
+</div>
+
+<div class="card">
+  <h2>Клиенты</h2>
+  <table id="tbl">
+    <thead><tr><th>Телефон</th><th>Канал</th><th>Последнее сообщение</th><th>Время</th></tr></thead>
+    <tbody id="tbody"></tbody>
+  </table>
+</div>
+
+<div class="card">
+  <h2>Ручная отправка (WhatsApp)</h2>
+  <select id="selPhone"><option value="">— выбрать клиента —</option></select>
+  <textarea id="txtMsg" rows="3" placeholder="Текст сообщения..."></textarea>
+  <button class="btn btn-gold" onclick="sendManual()">Отправить</button>
+  <div id="sendMsg"></div>
+</div>
+
+<script>
+var jarvisOn = """ + ("true" if jarvis_enabled else "false") + """;
+var igOn = """ + ("true" if instagram_enabled else "false") + """;
+
+function updateBadges(){
+  document.getElementById('jarvisBadge').className='badge '+(jarvisOn?'on':'off');
+  document.getElementById('jarvisBadge').textContent=jarvisOn?'ВКЛ':'ВЫКЛ';
+  document.getElementById('jarvisBtn').textContent=jarvisOn?'Выключить Jarvis':'Включить Jarvis';
+  document.getElementById('igBadge').className='badge '+(igOn?'on':'off');
+  document.getElementById('igBadge').textContent=igOn?'ВКЛ':'ВЫКЛ';
+  document.getElementById('igBtn').textContent=igOn?'Выключить Instagram':'Включить Instagram';
+}
+updateBadges();
+
+function toggleJarvis(){
+  fetch('/admin/api/toggle',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({enabled:!jarvisOn})})
+    .then(r=>r.json()).then(d=>{jarvisOn=!jarvisOn;updateBadges();document.getElementById('msg').textContent=d.message||'';});
+}
+function toggleIg(){
+  fetch('/admin/api/toggle-instagram',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({enabled:!igOn})})
+    .then(r=>r.json()).then(d=>{igOn=!igOn;updateBadges();document.getElementById('msg').textContent=d.message||'';});
+}
+
+function loadClients(){
+  fetch('/admin/api/messages').then(r=>r.json()).then(data=>{
+    var tbody=document.getElementById('tbody');
+    tbody.innerHTML='';
+    var sel=document.getElementById('selPhone');
+    var cur=sel.value;
+    sel.innerHTML='<option value="">— выбрать клиента —</option>';
+    data.sort(function(a,b){return b.ts.localeCompare(a.ts);});
+    data.forEach(function(c){
+      var tr=document.createElement('tr');
+      var ts=c.ts?new Date(c.ts).toLocaleString('ru-RU',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}):'\\u2014';
+      tr.innerHTML='<td>'+esc(c.phone)+'</td><td><span class="ch">'+esc(c.channel||'wa')+'</span></td><td>'+esc(c.last_text||'')+'</td><td>'+ts+'</td>';
+      tbody.appendChild(tr);
+      var opt=document.createElement('option');
+      opt.value=c.phone; opt.textContent=c.phone+(c.last_text?' — '+c.last_text.substring(0,30):'');
+      sel.appendChild(opt);
+    });
+    if(cur) sel.value=cur;
+  });
+}
+
+function esc(s){var d=document.createElement('div');d.appendChild(document.createTextNode(String(s)));return d.innerHTML;}
+
+function sendManual(){
+  var phone=document.getElementById('selPhone').value;
+  var text=document.getElementById('txtMsg').value.trim();
+  var msgEl=document.getElementById('sendMsg');
+  if(!phone){msgEl.textContent='Выберите клиента';return;}
+  if(!text){msgEl.textContent='Введите текст';return;}
+  msgEl.textContent='Отправка...';
+  fetch('/admin/api/send',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({phone:phone,text:text})})
+    .then(r=>r.json()).then(d=>{
+      if(d.ok){msgEl.textContent='✓ Отправлено';document.getElementById('txtMsg').value='';}
+      else{msgEl.textContent='Ошибка: '+(d.error||'неизвестно');}
+    });
+}
+
+loadClients();
+setInterval(loadClients, 15000);
+</script>
+</body>
+</html>"""
+    return html
+
 # ── PUBLIC ─────────────────────────────────────────────────────────────────
 @app.route("/")
 def home():
