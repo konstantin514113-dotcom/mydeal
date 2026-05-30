@@ -12,6 +12,7 @@
 'use strict';
 
 const http = require('http');
+const https = require('https');
 const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcodeTerminal = require('qrcode-terminal');
 const QRCode = require('qrcode');
@@ -108,6 +109,17 @@ SPA-УХОД (дополнительная процедура):
 — стрижка когтей
 — уход за глазками и ушками
 Стоимость может варьироваться от состояния шерсти, колтунов и поведения питомца 🤍
+
+ВОРОНКА БРОНИРОВАНИЯ (строго по шагам, не переспрашивай уже известные данные):
+Шаг 1 — Порода и вес питомца (если не указаны)
+Шаг 2 — Назови цену из прайса и уточни услугу
+Шаг 3 — Желаемые дата и время
+Шаг 4 — Имя владельца и кличка питомца
+Шаг 5 — Покажи итоговую карточку записи и попроси подтвердить:
+  «Порода: ... | Услуга: ... | Дата: ... | Время: ... | Владелец: ... | Питомец: ...»
+  «Всё верно? Ответьте "да" для подтверждения 🤍»
+После подтверждения («да», «подтверждаю», «yes», «jah», «всё верно» и т.п.) — ответь:
+  «Запись принята! Ждём вас 🐾 Если что-то изменится — напишите нам.»
 
 ПРАЙС-ЛИСТ (все цены в €):
 Австралийская овчарка 15–25 кг: Базовый уход 45, Гигиенический уход 60, Комплексный уход 80, Экспресс-линька 85
@@ -290,6 +302,70 @@ SPA-УХОД (дополнительная процедура):
 Кошка длинношерстная: Вычес 55
 Мейн-кун: Вычес 60`;
 
+// ── Conversation & booking state ─────────────────────────────────────────────
+const MAX_HISTORY = 20;
+const conversations = new Map();  // phone → [{role, content}]
+const bookingStates = new Map();  // phone → booking state
+
+function getHistory(phone) {
+  if (!conversations.has(phone)) conversations.set(phone, []);
+  return conversations.get(phone);
+}
+
+function getState(phone) {
+  if (!bookingStates.has(phone)) {
+    bookingStates.set(phone, {
+      breed: null, service: null, date: null, time: null,
+      ownerName: null, petName: null, confirmed: false,
+    });
+  }
+  return bookingStates.get(phone);
+}
+
+function stateContext(state) {
+  const labels = { breed: 'Порода/вес', service: 'Услуга', date: 'Дата', time: 'Время', ownerName: 'Имя владельца', petName: 'Кличка' };
+  const filled = Object.entries(labels).filter(([k]) => state[k]).map(([k, label]) => `${label}: ${state[k]}`);
+  return filled.length ? `\n\nТЕКУЩИЕ ДАННЫЕ КЛИЕНТА (уже известны, НЕ переспрашивай):\n${filled.join('\n')}` : '';
+}
+
+async function extractState(history, state) {
+  const recent = history.slice(-8).map(m => `${m.role === 'user' ? 'Клиент' : 'Jarvis'}: ${m.content}`).join('\n');
+  try {
+    const r = await anthropic.messages.create({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 200,
+      messages: [{
+        role: 'user',
+        content: `Извлеки данные бронирования из диалога. Верни ТОЛЬКО JSON, без пояснений.\nПоля: breed (string|null), service (string|null), date (string|null), time (string|null), ownerName (string|null), petName (string|null), confirmed (boolean — true только если клиент явно подтвердил запись: "да", "подтверждаю", "всё верно", "yes", "jah" и т.п.).\nТекущие значения: ${JSON.stringify(state)}\nДиалог:\n${recent}`,
+      }],
+    });
+    const text = r.content[0].text.trim();
+    const m = text.match(/\{[\s\S]*\}/);
+    if (m) return { ...state, ...JSON.parse(m[0]) };
+  } catch (e) {
+    console.error('[Jarvis WA] extractState error:', e.message);
+  }
+  return state;
+}
+
+function postBooking(state, phone) {
+  const body = JSON.stringify({
+    breed: state.breed, service: state.service,
+    date: state.date, time: state.time,
+    name: state.ownerName, pet: state.petName,
+    phone, source: 'whatsapp',
+  });
+  const req = https.request({
+    hostname: 'rjgrooming.up.railway.app',
+    path: '/book',
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) },
+  }, res => console.log(`[Jarvis WA] /book → ${res.statusCode}`));
+  req.on('error', e => console.error('[Jarvis WA] /book error:', e.message));
+  req.write(body);
+  req.end();
+}
+
 // ── Runtime state ───────────────────────────────────────────────────────────
 let currentQR = null;   // raw QR string from whatsapp-web.js
 let isReady = false;
@@ -438,17 +514,34 @@ client.on('message', async (msg) => {
     return;
   }
 
+  const history = getHistory(from);
+  const state = getState(from);
+
+  history.push({ role: 'user', content: text });
+  if (history.length > MAX_HISTORY) history.splice(0, history.length - MAX_HISTORY);
+
   try {
     const response = await anthropic.messages.create({
       model: 'claude-haiku-4-5-20251001',
-      max_tokens: 300,
-      system: SYSTEM_PROMPT,
-      messages: [{ role: 'user', content: text }],
+      max_tokens: 400,
+      system: SYSTEM_PROMPT + stateContext(state),
+      messages: history,
     });
     const reply = response.content[0]?.text?.trim();
     if (reply) {
+      history.push({ role: 'assistant', content: reply });
       await msg.reply(reply);
       console.log(`[Jarvis WA] → ${reply.substring(0, 80)}`);
+
+      extractState(history, state).then(newState => {
+        Object.assign(state, newState);
+        if (state.confirmed && state.breed && state.service && state.date && state.time && state.ownerName && state.petName) {
+          postBooking(state, from);
+          conversations.delete(from);
+          bookingStates.delete(from);
+          console.log(`[Jarvis WA] Booking submitted for ${from}`);
+        }
+      }).catch(e => console.error('[Jarvis WA] state update error:', e.message));
     }
   } catch (err) {
     console.error('[Jarvis WA] Anthropic error:', err.message);
