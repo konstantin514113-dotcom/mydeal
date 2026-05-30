@@ -38,12 +38,31 @@ const SYSTEM_PROMPT =
   'Keep answers short — 1 to 3 sentences maximum. ' +
   'For booking appointments always send this link: https://rjgrooming.up.railway.app/app';
 
-// ── QR state ────────────────────────────────────────────────────────────────
+// ── Runtime state ───────────────────────────────────────────────────────────
 let currentQR = null;   // raw QR string from whatsapp-web.js
 let isReady = false;
+let waEnabled = true;   // toggled at runtime via POST /toggle
 
 // ── HTTP server ──────────────────────────────────────────────────────────────
 const server = http.createServer(async (req, res) => {
+  // POST /toggle — enable/disable bot at runtime
+  if (req.method === 'POST' && req.url === '/toggle') {
+    let body = '';
+    req.on('data', chunk => { body += chunk; });
+    req.on('end', () => {
+      try {
+        const data = JSON.parse(body);
+        waEnabled = data.enabled !== false;
+        console.log(`[Jarvis WA] toggled via HTTP: ${waEnabled ? 'enabled' : 'disabled'}`);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: true, enabled: waEnabled }));
+      } catch (e) {
+        res.writeHead(400); res.end(JSON.stringify({ ok: false, error: 'invalid json' }));
+      }
+    });
+    return;
+  }
+
   if (req.method !== 'GET' || req.url !== '/') {
     res.writeHead(404); res.end('Not found'); return;
   }
@@ -162,8 +181,8 @@ client.on('message', async (msg) => {
   const from = msg.from.replace('@c.us', '');
   console.log(`[Jarvis WA] ${from}: ${text.substring(0, 100)}`);
 
-  if (process.env.JARVIS_WA_ENABLED === 'false') {
-    console.log('[Jarvis WA] Skipped (disabled via env).');
+  if (!waEnabled) {
+    console.log('[Jarvis WA] Skipped (disabled).');
     return;
   }
 

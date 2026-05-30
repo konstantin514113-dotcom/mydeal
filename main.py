@@ -505,6 +505,11 @@ textarea:focus{outline:none;border-color:#c9a84c}
     <span class="badge" id="igBadge"></span>
   </div>
   <div class="btn-row"><button class="btn btn-gold" id="igBtn" onclick="toggleIg()"></button></div>
+  <div class="bot-row" style="margin-top:14px">
+    <span class="bot-label">Jarvis WA</span>
+    <span class="badge" id="waJarvisBadge"></span>
+  </div>
+  <div class="btn-row"><button class="btn btn-gold" id="waJarvisBtn" onclick="toggleWaJarvis()"></button></div>
   <div id="msg"></div>
 </div>
 
@@ -524,14 +529,20 @@ textarea:focus{outline:none;border-color:#c9a84c}
 <script>
 var jarvisOn = """ + ("true" if jarvis_enabled else "false") + """;
 var igOn = """ + ("true" if instagram_enabled else "false") + """;
+var waJarvisOn = true;
 
+function setBadge(id, on){
+  var el=document.getElementById(id);
+  el.className='badge '+(on?'on':'off');
+  el.textContent=on?'ВКЛ':'ВЫКЛ';
+}
 function updateBadges(){
-  document.getElementById('jarvisBadge').className='badge '+(jarvisOn?'on':'off');
-  document.getElementById('jarvisBadge').textContent=jarvisOn?'ВКЛ':'ВЫКЛ';
+  setBadge('jarvisBadge', jarvisOn);
   document.getElementById('jarvisBtn').textContent=jarvisOn?'Выключить Jarvis':'Включить Jarvis';
-  document.getElementById('igBadge').className='badge '+(igOn?'on':'off');
-  document.getElementById('igBadge').textContent=igOn?'ВКЛ':'ВЫКЛ';
+  setBadge('igBadge', igOn);
   document.getElementById('igBtn').textContent=igOn?'Выключить Instagram':'Включить Instagram';
+  setBadge('waJarvisBadge', waJarvisOn);
+  document.getElementById('waJarvisBtn').textContent=waJarvisOn?'Выключить Jarvis WA':'Включить Jarvis WA';
 }
 updateBadges();
 
@@ -542,6 +553,15 @@ function toggleJarvis(){
 function toggleIg(){
   fetch('/admin/api/toggle-instagram',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({enabled:!igOn})})
     .then(r=>r.json()).then(d=>{igOn=!igOn;updateBadges();document.getElementById('msg').textContent=d.message||'';});
+}
+function toggleWaJarvis(){
+  var msgEl=document.getElementById('msg');
+  msgEl.textContent='...';
+  fetch('http://mydeal.railway.internal/toggle',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({enabled:!waJarvisOn})})
+    .then(r=>r.json()).then(d=>{
+      waJarvisOn=!waJarvisOn;updateBadges();
+      msgEl.textContent='Jarvis WA '+(waJarvisOn?'включён ✅':'выключен ❌');
+    }).catch(function(){msgEl.textContent='Ошибка: недоступен Jarvis WA сервис';});
 }
 
 function loadClients(){
