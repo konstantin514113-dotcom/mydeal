@@ -115,6 +115,9 @@ SPA-УХОД (дополнительная процедура):
 Шаг 2 — Назови цену из прайса и уточни услугу
 Шаг 3 — Желаемые дата и время
 Шаг 4 — Имя владельца и кличка питомца
+Шаг 4б — Вежливо спроси: «Прислать SMS-подтверждение на этот номер или на другой?»
+  Если клиент говорит «на этот» / «не нужно» / не хочет другой — не настаивай, запишем WhatsApp-номер.
+  Если называет другой номер — запиши его.
 Шаг 5 — Покажи итоговую карточку и попроси подтвердить:
   «Порода: ... | Услуга: ... | Дата: ... | Время: ... | Владелец: ... | Питомец: ...»
   Если клиент сам назвал мастера — добавь строку «Мастер: ...» в карточку.
@@ -123,6 +126,7 @@ SPA-УХОД (дополнительная процедура):
   «Запись принята! Ждём вас 🐾 Если что-то изменится — напишите нам.»
 
 МАСТЕР: никогда не спрашивай мастера сам. Упоминай мастера только если клиент сам попросил конкретного.
+EMAIL: никогда не спрашивай email.
 
 ПРАЙС-ЛИСТ (все цены в €):
 Австралийская овчарка 15–25 кг: Базовый уход 45, Гигиенический уход 60, Комплексный уход 80, Экспресс-линька 85
@@ -319,14 +323,14 @@ function getState(phone) {
   if (!bookingStates.has(phone)) {
     bookingStates.set(phone, {
       breed: null, service: null, date: null, time: null,
-      ownerName: null, petName: null, master: null, confirmed: false,
+      ownerName: null, petName: null, master: null, clientPhone: null, confirmed: false,
     });
   }
   return bookingStates.get(phone);
 }
 
 function stateContext(state) {
-  const labels = { breed: 'Порода/вес', service: 'Услуга', date: 'Дата', time: 'Время', ownerName: 'Имя владельца', petName: 'Кличка', master: 'Мастер' };
+  const labels = { breed: 'Порода/вес', service: 'Услуга', date: 'Дата', time: 'Время', ownerName: 'Имя владельца', petName: 'Кличка', master: 'Мастер', clientPhone: 'Телефон для SMS' };
   const filled = Object.entries(labels).filter(([k]) => state[k]).map(([k, label]) => `${label}: ${state[k]}`);
   return filled.length ? `\n\nТЕКУЩИЕ ДАННЫЕ КЛИЕНТА (уже известны, НЕ переспрашивай):\n${filled.join('\n')}` : '';
 }
@@ -339,7 +343,7 @@ async function extractState(history, state) {
       max_tokens: 200,
       messages: [{
         role: 'user',
-        content: `Извлеки данные бронирования из диалога. Верни ТОЛЬКО JSON, без пояснений.\nПоля: breed (string|null), service (string|null), date (string|null), time (string|null), ownerName (string|null), petName (string|null), master (string|null — только если клиент сам назвал мастера, иначе null), confirmed (boolean — true только если клиент явно подтвердил запись: "да", "подтверждаю", "всё верно", "yes", "jah" и т.п.).\nТекущие значения: ${JSON.stringify(state)}\nДиалог:\n${recent}`,
+        content: `Извлеки данные бронирования из диалога. Верни ТОЛЬКО JSON, без пояснений.\nПоля: breed (string|null), service (string|null), date (string|null), time (string|null), ownerName (string|null), petName (string|null), master (string|null — только если клиент сам назвал мастера, иначе null), clientPhone (string|null — номер для SMS только если клиент назвал ДРУГОЙ номер, не WhatsApp; если сказал «на этот» или промолчал — null), confirmed (boolean — true только если клиент явно подтвердил запись: "да", "подтверждаю", "всё верно", "yes", "jah" и т.п.).\nТекущие значения: ${JSON.stringify(state)}\nДиалог:\n${recent}`,
       }],
     });
     const text = r.content[0].text.trim();
@@ -351,13 +355,14 @@ async function extractState(history, state) {
   return state;
 }
 
-function postBooking(state, phone) {
+function postBooking(state, waPhone) {
   const body = JSON.stringify({
     breed: state.breed, service: state.service,
     date: state.date, time: state.time,
     name: state.ownerName, pet: state.petName,
     master: state.master || '',
-    phone, source: 'whatsapp',
+    phone: state.clientPhone || waPhone,
+    source: 'whatsapp',
   });
   const req = https.request({
     hostname: 'rjgrooming.up.railway.app',
