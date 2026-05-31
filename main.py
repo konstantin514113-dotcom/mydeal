@@ -44,14 +44,7 @@ def _load_wa_prompt():
 
 WA_SYSTEM_PROMPT = _load_wa_prompt()
 
-# test-chat uses same rules but keeps the name "Jarvis"
-TEST_CHAT_SYSTEM_PROMPT = (
-    WA_SYSTEM_PROMPT
-    .replace("Ты Анна, администратор салона R&J Grooming",
-             "Ты Jarvis, AI-ассистент салона R&J Grooming")
-    .replace("«Здравствуйте! Я Анна, администратор R&J Grooming 🐾»",
-             "«Здравствуйте! Я Jarvis, ассистент R&J Grooming 🐾»")
-)
+TEST_CHAT_SYSTEM_PROMPT = WA_SYSTEM_PROMPT
 
 # ── Test-chat in-memory sessions ─────────────────────────────────────────────
 _chat_sessions = {}  # sid -> {history, state}
@@ -721,7 +714,7 @@ _TEST_CHAT_HTML = """<!DOCTYPE html>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Jarvis — тест чата</title>
+<title>Анна — тест чата</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
@@ -767,7 +760,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
 <div class="header">
   <div class="avatar">🐾</div>
   <div class="hinfo">
-    <div class="hname">Jarvis — R&amp;J Grooming</div>
+    <div class="hname">Анна — R&amp;J Grooming</div>
     <div class="hstatus" id="st">онлайн</div>
   </div>
   <button class="reset" onclick="resetChat()">Сбросить</button>
