@@ -157,6 +157,34 @@ def _avail_context(avail):
             lines.append(f"Свободные слоты на {label}: {slot_list}.")
     return ("\n\n📅 РАСПИСАНИЕ (актуально):\n" + "\n".join(lines)) if lines else ""
 
+# ── Price disclaimer (code-level, breed-aware) ────────────────────────────────
+_SMOOTH_COAT_KW = [
+    'такса гладк', 'джек-рассел гладк', 'джек рассел гладк',
+    'французский бульдог', 'чихуахуа гладк', 'доберман',
+    'боксер', 'боксёр', 'далматин', 'бигль', 'мопс',
+    'бульмастиф', 'немецкий дог', 'американский стаффордш', 'питбуль',
+]
+_PRICE_RE = re.compile(r'\d+\s*€')
+_DISCLAIMER_SMOOTH = ("Окончательная стоимость будет озвучена мастером после осмотра "
+                      "при приёмке — может варьироваться в зависимости от состояния шерсти 🤍")
+_DISCLAIMER_OTHER  = ("Окончательная стоимость будет озвучена мастером после осмотра "
+                      "при приёмке — может варьироваться в зависимости от состояния шерсти "
+                      "и наличия колтунов 🤍")
+
+def _is_smooth_coat(breed):
+    if not breed:
+        return False
+    b = breed.lower()
+    return any(kw in b for kw in _SMOOTH_COAT_KW)
+
+def _add_price_disclaimer(reply, breed):
+    if not _PRICE_RE.search(reply):
+        return reply
+    if "Окончательная стоимость" in reply:
+        return reply
+    disclaimer = _DISCLAIMER_SMOOTH if _is_smooth_coat(breed) else _DISCLAIMER_OTHER
+    return reply + "\n\n" + disclaimer
+
 def track_client(phone, channel, text):
     if phone not in clients:
         clients[phone] = {"channel": channel, "timestamps": [], "last_seen": None, "last_text": "", "mode": "jarvis"}
@@ -941,6 +969,7 @@ def test_chat_send():
         messages=history,
     )
     reply = response.content[0].text.strip()
+    reply = _add_price_disclaimer(reply, new_state.get("breed"))
     history.append({"role": "assistant", "content": reply})
     sess["state"] = new_state
 
@@ -949,19 +978,24 @@ def test_chat_send():
               and new_state.get("time") and new_state.get("ownerName")
               and new_state.get("petName"))
     if booked:
+        payload = {
+            "breed": new_state["breed"], "service": new_state["service"],
+            "date": new_state["date"], "time": new_state["time"],
+            "name": new_state["ownerName"], "pet": new_state["petName"],
+            "master": new_state.get("master") or "",
+            "phone": new_state.get("clientPhone") or "test-chat",
+            "source": "test-chat",
+        }
+        print(f"[test-chat] Booking confirmed → POST /book: {payload}", flush=True)
         try:
-            requests.post(
+            book_resp = requests.post(
                 request.host_url.rstrip("/") + "/book",
-                json={"breed": new_state["breed"], "service": new_state["service"],
-                      "date": new_state["date"], "time": new_state["time"],
-                      "name": new_state["ownerName"], "pet": new_state["petName"],
-                      "master": new_state.get("master") or "",
-                      "phone": new_state.get("clientPhone") or "test-chat",
-                      "source": "test-chat"},
-                timeout=5,
+                json=payload,
+                timeout=10,
             )
-        except Exception:
-            pass
+            print(f"[test-chat] /book response: {book_resp.status_code} {book_resp.text[:300]}", flush=True)
+        except Exception as e:
+            print(f"[test-chat] /book call failed: {e}", flush=True)
         del _chat_sessions[sid]
         session.pop("chat_sid", None)
 
