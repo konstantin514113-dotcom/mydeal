@@ -1,9 +1,10 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, session
 import anthropic
 import os
 import requests
 from datetime import datetime, timedelta
 from functools import wraps
+import json, re, uuid
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
@@ -30,6 +31,61 @@ SYSTEM_PROMPT = """You are Jarvis, the AI administrator of R&J Grooming in Talli
 - Keep answers short: 1-3 sentences
 - Greet only on first message
 - Booking: https://n1425894.alteg.io"""
+
+# ── WA funnel SYSTEM_PROMPT (loaded from whatsapp_bot.js) ────────────────────
+def _load_wa_prompt():
+    try:
+        p = os.path.join(os.path.dirname(__file__), "whatsapp_bot.js")
+        src = open(p, encoding="utf-8").read()
+        m = re.search(r"const SYSTEM_PROMPT = `([\s\S]*?)`;", src)
+        return m.group(1) if m else ""
+    except Exception:
+        return ""
+
+WA_SYSTEM_PROMPT = _load_wa_prompt()
+
+# ── Test-chat in-memory sessions ─────────────────────────────────────────────
+_chat_sessions = {}  # sid -> {history, state}
+
+def _blank_state():
+    return {"breed": None, "service": None, "date": None, "time": None,
+            "ownerName": None, "petName": None, "master": None,
+            "clientPhone": None, "confirmed": False}
+
+def _state_context(state):
+    labels = {"breed": "Порода/вес", "service": "Услуга", "date": "Дата",
+              "time": "Время", "ownerName": "Имя владельца", "petName": "Кличка",
+              "master": "Мастер", "clientPhone": "Телефон для SMS"}
+    filled = [f"{labels[k]}: {state[k]}" for k in labels if state.get(k)]
+    return ("\n\nТЕКУЩИЕ ДАННЫЕ КЛИЕНТА (уже известны, НЕ переспрашивай):\n"
+            + "\n".join(filled)) if filled else ""
+
+def _extract_state(history, state):
+    recent = "\n".join(
+        ("Клиент" if m["role"] == "user" else "Jarvis") + ": " + m["content"]
+        for m in history[-8:]
+    )
+    prompt = (
+        "Извлеки данные бронирования. Верни ТОЛЬКО JSON.\n"
+        "Поля: breed, service, date, time, ownerName, petName, "
+        "master (null если не назван клиентом), "
+        "clientPhone (null если клиент не назвал другой номер), "
+        "confirmed (boolean — true только если клиент явно подтвердил: "
+        "\"да\", \"подтверждаю\", \"всё верно\", \"yes\", \"jah\").\n"
+        f"Текущие: {json.dumps(state, ensure_ascii=False)}\nДиалог:\n{recent}"
+    )
+    try:
+        r = client_ai.messages.create(
+            model="claude-haiku-4-5-20251001", max_tokens=200,
+            messages=[{"role": "user", "content": prompt}]
+        )
+        text = r.content[0].text.strip()
+        m = re.search(r"\{[\s\S]*\}", text)
+        if m:
+            return {**state, **json.loads(m.group())}
+    except Exception:
+        pass
+    return state
 
 def track_client(phone, channel, text):
     if phone not in clients:
@@ -649,6 +705,178 @@ def api_stats():
         resp = jsonify({"success": False, "error": str(e), "bookings": []})
     resp.headers["Access-Control-Allow-Origin"] = "*"
     return resp
+
+# ── /test-chat ────────────────────────────────────────────────────────────────
+_TEST_CHAT_HTML = """<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Jarvis — тест чата</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+     background:#0b141a;height:100vh;display:flex;flex-direction:column;overflow:hidden}
+.header{background:#202c33;padding:10px 16px;display:flex;align-items:center;
+        gap:12px;border-bottom:1px solid #111b21;flex-shrink:0}
+.avatar{width:40px;height:40px;border-radius:50%;background:#00a884;
+        display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0}
+.hinfo{flex:1}
+.hname{color:#e9edef;font-size:15px;font-weight:600}
+.hstatus{color:#8696a0;font-size:12px;margin-top:1px}
+.reset{background:none;border:1px solid #8696a0;color:#8696a0;padding:5px 12px;
+       border-radius:6px;cursor:pointer;font-size:12px;white-space:nowrap}
+.reset:hover{border-color:#e9edef;color:#e9edef}
+.messages{flex:1;overflow-y:auto;padding:16px 5vw;display:flex;flex-direction:column;gap:2px}
+.messages::-webkit-scrollbar{width:5px}
+.messages::-webkit-scrollbar-thumb{background:#374045;border-radius:3px}
+.bubble{max-width:72%;padding:8px 12px 4px;border-radius:8px;
+        font-size:14px;line-height:1.5;word-break:break-word;margin:1px 0}
+.bubble .ts{font-size:11px;color:#8696a0;text-align:right;margin-top:3px}
+.jarvis{background:#202c33;color:#e9edef;align-self:flex-start;border-top-left-radius:0}
+.client{background:#005c4b;color:#e9edef;align-self:flex-end;border-top-right-radius:0}
+.typing-row{display:none;align-self:flex-start;padding:2px 0}
+.dots{display:flex;gap:5px;padding:10px 14px;background:#202c33;border-radius:8px;
+      border-top-left-radius:0}
+.dots span{width:8px;height:8px;border-radius:50%;background:#8696a0;
+           animation:blink 1.2s infinite}
+.dots span:nth-child(2){animation-delay:.2s}
+.dots span:nth-child(3){animation-delay:.4s}
+@keyframes blink{0%,60%,100%{opacity:.3}30%{opacity:1}}
+.input-bar{background:#202c33;padding:10px 12px;display:flex;align-items:center;
+           gap:8px;flex-shrink:0}
+.input-bar input{flex:1;background:#2a3942;border:none;border-radius:24px;
+                 padding:10px 16px;color:#e9edef;font-size:15px;outline:none}
+.input-bar input::placeholder{color:#8696a0}
+.send{width:44px;height:44px;border-radius:50%;background:#00a884;border:none;
+      cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.send:disabled{background:#3a4a52;cursor:default}
+.send svg{fill:#fff}
+</style>
+</head>
+<body>
+<div class="header">
+  <div class="avatar">🐾</div>
+  <div class="hinfo">
+    <div class="hname">Jarvis — R&amp;J Grooming</div>
+    <div class="hstatus" id="st">онлайн</div>
+  </div>
+  <button class="reset" onclick="resetChat()">Сбросить</button>
+</div>
+<div class="messages" id="msgs"></div>
+<div class="typing-row" id="typing"><div class="dots"><span></span><span></span><span></span></div></div>
+<div class="input-bar">
+  <input id="inp" type="text" placeholder="Сообщение" onkeydown="if(event.key==='Enter')send()">
+  <button class="send" id="sb" onclick="send()">
+    <svg viewBox="0 0 24 24" width="22" height="22"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+  </button>
+</div>
+<script>
+const msgs=document.getElementById('msgs'),inp=document.getElementById('inp'),
+      typing=document.getElementById('typing'),sb=document.getElementById('sb'),
+      st=document.getElementById('st');
+function ts(){return new Date().toLocaleTimeString('ru',{hour:'2-digit',minute:'2-digit'})}
+function addBubble(text,role){
+  const d=document.createElement('div');
+  d.className='bubble '+role;
+  const html=text.replace(/\*\*(.*?)\*\*/g,'<b>$1</b>').replace(/\\n/g,'<br>');
+  d.innerHTML=html+'<div class="ts">'+ts()+'</div>';
+  msgs.appendChild(d);
+  msgs.scrollTop=msgs.scrollHeight;
+}
+async function send(){
+  const text=inp.value.trim();if(!text)return;
+  inp.value='';sb.disabled=true;
+  addBubble(text,'client');
+  typing.style.display='flex';msgs.scrollTop=msgs.scrollHeight;
+  st.textContent='печатает…';
+  try{
+    const r=await fetch('/test-chat/send',{method:'POST',
+      headers:{'Content-Type':'application/json'},body:JSON.stringify({text})});
+    const d=await r.json();
+    typing.style.display='none';st.textContent='онлайн';
+    if(d.reply)addBubble(d.reply,'jarvis');
+    if(d.booked){st.textContent='запись принята ✓';setTimeout(()=>st.textContent='онлайн',4000);}
+  }catch(e){
+    typing.style.display='none';st.textContent='ошибка';
+    addBubble('Ошибка соединения. Попробуйте ещё раз.','jarvis');
+  }
+  sb.disabled=false;inp.focus();
+}
+async function resetChat(){
+  await fetch('/test-chat/reset',{method:'POST'});
+  msgs.innerHTML='';st.textContent='онлайн';
+}
+inp.focus();
+</script>
+</body>
+</html>"""
+
+@app.route("/test-chat")
+def test_chat():
+    return _TEST_CHAT_HTML, 200, {"Content-Type": "text/html; charset=utf-8"}
+
+@app.route("/test-chat/send", methods=["POST"])
+def test_chat_send():
+    data = request.get_json() or {}
+    text = data.get("text", "").strip()
+    if not text:
+        return jsonify({"error": "empty"}), 400
+
+    sid = session.get("chat_sid")
+    if not sid or sid not in _chat_sessions:
+        sid = str(uuid.uuid4())
+        session["chat_sid"] = sid
+        _chat_sessions[sid] = {"history": [], "state": _blank_state()}
+
+    sess = _chat_sessions[sid]
+    history, state = sess["history"], sess["state"]
+
+    history.append({"role": "user", "content": text})
+    if len(history) > MAX_HISTORY:
+        history[:] = history[-MAX_HISTORY:]
+
+    response = client_ai.messages.create(
+        model="claude-haiku-4-5-20251001",
+        max_tokens=400,
+        system=WA_SYSTEM_PROMPT + _state_context(state),
+        messages=history,
+    )
+    reply = response.content[0].text.strip()
+    history.append({"role": "assistant", "content": reply})
+
+    new_state = _extract_state(history, state)
+    sess["state"] = new_state
+
+    booked = (new_state.get("confirmed") and new_state.get("breed")
+              and new_state.get("service") and new_state.get("date")
+              and new_state.get("time") and new_state.get("ownerName")
+              and new_state.get("petName"))
+    if booked:
+        try:
+            requests.post(
+                request.host_url.rstrip("/") + "/book",
+                json={"breed": new_state["breed"], "service": new_state["service"],
+                      "date": new_state["date"], "time": new_state["time"],
+                      "name": new_state["ownerName"], "pet": new_state["petName"],
+                      "master": new_state.get("master") or "",
+                      "phone": new_state.get("clientPhone") or "test-chat",
+                      "source": "test-chat"},
+                timeout=5,
+            )
+        except Exception:
+            pass
+        del _chat_sessions[sid]
+        session.pop("chat_sid", None)
+
+    return jsonify({"reply": reply, "state": new_state, "booked": bool(booked)})
+
+@app.route("/test-chat/reset", methods=["POST"])
+def test_chat_reset():
+    sid = session.pop("chat_sid", None)
+    if sid:
+        _chat_sessions.pop(sid, None)
+    return jsonify({"ok": True})
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
