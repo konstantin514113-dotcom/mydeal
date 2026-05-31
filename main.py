@@ -995,6 +995,11 @@ def test_chat_send():
     # Always log state after extraction so we can debug confirmed/missing fields
     _required = ("breed", "service", "date", "time", "ownerName", "petName")
     _missing = [k for k in _required if not new_state.get(k)]
+    # Treat date as missing if it's not a real parseable date ("среда", "завтра" etc.)
+    if "date" not in _missing and new_state.get("date"):
+        if _parse_date_to_iso(new_state["date"]) is None:
+            _missing.append("date")
+            print(f"[test-chat] date {new_state['date']!r} not parseable — keeping as missing", flush=True)
     print(
         f"[test-chat] state: confirmed={new_state.get('confirmed')} missing={_missing} | "
         f"breed={new_state.get('breed')!r} service={new_state.get('service')!r} "
