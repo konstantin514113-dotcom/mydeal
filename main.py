@@ -89,6 +89,74 @@ def _extract_state(history, state):
         pass
     return state
 
+# ── Availability helpers ──────────────────────────────────────────────────────
+_RU_MONTHS = {
+    'января': '01', 'февраля': '02', 'марта': '03', 'апреля': '04',
+    'мая': '05', 'июня': '06', 'июля': '07', 'августа': '08',
+    'сентября': '09', 'октября': '10', 'ноября': '11', 'декабря': '12',
+}
+
+def _parse_date_to_iso(date_str):
+    if not date_str:
+        return None
+    if re.match(r'^\d{4}-\d{2}-\d{2}$', date_str):
+        return date_str
+    m = re.match(r'^(\d{1,2})[./](\d{1,2})[./](\d{4})$', date_str)
+    if m:
+        return f"{m.group(3)}-{m.group(2).zfill(2)}-{m.group(1).zfill(2)}"
+    dl = date_str.lower()
+    for ru, num in _RU_MONTHS.items():
+        if ru in dl:
+            day_m = re.search(r'(\d{1,2})', dl)
+            year_m = re.search(r'(\d{4})', dl)
+            day = day_m.group(1).zfill(2) if day_m else '01'
+            year = int(year_m.group(1)) if year_m else datetime.now().year
+            month_int = int(num)
+            now = datetime.now()
+            if year == now.year and month_int < now.month:
+                year += 1
+            return f"{year}-{num}-{day}"
+    return None
+
+def _fetch_slots_for_date(date_iso, base_url):
+    try:
+        r = requests.get(base_url.rstrip("/") + "/api/slots",
+                         params={"date": date_iso}, timeout=5)
+        return [str(s) for s in r.json().get("slots", [])]
+    except Exception:
+        return None
+
+def _fetch_available_days(base_url):
+    try:
+        now = datetime.now()
+        r = requests.get(base_url.rstrip("/") + "/api/available_days",
+                         params={"month": now.month, "year": now.year}, timeout=5)
+        return [str(d) for d in r.json().get("available", [])]
+    except Exception:
+        return None
+
+def _avail_context(avail):
+    if not avail:
+        return ""
+    lines = []
+    if avail.get("available_days"):
+        days = avail["available_days"]
+        lines.append(f"Ближайшие свободные дни: {', '.join(str(d) for d in days[:10])}.")
+    if "slots" in avail:
+        label = avail.get("date_label", "")
+        slots = avail["slots"]
+        if slots is None:
+            pass  # fetch failed — say nothing
+        elif not slots:
+            lines.append(f"На {label} свободных слотов нет — предложи другой день.")
+        else:
+            slot_list = ", ".join(slots)
+            req_t = avail.get("requested_time", "")
+            if req_t and not any(str(s).strip()[:5] == req_t.strip()[:5] for s in slots):
+                lines.append(f"Слот {req_t} на {label} ЗАНЯТ — не подтверждай его, предложи свободный.")
+            lines.append(f"Свободные слоты на {label}: {slot_list}.")
+    return ("\n\n📅 РАСПИСАНИЕ (актуально):\n" + "\n".join(lines)) if lines else ""
+
 def track_client(phone, channel, text):
     if phone not in clients:
         clients[phone] = {"channel": channel, "timestamps": [], "last_seen": None, "last_text": "", "mode": "jarvis"}
@@ -829,25 +897,51 @@ def test_chat_send():
     if not sid or sid not in _chat_sessions:
         sid = str(uuid.uuid4())
         session["chat_sid"] = sid
-        _chat_sessions[sid] = {"history": [], "state": _blank_state()}
+        _chat_sessions[sid] = {"history": [], "state": _blank_state(), "avail": {}}
 
     sess = _chat_sessions[sid]
     history, state = sess["history"], sess["state"]
+    avail = sess.setdefault("avail", {})
 
     history.append({"role": "user", "content": text})
     if len(history) > MAX_HISTORY:
         history[:] = history[-MAX_HISTORY:]
 
+    # Extract state BEFORE generating reply so bot knows about slot availability
+    new_state = _extract_state(history, state)
+
+    # Fetch available days when date-selection step is reached (breed+service known, date unknown)
+    if (new_state.get("breed") and new_state.get("service")
+            and not new_state.get("date") and "available_days" not in avail):
+        days = _fetch_available_days(request.host_url)
+        if days is not None:
+            avail["available_days"] = days
+
+    # Fetch slots when date changes
+    curr_date = new_state.get("date")
+    curr_time = new_state.get("time")
+    if curr_date and curr_date != avail.get("cached_date"):
+        date_iso = _parse_date_to_iso(curr_date)
+        if date_iso:
+            slots = _fetch_slots_for_date(date_iso, request.host_url)
+            avail.update({
+                "cached_date": curr_date,
+                "date_label": curr_date,
+                "slots": slots,
+                "requested_time": curr_time,
+            })
+    elif curr_time and curr_time != avail.get("requested_time"):
+        avail["requested_time"] = curr_time
+
+    # Generate reply with state context + live availability data
     response = client_ai.messages.create(
         model="claude-haiku-4-5-20251001",
         max_tokens=400,
-        system=TEST_CHAT_SYSTEM_PROMPT + _state_context(state),
+        system=TEST_CHAT_SYSTEM_PROMPT + _state_context(new_state) + _avail_context(avail),
         messages=history,
     )
     reply = response.content[0].text.strip()
     history.append({"role": "assistant", "content": reply})
-
-    new_state = _extract_state(history, state)
     sess["state"] = new_state
 
     booked = (new_state.get("confirmed") and new_state.get("breed")
