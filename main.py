@@ -44,6 +44,15 @@ def _load_wa_prompt():
 
 WA_SYSTEM_PROMPT = _load_wa_prompt()
 
+# test-chat uses same rules but keeps the name "Jarvis"
+TEST_CHAT_SYSTEM_PROMPT = (
+    WA_SYSTEM_PROMPT
+    .replace("Ты Анна, администратор салона R&J Grooming",
+             "Ты Jarvis, AI-ассистент салона R&J Grooming")
+    .replace("«Здравствуйте! Я Анна, администратор R&J Grooming 🐾»",
+             "«Здравствуйте! Я Jarvis, ассистент R&J Grooming 🐾»")
+)
+
 # ── Test-chat in-memory sessions ─────────────────────────────────────────────
 _chat_sessions = {}  # sid -> {history, state}
 
@@ -839,7 +848,7 @@ def test_chat_send():
     response = client_ai.messages.create(
         model="claude-haiku-4-5-20251001",
         max_tokens=400,
-        system=WA_SYSTEM_PROMPT + _state_context(state),
+        system=TEST_CHAT_SYSTEM_PROMPT + _state_context(state),
         messages=history,
     )
     reply = response.content[0].text.strip()
