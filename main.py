@@ -973,10 +973,19 @@ def test_chat_send():
     history.append({"role": "assistant", "content": reply})
     sess["state"] = new_state
 
-    booked = (new_state.get("confirmed") and new_state.get("breed")
-              and new_state.get("service") and new_state.get("date")
-              and new_state.get("time") and new_state.get("ownerName")
-              and new_state.get("petName"))
+    # Always log state after extraction so we can debug confirmed/missing fields
+    _required = ("breed", "service", "date", "time", "ownerName", "petName")
+    _missing = [k for k in _required if not new_state.get(k)]
+    print(
+        f"[test-chat] state: confirmed={new_state.get('confirmed')} missing={_missing} | "
+        f"breed={new_state.get('breed')!r} service={new_state.get('service')!r} "
+        f"date={new_state.get('date')!r} time={new_state.get('time')!r} "
+        f"owner={new_state.get('ownerName')!r} pet={new_state.get('petName')!r} "
+        f"phone={new_state.get('clientPhone')!r}",
+        flush=True,
+    )
+
+    booked = new_state.get("confirmed") and not _missing
     if booked:
         payload = {
             "breed": new_state["breed"], "service": new_state["service"],
@@ -986,16 +995,15 @@ def test_chat_send():
             "phone": new_state.get("clientPhone") or "test-chat",
             "source": "test-chat",
         }
-        print(f"[test-chat] Booking confirmed → POST /book: {payload}", flush=True)
-        try:
-            book_resp = requests.post(
-                request.host_url.rstrip("/") + "/book",
-                json=payload,
-                timeout=10,
-            )
-            print(f"[test-chat] /book response: {book_resp.status_code} {book_resp.text[:300]}", flush=True)
-        except Exception as e:
-            print(f"[test-chat] /book call failed: {e}", flush=True)
+        print(f"[test-chat] ✅ All fields confirmed — writing to calendar: {payload}", flush=True)
+        if GOOGLE_SCRIPT:
+            try:
+                gs_resp = requests.get(GOOGLE_SCRIPT, params=payload, timeout=15)
+                print(f"[test-chat] Google Script → {gs_resp.status_code}: {gs_resp.text[:500]}", flush=True)
+            except Exception as e:
+                print(f"[test-chat] Google Script call failed: {e}", flush=True)
+        else:
+            print("[test-chat] ⚠️ GOOGLE_SCRIPT env var not set — calendar write skipped", flush=True)
         del _chat_sessions[sid]
         session.pop("chat_sid", None)
 
