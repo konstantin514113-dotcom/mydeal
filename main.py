@@ -64,29 +64,40 @@ def _state_context(state):
 
 def _extract_state(history, state):
     recent = "\n".join(
-        ("Клиент" if m["role"] == "user" else "Jarvis") + ": " + m["content"]
+        ("Клиент" if m["role"] == "user" else "Анна") + ": " + m["content"]
         for m in history[-8:]
     )
     prompt = (
-        "Извлеки данные бронирования. Верни ТОЛЬКО JSON.\n"
+        "Извлеки данные бронирования. Верни ТОЛЬКО JSON без пояснений.\n"
         "Поля: breed, service, date, time, ownerName, petName, "
-        "master (null если не назван клиентом), "
-        "clientPhone (null если клиент не назвал другой номер), "
-        "confirmed (boolean — true только если клиент явно подтвердил: "
+        "master (null если клиент не называл мастера), "
+        "clientPhone (null если клиент не называл другой номер), "
+        "confirmed (boolean — true только если клиент явно написал "
         "\"да\", \"подтверждаю\", \"всё верно\", \"yes\", \"jah\").\n"
+        "ВАЖНО: если поле уже есть в «Текущие» и в диалоге не изменилось — "
+        "оставь его значение, не возвращай null.\n"
         f"Текущие: {json.dumps(state, ensure_ascii=False)}\nДиалог:\n{recent}"
     )
     try:
         r = client_ai.messages.create(
-            model="claude-haiku-4-5-20251001", max_tokens=200,
+            model="claude-haiku-4-5-20251001", max_tokens=300,
             messages=[{"role": "user", "content": prompt}]
         )
         text = r.content[0].text.strip()
+        print(f"[extract_state] raw: {text[:400]}", flush=True)
         m = re.search(r"\{[\s\S]*\}", text)
         if m:
-            return {**state, **json.loads(m.group())}
-    except Exception:
-        pass
+            extracted = json.loads(m.group())
+            # Merge: only overwrite with non-null values so existing fields aren't cleared
+            merged = dict(state)
+            for k, v in extracted.items():
+                if v is not None:
+                    merged[k] = v
+            return merged
+        else:
+            print(f"[extract_state] no JSON found in response", flush=True)
+    except Exception as e:
+        print(f"[extract_state] error: {e}", flush=True)
     return state
 
 # ── Availability helpers ──────────────────────────────────────────────────────
@@ -117,6 +128,14 @@ def _parse_date_to_iso(date_str):
                 year += 1
             return f"{year}-{num}-{day}"
     return None
+
+def _to_booking_date(date_str):
+    """Convert any date string to DD.MM.YYYY (format Google Script expects)."""
+    iso = _parse_date_to_iso(date_str)
+    if iso and re.match(r'^\d{4}-\d{2}-\d{2}$', iso):
+        y, mo, d = iso.split('-')
+        return f"{d}.{mo}.{y}"
+    return date_str  # fallback: send as-is, log will show it
 
 def _fetch_slots_for_date(date_iso, base_url):
     try:
@@ -987,15 +1006,21 @@ def test_chat_send():
 
     booked = new_state.get("confirmed") and not _missing
     if booked:
+        booking_date = _to_booking_date(new_state["date"])
         payload = {
             "breed": new_state["breed"], "service": new_state["service"],
-            "date": new_state["date"], "time": new_state["time"],
-            "name": new_state["ownerName"], "pet": new_state["petName"],
+            "date": booking_date, "time": new_state["time"],
+            "name": new_state["ownerName"], "pet": new_state["petName"] or "",
             "master": new_state.get("master") or "",
             "phone": new_state.get("clientPhone") or "test-chat",
-            "source": "test-chat",
+            "lang": "ru", "source": "test-chat",
         }
-        print(f"[test-chat] ✅ All fields confirmed — writing to calendar: {payload}", flush=True)
+        print(
+            f"[test-chat] ✅ All fields confirmed — writing to calendar.\n"
+            f"  date_raw={new_state['date']!r} → date_fmt={booking_date!r}\n"
+            f"  payload={payload}",
+            flush=True,
+        )
         if GOOGLE_SCRIPT:
             try:
                 gs_resp = requests.get(GOOGLE_SCRIPT, params=payload, timeout=15)
