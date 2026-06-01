@@ -167,8 +167,9 @@ def _fetch_slots_for_date(date_iso, _base_url=None):
         return []
     # GS expects DD.MM.YYYY (booking form sends this format)
     date_gs = _to_booking_date(date_iso)
-    params = {"action": "slots", "date": date_gs}
-    print(f"[slots] GET {_gs_url(params)}", flush=True)
+    action = "slots"
+    params = {"action": action, "date": date_gs}
+    print(f"[slots] action={action!r} GET {_gs_url(params)}", flush=True)
     try:
         r = requests.get(GOOGLE_SCRIPT, params=params, timeout=25)
         print(f"[slots] → {r.status_code}: {r.text[:300]}", flush=True)
@@ -180,7 +181,7 @@ def _fetch_slots_for_date(date_iso, _base_url=None):
         return []
 
 def _fetch_available_days(_base_url=None):
-    """Call Google Script directly (no self-referential HTTP hop)."""
+    """Call Google Script directly with the same params as /api/available_days Flask route."""
     now = datetime.now()
     cache_key = f"days:{now.year}-{now.month}"
     cached = _cache_get(cache_key)
@@ -190,8 +191,10 @@ def _fetch_available_days(_base_url=None):
     if not GOOGLE_SCRIPT:
         print("[days] GOOGLE_SCRIPT env var not set", flush=True)
         return []
-    params = {"action": "available_days", "month": now.month, "year": now.year}
-    print(f"[days] GET {_gs_url(params)}", flush=True)
+    # Params identical to /api/available_days Flask route → GS call
+    action = "available_days"
+    params = {"action": action, "month": now.month, "year": now.year, "master": ""}
+    print(f"[days] action={action!r} GET {_gs_url(params)}", flush=True)
     try:
         r = requests.get(GOOGLE_SCRIPT, params=params, timeout=25)
         print(f"[days] → {r.status_code}: {r.text[:300]}", flush=True)
