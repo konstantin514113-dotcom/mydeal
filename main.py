@@ -198,7 +198,7 @@ def _fetch_slots_for_date(date_iso, master=""):
     params = {"action": action, "date": date_gs, "master": master}
     print(f"[slots] action={action!r} master={master!r} GET {_gs_url(params)}", flush=True)
     try:
-        r = requests.get(GOOGLE_SCRIPT, params=params, timeout=8)
+        r = requests.get(GOOGLE_SCRIPT, params=params, timeout=20)
         print(f"[slots] → {r.status_code}: {r.text[:300]}", flush=True)
         slots = [str(s) for s in r.json().get("slots", [])]
         _cache_set(cache_key, slots)
@@ -222,7 +222,7 @@ def _fetch_available_days(master=""):
     params = {"action": action, "month": now.month, "year": now.year, "master": master}
     print(f"[days] action={action!r} master={master!r} GET {_gs_url(params)}", flush=True)
     try:
-        r = requests.get(GOOGLE_SCRIPT, params=params, timeout=5)
+        r = requests.get(GOOGLE_SCRIPT, params=params, timeout=20)
         print(f"[days] → {r.status_code}: {r.text[:300]}", flush=True)
         days = [str(d) for d in r.json().get("available", [])]
         _cache_set(cache_key, days)
@@ -250,32 +250,49 @@ _SCHEDULE_KW = re.compile(
 )
 
 def _build_schedule_for_days():
-    """2 requests max: available_days for Татьяна + Алиса, next 7 days, timeout=5s each."""
+    """Synchronous: Татьяна + Алиса, next 7 days, timeout=20s per GS request.
+    Returns formatted string with dates and time slots."""
     _SCHED_MASTERS = ["татьяна", "алиса"]
     now = datetime.now()
-    # Next 7 calendar days as DD.MM.YYYY
     next7 = set()
     for i in range(7):
         d = now + timedelta(days=i)
         next7.add(f"{d.day:02d}.{d.month:02d}.{d.year}")
 
-    print(f"[schedule] querying masters={_SCHED_MASTERS} × 7 days, timeout=5s each (2 requests max)", flush=True)
-
-    available: set = set()  # DD.MM.YYYY dates that have any master free
+    print(f"[schedule] step 1 — available_days for {_SCHED_MASTERS}, next 7 days", flush=True)
+    avail_days: set = set()
     for master in _SCHED_MASTERS:
-        days = _fetch_available_days(master=master)  # timeout=5s (see below)
+        days = _fetch_available_days(master=master)
         matched = [d for d in days if d in next7]
-        print(f"[schedule] master={master!r} → {matched}", flush=True)
-        available.update(matched)
+        print(f"[schedule] {master}: {matched}", flush=True)
+        avail_days.update(matched)
 
-    if not available:
-        print("[schedule] no available days in next 7 days", flush=True)
+    if not avail_days:
+        print("[schedule] no available days", flush=True)
         return None
 
-    sorted_dates = sorted(available, key=lambda d: _parse_date_to_iso(d) or d)
-    lines = [f"• {_iso_to_ru_date(_parse_date_to_iso(d))}" for d in sorted_dates]
-    result = "Свободные дни для записи:\n" + "\n".join(lines)
-    print(f"[schedule] ready: {result}", flush=True)
+    print(f"[schedule] step 2 — slots for {len(avail_days)} days × {len(_SCHED_MASTERS)} masters", flush=True)
+    day_slots: dict = {}
+    sorted_dates = sorted(avail_days, key=lambda d: _parse_date_to_iso(d) or d)
+    for day_str in sorted_dates:
+        iso = _parse_date_to_iso(day_str)
+        if not iso:
+            continue
+        for master in _SCHED_MASTERS:
+            slots = _fetch_slots_for_date(iso, master=master)
+            if slots:
+                day_slots.setdefault(day_str, set()).update(slots)
+
+    if not day_slots:
+        print("[schedule] no slots found", flush=True)
+        return None
+
+    lines = [
+        f"• {_iso_to_ru_date(_parse_date_to_iso(d))}: {', '.join(sorted(day_slots[d]))}"
+        for d in sorted_dates if d in day_slots
+    ]
+    result = "Свободные места:\n" + "\n".join(lines)
+    print(f"[schedule] ready:\n{result}", flush=True)
     return result
 
 def _fetch_schedule_bg(sid):
@@ -1169,38 +1186,6 @@ def _test_chat_send():
     # Extract state BEFORE generating reply so bot knows about slot availability
     new_state = _extract_state(history, state)
 
-    # ── Schedule state machine ────────────────────────────────────────────────
-    if "schedule_loading" in avail:
-        if not avail["schedule_loading"]:
-            # Background thread finished — show the result
-            del avail["schedule_loading"]
-            schedule = avail.get("full_schedule")
-            if schedule:
-                try:
-                    resp2 = client_ai.messages.create(
-                        model="claude-haiku-4-5-20251001",
-                        max_tokens=500,
-                        system=TEST_CHAT_SYSTEM_PROMPT + _state_context(new_state)
-                               + f"\n\n📅 РАСПИСАНИЕ (актуально):\n{schedule}",
-                        messages=history,
-                    )
-                    reply = resp2.content[0].text.strip()
-                except Exception as e:
-                    print(f"[schedule-bg] claude error: {e}", flush=True)
-                    reply = f"Вот свободные дни для записи:\n\n{schedule}\n\nКакой день вам удобен? 🤍"
-            else:
-                reply = ("К сожалению, расписание недоступно. "
-                         "Назовите удобную дату — я проверю наличие слотов 🤍")
-            history.append({"role": "assistant", "content": reply})
-            sess["state"] = new_state
-            return jsonify({"reply": reply, "state": new_state, "booked": False})
-        else:
-            # Thread still running
-            reply = "Ещё секунду ⏳"
-            history.append({"role": "assistant", "content": reply})
-            sess["state"] = new_state
-            return jsonify({"reply": reply, "state": new_state, "booked": False})
-
     # ── Schedule trigger ──────────────────────────────────────────────────────
     _booking_intent  = bool(new_state.get("booking_intent"))
     _no_date_yet     = not new_state.get("date")
@@ -1215,10 +1200,13 @@ def _test_chat_send():
     )
 
     if _needs_schedule:
-        reply = "Одну минуту, проверяю расписание 🐾"
+        schedule = _build_schedule_for_days()
+        if schedule:
+            avail["full_schedule"] = schedule
+            reply = f"{schedule}\n\nКакое время вам удобно? 🤍"
+        else:
+            reply = "Расписание сейчас недоступно. Назовите удобную дату — я проверю наличие слотов 🤍"
         history.append({"role": "assistant", "content": reply})
-        avail["schedule_loading"] = True
-        threading.Thread(target=_fetch_schedule_bg, args=(sid,), daemon=True).start()
         sess["state"] = new_state
         return jsonify({"reply": reply, "state": new_state, "booked": False})
 
