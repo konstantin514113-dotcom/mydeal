@@ -250,20 +250,21 @@ _SCHEDULE_KW = re.compile(
 )
 
 def _build_schedule_for_days():
-    """Synchronous: Татьяна + Алиса, next 7 days, timeout=20s per GS request.
+    """Synchronous: Татьяна + Алиса, remaining days of current month, timeout=20s per GS request.
     Returns formatted string with dates and time slots."""
     _SCHED_MASTERS = ["татьяна", "алиса"]
     now = datetime.now()
-    next7 = set()
-    for i in range(7):
-        d = now + timedelta(days=i)
-        next7.add(f"{d.day:02d}.{d.month:02d}.{d.year}")
+    last_day = 31 if now.month == 12 else (datetime(now.year, now.month + 1, 1) - timedelta(days=1)).day
+    month_remaining = {
+        f"{day:02d}.{now.month:02d}.{now.year}"
+        for day in range(now.day, last_day + 1)
+    }
 
-    print(f"[schedule] step 1 — available_days for {_SCHED_MASTERS}, next 7 days", flush=True)
+    print(f"[schedule] step 1 — available_days for {_SCHED_MASTERS}, {now.day:02d}.{now.month:02d}–{last_day:02d}.{now.month:02d}.{now.year}", flush=True)
     avail_days: set = set()
     for master in _SCHED_MASTERS:
         days = _fetch_available_days(master=master)
-        matched = [d for d in days if d in next7]
+        matched = [d for d in days if d in month_remaining]
         print(f"[schedule] {master}: {matched}", flush=True)
         avail_days.update(matched)
 
