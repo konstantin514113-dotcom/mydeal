@@ -1022,7 +1022,7 @@ function ts(){return new Date().toLocaleTimeString('ru',{hour:'2-digit',minute:'
 function addBubble(text,role){
   const d=document.createElement('div');
   d.className='bubble '+role;
-  const html=text.replace(/\*\*(.*?)\*\*/g,'<b>$1</b>').replace(/\\n/g,'<br>');
+  const html=text.replace(/\\*\\*(.*?)\\*\\*/g,'<b>$1</b>').replace(/\\n/g,'<br>');
   d.innerHTML=html+'<div class="ts">'+ts()+'</div>';
   msgs.appendChild(d);
   msgs.scrollTop=msgs.scrollHeight;
