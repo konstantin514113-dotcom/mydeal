@@ -49,16 +49,19 @@ _FUNNEL_RULES = """
 ═══ ВОРОНКА /test-chat (приоритет над всем выше — строго по шагам) ═══
 Шаг 1 — Узнай породу и вес питомца.
 Шаг 2 — Узнай потребность: что беспокоит? (шерсть, стрижка, когти, запах, линька?)
-Шаг 3 — Порекомендуй услугу: описание без цены. Жди пока клиент подтвердит («хочу», «хорошо», «давайте»).
-Шаг 4 — После подтверждения услуги: назови цену с «от» («Комплексный уход — от 55€.») и дисклеймер.
+Шаг 3 — Порекомендуй услугу: описание без цены. Жди пока клиент подтвердит («хочу», «хорошо», «давайте», «окей»).
+Шаг 4 — Клиент подтвердил услугу → ОБЯЗАТЕЛЬНО назови цену прямо сейчас: «[Услуга] — от [N]€.»
+         Добавь дисклеймер об окончательной стоимости.
          Затем спроси ТОЛЬКО: «Хотите записаться?»
-Шаг 5 — После «да» на запись: ответь ТОЛЬКО «Одну минуту, проверяю расписание 🐾»
+         БЕЗ ЦЕНЫ К СЛЕДУЮЩЕМУ ШАГУ НЕ ПЕРЕХОДИ.
+Шаг 5 — Клиент согласился записаться → ответь ТОЛЬКО: «Одну минуту, проверяю расписание 🐾»
          Расписание придёт следующим сообщением автоматически — ничего больше не пиши.
 Шаг 6 — После расписания: жди пока клиент назовёт конкретную дату и время.
 Шаг 7 — Собери имя владельца и кличку питомца (если не известны).
 Шаг 8 — Покажи карточку: Порода | Услуга | Дата | Время | Владелец | Питомец.
          Спроси «Всё верно?». После «да» — «Запись принята! Ждём вас 🐾»
 
+ЗАПРЕЩЕНО: переход к шагу 5 без называния цены на шаге 4.
 ЗАПРЕЩЕНО: цена до подтверждения услуги клиентом.
 ЗАПРЕЩЕНО: спрашивать дату/время до показа расписания.
 ЗАПРЕЩЕНО: два вопроса в одном сообщении.
@@ -219,7 +222,7 @@ def _fetch_available_days(master=""):
     params = {"action": action, "month": now.month, "year": now.year, "master": master}
     print(f"[days] action={action!r} master={master!r} GET {_gs_url(params)}", flush=True)
     try:
-        r = requests.get(GOOGLE_SCRIPT, params=params, timeout=8)
+        r = requests.get(GOOGLE_SCRIPT, params=params, timeout=5)
         print(f"[days] → {r.status_code}: {r.text[:300]}", flush=True)
         days = [str(d) for d in r.json().get("available", [])]
         _cache_set(cache_key, days)
@@ -247,49 +250,32 @@ _SCHEDULE_KW = re.compile(
 )
 
 def _build_schedule_for_days():
-    """Query GS per master for all remaining days of the current month; merge results."""
+    """2 requests max: available_days for Татьяна + Алиса, next 7 days, timeout=5s each."""
+    _SCHED_MASTERS = ["татьяна", "алиса"]
     now = datetime.now()
-    # Last day of current month
-    if now.month == 12:
-        last_day = 31
-    else:
-        last_day = (datetime(now.year, now.month + 1, 1) - timedelta(days=1)).day
-    # All days from today through end of month as DD.MM.YYYY
-    month_days = {
-        f"{day:02d}.{now.month:02d}.{now.year}"
-        for day in range(now.day, last_day + 1)
-    }
-    print(
-        f"[schedule] querying {len(_MASTERS)} masters × {len(month_days)} days "
-        f"({now.day:02d}.{now.month:02d}–{last_day:02d}.{now.month:02d}.{now.year}), timeout=8s each",
-        flush=True,
-    )
+    # Next 7 calendar days as DD.MM.YYYY
+    next7 = set()
+    for i in range(7):
+        d = now + timedelta(days=i)
+        next7.add(f"{d.day:02d}.{d.month:02d}.{d.year}")
 
-    day_slots: dict = {}  # DD.MM.YYYY → set of time strings
+    print(f"[schedule] querying masters={_SCHED_MASTERS} × 7 days, timeout=5s each (2 requests max)", flush=True)
 
-    for master in _MASTERS:
-        avail_days = _fetch_available_days(master=master)
-        master_days = [d for d in avail_days if d in month_days]
-        print(f"[schedule] master={master!r} → {len(master_days)} days available this month", flush=True)
-        for day_str in master_days:
-            iso = _parse_date_to_iso(day_str)
-            if not iso:
-                continue
-            slots = _fetch_slots_for_date(iso, master=master)
-            if slots:
-                day_slots.setdefault(day_str, set()).update(slots)
+    available: set = set()  # DD.MM.YYYY dates that have any master free
+    for master in _SCHED_MASTERS:
+        days = _fetch_available_days(master=master)  # timeout=5s (see below)
+        matched = [d for d in days if d in next7]
+        print(f"[schedule] master={master!r} → {matched}", flush=True)
+        available.update(matched)
 
-    if not day_slots:
-        print("[schedule] no slots found this month", flush=True)
+    if not available:
+        print("[schedule] no available days in next 7 days", flush=True)
         return None
 
-    sorted_dates = sorted(day_slots, key=lambda d: _parse_date_to_iso(d) or d)
-    lines = [
-        f"• {_iso_to_ru_date(_parse_date_to_iso(d))}: {', '.join(sorted(day_slots[d]))}"
-        for d in sorted_dates
-    ]
-    result = "Свободные места в этом месяце:\n" + "\n".join(lines)
-    print(f"[schedule] ready: {len(sorted_dates)} days with slots", flush=True)
+    sorted_dates = sorted(available, key=lambda d: _parse_date_to_iso(d) or d)
+    lines = [f"• {_iso_to_ru_date(_parse_date_to_iso(d))}" for d in sorted_dates]
+    result = "Свободные дни для записи:\n" + "\n".join(lines)
+    print(f"[schedule] ready: {result}", flush=True)
     return result
 
 def _fetch_full_schedule(max_days=5):
