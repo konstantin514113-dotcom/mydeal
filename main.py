@@ -87,6 +87,16 @@ def _state_context(state):
     return ("\n\nТЕКУЩИЕ ДАННЫЕ КЛИЕНТА (уже известны, НЕ переспрашивай):\n"
             + "\n".join(filled)) if filled else ""
 
+def _extract_price_from_history(history):
+    """Find last 'от N€' price mentioned by Anna in conversation."""
+    price_re = re.compile(r'от\s+(\d+)\s*€', re.IGNORECASE)
+    for msg in reversed(history):
+        if msg.get('role') == 'assistant':
+            m = price_re.search(msg.get('content', ''))
+            if m:
+                return int(m.group(1))
+    return 0
+
 def _extract_state(history, state):
     recent = "\n".join(
         ("Клиент" if m["role"] == "user" else "Анна") + ": " + m["content"]
@@ -1266,15 +1276,31 @@ def _test_chat_send():
     booked = new_state.get("confirmed") and not _missing
     if booked:
         booking_date = _to_booking_date(new_state["date"])
+        price = _extract_price_from_history(history)
         payload = {
-            "breed": new_state["breed"], "service": new_state["service"],
-            "date": booking_date, "time": new_state["time"],
-            "name": new_state["ownerName"], "pet": new_state["petName"] or "",
-            "master": new_state.get("master") or "",
-            "phone": new_state.get("clientPhone") or "test-chat",
-            "lang": "ru", "source": "test-chat",
+            "breed":        new_state["breed"],
+            "breedDisplay": new_state["breed"],
+            "service":      new_state["service"],
+            "price":        price,
+            "date":         booking_date,
+            "time":         new_state["time"],
+            "name":         new_state["ownerName"],
+            "pet":          new_state["petName"] or "",
+            "master":       new_state.get("master") or "",
+            "phone":        new_state.get("clientPhone") or "test-chat",
+            "lang":         "ru",
+            "source":       "test-chat",
         }
-        print(f"[test-chat] ✅ booking: {payload}", flush=True)
+        # Validate all required fields before sending
+        _required_booking = {"breed": payload["breed"], "service": payload["service"],
+                             "date": payload["date"], "time": payload["time"],
+                             "name": payload["name"]}
+        _empty = [k for k, v in _required_booking.items() if not v]
+        if _empty:
+            print(f"[test-chat] ⚠️ booking missing required fields: {_empty}", flush=True)
+        if not price:
+            print("[test-chat] ⚠️ price=0 — Anna may not have mentioned price in conversation", flush=True)
+        print(f"[test-chat] ✅ booking payload: {payload}", flush=True)
         if GOOGLE_SCRIPT:
             try:
                 gs_resp = requests.get(GOOGLE_SCRIPT, params=payload, timeout=15)
