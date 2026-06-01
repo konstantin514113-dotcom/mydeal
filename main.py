@@ -196,13 +196,52 @@ def _fetch_available_days(_base_url=None):
         print(f"[days] error: {e}", flush=True)
         return []
 
+_NUM_TO_RU = ['', 'января', 'февраля', 'марта', 'апреля', 'мая', 'июня',
+              'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря']
+
+def _iso_to_ru_date(iso):
+    """'2026-06-03' → '3 июня'"""
+    try:
+        _, m, d = iso.split('-')
+        return f"{int(d)} {_NUM_TO_RU[int(m)]}"
+    except Exception:
+        return iso
+
+# Keywords that indicate the client is asking about availability/schedule
+_SCHEDULE_KW = re.compile(
+    r'когда|свободн|занят|место[сть]?|дни|дат[ыею]|расписани|'
+    r'слот|ближайш|доступн|прийти|записа|выбрать|в какое|какие',
+    re.IGNORECASE
+)
+
+def _fetch_full_schedule(max_days=5):
+    """Fetch available days + slots for each; return formatted schedule string."""
+    days = _fetch_available_days()
+    if not days:
+        return None
+    lines = []
+    for day_str in days[:max_days]:
+        iso = _parse_date_to_iso(day_str)
+        if not iso:
+            continue
+        slots = _fetch_slots_for_date(iso)
+        if slots:
+            lines.append(f"• {_iso_to_ru_date(iso)}: {', '.join(slots)}")
+    if not lines:
+        return None
+    return "Свободные места:\n" + "\n".join(lines)
+
 def _avail_context(avail):
     if not avail:
         return ""
     lines = []
-    if avail.get("available_days"):
+    # Full schedule (days + slots) takes priority over bare available_days list
+    if avail.get("full_schedule"):
+        lines.append(avail["full_schedule"])
+    elif avail.get("available_days"):
         days = avail["available_days"]
         lines.append(f"Ближайшие свободные дни: {', '.join(str(d) for d in days[:10])}.")
+    # Slot check for a specific date (when client named one)
     if "slots" in avail:
         label = avail.get("date_label", "")
         slots = avail["slots"]
@@ -1019,20 +1058,30 @@ def test_chat_send():
     # Extract state BEFORE generating reply so bot knows about slot availability
     new_state = _extract_state(history, state)
 
-    # Fetch available days when date-selection step is reached (breed+service known, date unknown)
-    if (new_state.get("breed") and new_state.get("service")
-            and not new_state.get("date") and "available_days" not in avail):
-        days = _fetch_available_days(request.host_url)
-        if days is not None:
-            avail["available_days"] = days
+    # Detect if user is asking about schedule / availability
+    _wants_schedule = bool(_SCHEDULE_KW.search(text))
+    _at_date_step = (new_state.get("breed") and new_state.get("service")
+                     and not new_state.get("date"))
 
-    # Fetch slots when date changes
+    # Fetch full schedule (days + slots per day) when:
+    # - user explicitly asks about availability, OR
+    # - reached date-selection step and full_schedule not yet cached
+    if (_wants_schedule or _at_date_step) and "full_schedule" not in avail:
+        schedule = _fetch_full_schedule()
+        if schedule:
+            avail["full_schedule"] = schedule
+            avail.pop("available_days", None)  # superseded by full_schedule
+            print(f"[test-chat] full schedule ready:\n{schedule}", flush=True)
+        else:
+            print("[test-chat] full schedule: no data (GS empty or not configured)", flush=True)
+
+    # Fetch slots for a specific date when client names one
     curr_date = new_state.get("date")
     curr_time = new_state.get("time")
     if curr_date and curr_date != avail.get("cached_date"):
         date_iso = _parse_date_to_iso(curr_date)
         if date_iso:
-            slots = _fetch_slots_for_date(date_iso, request.host_url)
+            slots = _fetch_slots_for_date(date_iso)
             avail.update({
                 "cached_date": curr_date,
                 "date_label": curr_date,
