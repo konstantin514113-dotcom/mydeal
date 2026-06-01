@@ -49,22 +49,22 @@ _FUNNEL_RULES = """
 ═══ ВОРОНКА /test-chat (приоритет над всем выше — строго по шагам) ═══
 Шаг 1 — Узнай породу и вес питомца.
 Шаг 2 — Узнай потребность: что беспокоит? (шерсть, стрижка, когти, запах, линька?)
-Шаг 3 — Порекомендуй услугу: описание без цены. Жди пока клиент подтвердит («хочу», «хорошо», «давайте», «окей»).
-Шаг 4 — Клиент подтвердил услугу → ОБЯЗАТЕЛЬНО назови цену прямо сейчас: «[Услуга] — от [N]€.»
-         Добавь дисклеймер об окончательной стоимости.
-         Затем спроси ТОЛЬКО: «Хотите записаться?»
-         БЕЗ ЦЕНЫ К СЛЕДУЮЩЕМУ ШАГУ НЕ ПЕРЕХОДИ.
-Шаг 5 — Клиент согласился записаться → ответь ТОЛЬКО: «Одну минуту, проверяю расписание 🐾»
+Шаг 3 — Порекомендуй услугу: описание без цены. Спроси «Вам подходит?». Жди подтверждения.
+         Если клиент говорит «не знаю», «всё равно», «что посоветуете» — рекомендуй САМУЮ ДОРОГУЮ
+         доступную услугу для его породы (указана в ТЕКУЩИЕ ДАННЫЕ КЛИЕНТА).
+Шаг 4 — ВЫПОЛНЯЕТСЯ КОДОМ АВТОМАТИЧЕСКИ: как только клиент подтверждает услугу,
+         система сама отправит цену «от N€» + дисклеймер + «Хотите записаться?».
+         Тебе НЕ НУЖНО и ЗАПРЕЩЕНО называть цену — она придёт следующим сообщением.
+Шаг 5 — Клиент ответил «да» на «Хотите записаться?» → ответь ТОЛЬКО: «Одну минуту, проверяю расписание 🐾»
          Расписание придёт следующим сообщением автоматически — ничего больше не пиши.
 Шаг 6 — После расписания: жди пока клиент назовёт конкретную дату и время.
 Шаг 7 — Собери имя владельца и кличку питомца (если не известны).
 Шаг 8 — Покажи карточку: Порода | Услуга | Дата | Время | Владелец | Питомец.
          Спроси «Всё верно?». После «да» — «Запись принята! Ждём вас 🐾»
 
-ЖЁСТКОЕ ПРАВИЛО ЦЕНЫ: когда клиент говорит «да», «хочу», «хорошо», «давайте» на рекомендацию услуги —
-В ТОМ ЖЕ ответе (не в следующем!) написать: «[Услуга] — от [N]€.» + дисклеймер + «Хотите записаться?»
-ЗАПРЕЩЕНО: переход к шагу 5 без называния цены на шаге 4.
-ЗАПРЕЩЕНО: цена до подтверждения услуги клиентом.
+ЖЁСТКИЕ ПРАВИЛА:
+ЗАПРЕЩЕНО: называть цену самостоятельно — цена вставляется кодом автоматически.
+ЗАПРЕЩЕНО: переход к слотам без ответа «да» клиента на «Хотите записаться?».
 ЗАПРЕЩЕНО: спрашивать дату/время до показа расписания.
 ЗАПРЕЩЕНО: два вопроса в одном сообщении.
 ЗАПРЕЩЕНО: предлагать бронирование через сайт."""
@@ -77,15 +77,87 @@ _chat_sessions = {}  # sid -> {history, state}
 def _blank_state():
     return {"breed": None, "service": None, "date": None, "time": None,
             "ownerName": None, "petName": None, "master": None,
-            "clientPhone": None, "confirmed": False, "booking_intent": False}
+            "clientPhone": None, "confirmed": False,
+            "service_confirmed": False, "booking_intent": False}
 
 def _state_context(state):
     labels = {"breed": "Порода/вес", "service": "Услуга", "date": "Дата",
               "time": "Время", "ownerName": "Имя владельца", "petName": "Кличка",
               "master": "Мастер", "clientPhone": "Телефон для SMS"}
     filled = [f"{labels[k]}: {state[k]}" for k in labels if state.get(k)]
-    return ("\n\nТЕКУЩИЕ ДАННЫЕ КЛИЕНТА (уже известны, НЕ переспрашивай):\n"
-            + "\n".join(filled)) if filled else ""
+    ctx = ("\n\nТЕКУЩИЕ ДАННЫЕ КЛИЕНТА (уже известны, НЕ переспрашивай):\n"
+           + "\n".join(filled)) if filled else ""
+    breed = state.get("breed")
+    if breed and not state.get("service"):
+        top_svc, top_price = _lookup_most_expensive_service(breed)
+        if top_svc and top_price:
+            ctx += (f"\n\nСАМАЯ ДОРОГАЯ УСЛУГА ДЛЯ ЭТОЙ ПОРОДЫ: {top_svc} — от {top_price}€"
+                    " (предлагай именно её, если клиент не знает что нужно)")
+    return ctx
+
+_SVC_KW = {
+    'базовый':       'Базовый уход',
+    'гигиенический': 'Гигиенический уход',
+    'комплексный':   'Комплексный уход',
+    'spa':           'SPA-уход',
+    'тримминг':      'Тримминг',
+    'экспресс':      'Экспресс-линька',
+    'линька':        'Экспресс-линька',
+    'вычес':         'Вычес',
+}
+
+def _lookup_price(breed, service):
+    """Look up price from WA_SYSTEM_PROMPT price list by breed + service keywords."""
+    if not breed or not service or not WA_SYSTEM_PROMPT:
+        return 0
+    service_lower = service.lower()
+    canonical = next((name for kw, name in _SVC_KW.items() if kw in service_lower), None)
+    if not canonical:
+        return 0
+    # Breed words longer than 3 chars, skip digits/weight tokens
+    breed_words = [w.strip(',.()кгКГ') for w in breed.lower().split()
+                   if len(w) > 3 and not re.match(r'^\d', w)]
+    if not breed_words:
+        return 0
+    best_line, best_score = "", 0
+    for line in WA_SYSTEM_PROMPT.split('\n'):
+        if ':' not in line:
+            continue
+        ll = line.lower()
+        score = sum(1 for w in breed_words if w in ll)
+        if score > best_score:
+            best_score, best_line = score, line
+    if not best_line or best_score == 0:
+        return 0
+    m = re.search(rf'{re.escape(canonical)}\s+(\d+)', best_line)
+    return int(m.group(1)) if m else 0
+
+def _lookup_most_expensive_service(breed):
+    """Return (canonical_service_name, price) with the highest price for breed."""
+    if not breed or not WA_SYSTEM_PROMPT:
+        return None, 0
+    breed_words = [w.strip(',.()кгКГ') for w in breed.lower().split()
+                   if len(w) > 3 and not re.match(r'^\d', w)]
+    if not breed_words:
+        return None, 0
+    best_line, best_score = "", 0
+    for line in WA_SYSTEM_PROMPT.split('\n'):
+        if ':' not in line:
+            continue
+        ll = line.lower()
+        score = sum(1 for w in breed_words if w in ll)
+        if score > best_score:
+            best_score, best_line = score, line
+    if not best_line or best_score == 0:
+        return None, 0
+    best_service, best_price = None, 0
+    for canonical in set(_SVC_KW.values()):
+        m = re.search(rf'{re.escape(canonical)}\s+(\d+)', best_line)
+        if m:
+            p = int(m.group(1))
+            if p > best_price:
+                best_price, best_service = p, canonical
+    return best_service, best_price
 
 def _extract_price_from_history(history):
     """Find last 'от N€' price mentioned by Anna in conversation."""
@@ -107,8 +179,10 @@ def _extract_state(history, state):
         "Поля: breed, service, date, time, ownerName, petName, "
         "master (null если клиент не называл мастера), "
         "clientPhone (null если клиент не называл другой номер), "
-        "booking_intent (boolean — true если клиент ответил утвердительно «да»/«хочу»/«записывайте»/«yes» "
-        "на вопрос Анны «Хотите записаться?» — НЕ путать с финальным подтверждением данных).\n"
+        "service_confirmed (boolean — true если клиент явно согласился с рекомендованной услугой: "
+        "«да», «подходит», «хорошо», «давайте», «хочу», «окей» — это ДО вопроса о записи).\n"
+        "booking_intent (boolean — true если клиент ответил «да»/«хочу»/«записывайте»/«yes» "
+        "именно на вопрос «Хотите записаться?» — НЕ путать с подтверждением услуги).\n"
         "confirmed (boolean — true только если клиент явно подтвердил итоговую карточку записи: "
         "\"да\", \"подтверждаю\", \"всё верно\", \"yes\", \"jah\").\n"
         "ВАЖНО: если поле уже есть в «Текущие» и в диалоге не изменилось — "
@@ -1197,18 +1271,41 @@ def _test_chat_send():
     if len(history) > MAX_HISTORY:
         history[:] = history[-MAX_HISTORY:]
 
+    # Save flags before extraction to detect transitions
+    prev_service_confirmed = bool(state.get("service_confirmed"))
+
     # Extract state BEFORE generating reply so bot knows about slot availability
     new_state = _extract_state(history, state)
 
+    booking_intent = bool(new_state.get("booking_intent"))
+
+    # ── Step 2 (strict): service just confirmed → inject price from Python ────
+    just_confirmed_service = (not prev_service_confirmed) and bool(new_state.get("service_confirmed"))
+    if just_confirmed_service and not booking_intent:
+        breed   = new_state.get("breed")
+        service = new_state.get("service")
+        price   = _lookup_price(breed, service)
+        service_label = service or "Услуга"
+        if price:
+            disclaimer = _DISCLAIMER_SMOOTH if _is_smooth_coat(breed) else _DISCLAIMER_OTHER
+            reply = f"{service_label} — от {price}€.\n\n{disclaimer}\n\nХотите записаться?"
+        else:
+            reply = (f"{service_label} отлично подойдёт вашему питомцу 🤍\n\n"
+                     "Точную стоимость мастер озвучит при осмотре — она зависит от состояния шерсти.\n\n"
+                     "Хотите записаться?")
+        history.append({"role": "assistant", "content": reply})
+        sess["state"] = new_state
+        print(f"[test-chat] price-inject: breed={breed!r} service={service!r} price={price}", flush=True)
+        return jsonify({"reply": reply, "state": new_state, "booked": False})
+
     # ── Schedule trigger ──────────────────────────────────────────────────────
-    _booking_intent  = bool(new_state.get("booking_intent"))
     _no_date_yet     = not new_state.get("date")
     _schedule_cached = "full_schedule" in avail
-    _needs_schedule  = _booking_intent and _no_date_yet and not _schedule_cached
+    _needs_schedule  = booking_intent and _no_date_yet and not _schedule_cached
 
     print(
         f"[schedule-trigger] service={new_state.get('service')!r} "
-        f"booking_intent={_booking_intent} date={new_state.get('date')!r} "
+        f"booking_intent={booking_intent} date={new_state.get('date')!r} "
         f"cached={_schedule_cached} → needs_schedule={_needs_schedule}",
         flush=True,
     )
