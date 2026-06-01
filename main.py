@@ -155,46 +155,47 @@ def _gs_url(params: dict) -> str:
     import urllib.parse
     return GOOGLE_SCRIPT + "?" + urllib.parse.urlencode(params)
 
-def _fetch_slots_for_date(date_iso, _base_url=None):
-    """Call Google Script directly. date_iso is YYYY-MM-DD (used as cache key);
-    GS receives DD.MM.YYYY — same format as the booking form."""
-    cached = _cache_get(f"slots:{date_iso}")
+_MASTERS = ["татьяна", "алиса", "кристина", "анна"]
+
+def _fetch_slots_for_date(date_iso, master=""):
+    """Fetch slots from GS for date_iso (YYYY-MM-DD) and a specific master (lowercase).
+    GS receives date as DD.MM.YYYY — same format as booking form."""
+    cache_key = f"slots:{date_iso}:{master}"
+    cached = _cache_get(cache_key)
     if cached is not None:
-        print(f"[slots] cache hit {date_iso}: {cached}", flush=True)
+        print(f"[slots] cache hit {date_iso} master={master!r}: {cached}", flush=True)
         return cached
     if not GOOGLE_SCRIPT:
         print("[slots] GOOGLE_SCRIPT env var not set", flush=True)
         return []
-    # GS expects DD.MM.YYYY (booking form sends this format)
     date_gs = _to_booking_date(date_iso)
     action = "slots"
-    params = {"action": action, "date": date_gs}
-    print(f"[slots] action={action!r} GET {_gs_url(params)}", flush=True)
+    params = {"action": action, "date": date_gs, "master": master}
+    print(f"[slots] action={action!r} master={master!r} GET {_gs_url(params)}", flush=True)
     try:
         r = requests.get(GOOGLE_SCRIPT, params=params, timeout=25)
         print(f"[slots] → {r.status_code}: {r.text[:300]}", flush=True)
         slots = [str(s) for s in r.json().get("slots", [])]
-        _cache_set(f"slots:{date_iso}", slots)
+        _cache_set(cache_key, slots)
         return slots
     except Exception as e:
-        print(f"[slots] error for {date_iso}: {e}", flush=True)
+        print(f"[slots] error {date_iso} master={master!r}: {e}", flush=True)
         return []
 
-def _fetch_available_days(_base_url=None):
-    """Call Google Script directly with the same params as /api/available_days Flask route."""
+def _fetch_available_days(master=""):
+    """Fetch available days from GS for a specific master (lowercase)."""
     now = datetime.now()
-    cache_key = f"days:{now.year}-{now.month}"
+    cache_key = f"days:{now.year}-{now.month}:{master}"
     cached = _cache_get(cache_key)
     if cached is not None:
-        print(f"[days] cache hit: {cached[:5]}", flush=True)
+        print(f"[days] cache hit master={master!r}: {cached[:5]}", flush=True)
         return cached
     if not GOOGLE_SCRIPT:
         print("[days] GOOGLE_SCRIPT env var not set", flush=True)
         return []
-    # Params identical to /api/available_days Flask route → GS call
     action = "available_days"
-    params = {"action": action, "month": now.month, "year": now.year, "master": ""}
-    print(f"[days] action={action!r} GET {_gs_url(params)}", flush=True)
+    params = {"action": action, "month": now.month, "year": now.year, "master": master}
+    print(f"[days] action={action!r} master={master!r} GET {_gs_url(params)}", flush=True)
     try:
         r = requests.get(GOOGLE_SCRIPT, params=params, timeout=25)
         print(f"[days] → {r.status_code}: {r.text[:300]}", flush=True)
@@ -202,7 +203,7 @@ def _fetch_available_days(_base_url=None):
         _cache_set(cache_key, days)
         return days
     except Exception as e:
-        print(f"[days] error: {e}", flush=True)
+        print(f"[days] error master={master!r}: {e}", flush=True)
         return []
 
 _NUM_TO_RU = ['', 'января', 'февраля', 'марта', 'апреля', 'мая', 'июня',
@@ -224,18 +225,35 @@ _SCHEDULE_KW = re.compile(
 )
 
 def _fetch_full_schedule(max_days=5):
-    """Fetch available days + slots for each; return formatted schedule string."""
-    days = _fetch_available_days()
-    if not days:
+    """Fetch available days + slots across all masters, merge results."""
+    # Collect available days from each master (union)
+    all_days: set = set()
+    for master in _MASTERS:
+        for d in _fetch_available_days(master=master):
+            all_days.add(d)
+
+    if not all_days:
+        print("[schedule] no available days across any master", flush=True)
         return None
+
+    # Sort by ISO date so earliest days come first
+    sorted_days = sorted(all_days, key=lambda d: _parse_date_to_iso(d) or d)
+    print(f"[schedule] available days (all masters): {sorted_days[:max_days]}", flush=True)
+
     lines = []
-    for day_str in days[:max_days]:
+    for day_str in sorted_days[:max_days]:
         iso = _parse_date_to_iso(day_str)
         if not iso:
             continue
-        slots = _fetch_slots_for_date(iso)
-        if slots:
-            lines.append(f"• {_iso_to_ru_date(iso)}: {', '.join(slots)}")
+        # Collect slots from each master for this date (union, sorted)
+        all_slots: set = set()
+        for master in _MASTERS:
+            for s in _fetch_slots_for_date(iso, master=master):
+                all_slots.add(s)
+        if all_slots:
+            sorted_slots = sorted(all_slots)
+            lines.append(f"• {_iso_to_ru_date(iso)}: {', '.join(sorted_slots)}")
+
     if not lines:
         return None
     return "Свободные места:\n" + "\n".join(lines)
