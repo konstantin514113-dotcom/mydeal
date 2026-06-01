@@ -219,7 +219,7 @@ def _fetch_available_days(master=""):
     params = {"action": action, "month": now.month, "year": now.year, "master": master}
     print(f"[days] action={action!r} master={master!r} GET {_gs_url(params)}", flush=True)
     try:
-        r = requests.get(GOOGLE_SCRIPT, params=params, timeout=25)
+        r = requests.get(GOOGLE_SCRIPT, params=params, timeout=8)
         print(f"[days] → {r.status_code}: {r.text[:300]}", flush=True)
         days = [str(d) for d in r.json().get("available", [])]
         _cache_set(cache_key, days)
@@ -1191,38 +1191,47 @@ def test_chat_send():
     second_reply = None
 
     if _needs_schedule:
-        # Phase 1: immediate acknowledgment
+        # Phase 1: immediate acknowledgment (always safe)
         reply = "Одну минуту, проверяю расписание 🐾"
         history.append({"role": "assistant", "content": reply})
 
-        # Phase 2: sequential GS queries per master (timeout=8s each)
-        schedule = _build_schedule_for_days()
-        if schedule:
-            avail["full_schedule"] = schedule
-            avail.pop("ask_for_date", None)
-            resp2 = client_ai.messages.create(
-                model="claude-haiku-4-5-20251001",
-                max_tokens=500,
-                system=TEST_CHAT_SYSTEM_PROMPT + _state_context(new_state)
-                       + f"\n\n📅 РАСПИСАНИЕ (актуально):\n{schedule}",
-                messages=history,
-            )
-            second_reply = resp2.content[0].text.strip()
-            second_reply = _add_price_disclaimer(second_reply, new_state.get("breed"))
-        else:
-            second_reply = ("К сожалению, не удалось получить расписание. "
-                            "Назовите удобную дату — я проверю наличие слотов 🤍")
+        # Phase 2: GS queries + Claude — wrapped so any error returns a clean fallback
+        try:
+            schedule = _build_schedule_for_days()
+            if schedule:
+                avail["full_schedule"] = schedule
+                avail.pop("ask_for_date", None)
+                resp2 = client_ai.messages.create(
+                    model="claude-haiku-4-5-20251001",
+                    max_tokens=500,
+                    system=TEST_CHAT_SYSTEM_PROMPT + _state_context(new_state)
+                           + f"\n\n📅 РАСПИСАНИЕ (актуально):\n{schedule}",
+                    messages=history,
+                )
+                second_reply = resp2.content[0].text.strip()
+                second_reply = _add_price_disclaimer(second_reply, new_state.get("breed"))
+            else:
+                second_reply = ("К сожалению, не удалось получить расписание. "
+                                "Назовите удобную дату — я проверю наличие слотов 🤍")
+        except Exception as e:
+            print(f"[test-chat] schedule phase-2 error: {e}", flush=True)
+            second_reply = ("Не удалось загрузить расписание. "
+                            "Пожалуйста, назовите удобную дату — я проверю наличие слотов 🤍")
         history.append({"role": "assistant", "content": second_reply})
     else:
         # Normal single-reply flow
-        response = client_ai.messages.create(
-            model="claude-haiku-4-5-20251001",
-            max_tokens=400,
-            system=TEST_CHAT_SYSTEM_PROMPT + _state_context(new_state) + _avail_context(avail),
-            messages=history,
-        )
-        reply = response.content[0].text.strip()
-        reply = _add_price_disclaimer(reply, new_state.get("breed"))
+        try:
+            response = client_ai.messages.create(
+                model="claude-haiku-4-5-20251001",
+                max_tokens=400,
+                system=TEST_CHAT_SYSTEM_PROMPT + _state_context(new_state) + _avail_context(avail),
+                messages=history,
+            )
+            reply = response.content[0].text.strip()
+            reply = _add_price_disclaimer(reply, new_state.get("breed"))
+        except Exception as e:
+            print(f"[test-chat] claude error: {e}", flush=True)
+            reply = "Произошла ошибка. Пожалуйста, попробуйте ещё раз 🤍"
         history.append({"role": "assistant", "content": reply})
 
     sess["state"] = new_state
