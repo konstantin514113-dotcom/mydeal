@@ -4,7 +4,7 @@ import os
 import requests
 from datetime import datetime, timedelta
 from functools import wraps
-import json, re, uuid
+import json, re, uuid, time as _time
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
@@ -137,22 +137,64 @@ def _to_booking_date(date_str):
         return f"{d}.{mo}.{y}"
     return date_str  # fallback: send as-is, log will show it
 
-def _fetch_slots_for_date(date_iso, base_url):
-    try:
-        r = requests.get(base_url.rstrip("/") + "/api/slots",
-                         params={"date": date_iso}, timeout=5)
-        return [str(s) for s in r.json().get("slots", [])]
-    except Exception:
-        return None
+# TTL cache for Google Script availability data (avoids hammering GS on every message)
+_avail_cache: dict = {}
+_AVAIL_TTL = 300  # 5 minutes
 
-def _fetch_available_days(base_url):
+def _cache_get(key):
+    entry = _avail_cache.get(key)
+    if entry and (_time.time() - entry[0]) < _AVAIL_TTL:
+        return entry[1]
+    return None
+
+def _cache_set(key, value):
+    _avail_cache[key] = (_time.time(), value)
+
+def _fetch_slots_for_date(date_iso, _base_url=None):
+    """Call Google Script directly (no self-referential HTTP hop)."""
+    cached = _cache_get(f"slots:{date_iso}")
+    if cached is not None:
+        print(f"[slots] cache hit for {date_iso}: {cached}", flush=True)
+        return cached
+    if not GOOGLE_SCRIPT:
+        print("[slots] GOOGLE_SCRIPT not set", flush=True)
+        return []
     try:
-        now = datetime.now()
-        r = requests.get(base_url.rstrip("/") + "/api/available_days",
-                         params={"month": now.month, "year": now.year}, timeout=5)
-        return [str(d) for d in r.json().get("available", [])]
-    except Exception:
-        return None
+        print(f"[slots] fetching from GS: date={date_iso}", flush=True)
+        r = requests.get(GOOGLE_SCRIPT,
+                         params={"action": "slots", "date": date_iso},
+                         timeout=25)
+        print(f"[slots] GS → {r.status_code}: {r.text[:200]}", flush=True)
+        slots = [str(s) for s in r.json().get("slots", [])]
+        _cache_set(f"slots:{date_iso}", slots)
+        return slots
+    except Exception as e:
+        print(f"[slots] error for {date_iso}: {e}", flush=True)
+        return []
+
+def _fetch_available_days(_base_url=None):
+    """Call Google Script directly (no self-referential HTTP hop)."""
+    now = datetime.now()
+    cache_key = f"days:{now.year}-{now.month}"
+    cached = _cache_get(cache_key)
+    if cached is not None:
+        print(f"[days] cache hit: {cached[:5]}...", flush=True)
+        return cached
+    if not GOOGLE_SCRIPT:
+        print("[days] GOOGLE_SCRIPT not set", flush=True)
+        return []
+    try:
+        print(f"[days] fetching from GS: month={now.month} year={now.year}", flush=True)
+        r = requests.get(GOOGLE_SCRIPT,
+                         params={"action": "available_days", "month": now.month, "year": now.year},
+                         timeout=25)
+        print(f"[days] GS → {r.status_code}: {r.text[:200]}", flush=True)
+        days = [str(d) for d in r.json().get("available", [])]
+        _cache_set(cache_key, days)
+        return days
+    except Exception as e:
+        print(f"[days] error: {e}", flush=True)
+        return []
 
 def _avail_context(avail):
     if not avail:
@@ -446,10 +488,20 @@ def api_available_days():
     month = request.args.get("month", "")
     year = request.args.get("year", "")
     master = request.args.get("master", "")
+    print(f"[api/available_days] month={month} year={year} master={master!r}", flush=True)
+    if not GOOGLE_SCRIPT:
+        print("[api/available_days] GOOGLE_SCRIPT not configured", flush=True)
+        resp = jsonify({"available": [], "error": "GOOGLE_SCRIPT not configured"})
+        resp.headers["Access-Control-Allow-Origin"] = "*"
+        return resp
     try:
-        r = requests.get(GOOGLE_SCRIPT, params={"action": "available_days", "month": month, "year": year, "master": master}, timeout=15)
+        r = requests.get(GOOGLE_SCRIPT,
+                         params={"action": "available_days", "month": month, "year": year, "master": master},
+                         timeout=25)
+        print(f"[api/available_days] GS → {r.status_code}: {r.text[:300]}", flush=True)
         resp = jsonify(r.json())
     except Exception as e:
+        print(f"[api/available_days] error: {e}", flush=True)
         resp = jsonify({"available": [], "error": str(e)})
     resp.headers["Access-Control-Allow-Origin"] = "*"
     return resp
@@ -458,10 +510,20 @@ def api_available_days():
 def api_slots():
     date = request.args.get("date", "")
     master = request.args.get("master", "")
+    print(f"[api/slots] date={date!r} master={master!r}", flush=True)
+    if not GOOGLE_SCRIPT:
+        print("[api/slots] GOOGLE_SCRIPT not configured", flush=True)
+        resp = jsonify({"slots": [], "error": "GOOGLE_SCRIPT not configured"})
+        resp.headers["Access-Control-Allow-Origin"] = "*"
+        return resp
     try:
-        r = requests.get(GOOGLE_SCRIPT, params={"action": "slots", "date": date, "master": master}, timeout=10)
+        r = requests.get(GOOGLE_SCRIPT,
+                         params={"action": "slots", "date": date, "master": master},
+                         timeout=25)
+        print(f"[api/slots] GS → {r.status_code}: {r.text[:300]}", flush=True)
         resp = jsonify(r.json())
     except Exception as e:
+        print(f"[api/slots] error: {e}", flush=True)
         resp = jsonify({"slots": [], "error": str(e)})
     resp.headers["Access-Control-Allow-Origin"] = "*"
     return resp
