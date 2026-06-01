@@ -4,7 +4,7 @@ import os
 import requests
 from datetime import datetime, timedelta
 from functools import wraps
-import json, re, uuid, time as _time
+import json, re, uuid, time as _time, threading
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
@@ -277,6 +277,22 @@ def _build_schedule_for_days():
     result = "Свободные дни для записи:\n" + "\n".join(lines)
     print(f"[schedule] ready: {result}", flush=True)
     return result
+
+def _fetch_schedule_bg(sid):
+    """Background thread: fetch schedule and store result in session avail dict."""
+    print(f"[schedule-bg] starting for sid={sid[:8]}", flush=True)
+    try:
+        schedule = _build_schedule_for_days()
+    except Exception as e:
+        print(f"[schedule-bg] error: {e}", flush=True)
+        schedule = None
+    if sid in _chat_sessions:
+        avail = _chat_sessions[sid].get("avail", {})
+        avail["full_schedule"] = schedule   # None if failed/empty
+        avail["schedule_loading"] = False   # signal completion (set AFTER data)
+        print(f"[schedule-bg] done: {'ok — ' + schedule[:60] if schedule else 'empty'}", flush=True)
+    else:
+        print(f"[schedule-bg] session {sid[:8]} gone before fetch completed", flush=True)
 
 def _fetch_full_schedule(max_days=5):
     """Fetch available days + slots across all masters, merge results."""
@@ -1153,11 +1169,42 @@ def _test_chat_send():
     # Extract state BEFORE generating reply so bot knows about slot availability
     new_state = _extract_state(history, state)
 
-    # Schedule fetch trigger conditions
+    # ── Schedule state machine ────────────────────────────────────────────────
+    if "schedule_loading" in avail:
+        if not avail["schedule_loading"]:
+            # Background thread finished — show the result
+            del avail["schedule_loading"]
+            schedule = avail.get("full_schedule")
+            if schedule:
+                try:
+                    resp2 = client_ai.messages.create(
+                        model="claude-haiku-4-5-20251001",
+                        max_tokens=500,
+                        system=TEST_CHAT_SYSTEM_PROMPT + _state_context(new_state)
+                               + f"\n\n📅 РАСПИСАНИЕ (актуально):\n{schedule}",
+                        messages=history,
+                    )
+                    reply = resp2.content[0].text.strip()
+                except Exception as e:
+                    print(f"[schedule-bg] claude error: {e}", flush=True)
+                    reply = f"Вот свободные дни для записи:\n\n{schedule}\n\nКакой день вам удобен? 🤍"
+            else:
+                reply = ("К сожалению, расписание недоступно. "
+                         "Назовите удобную дату — я проверю наличие слотов 🤍")
+            history.append({"role": "assistant", "content": reply})
+            sess["state"] = new_state
+            return jsonify({"reply": reply, "state": new_state, "booked": False})
+        else:
+            # Thread still running
+            reply = "Ещё секунду ⏳"
+            history.append({"role": "assistant", "content": reply})
+            sess["state"] = new_state
+            return jsonify({"reply": reply, "state": new_state, "booked": False})
+
+    # ── Schedule trigger ──────────────────────────────────────────────────────
     _booking_intent  = bool(new_state.get("booking_intent"))
     _no_date_yet     = not new_state.get("date")
     _schedule_cached = "full_schedule" in avail
-    # Trigger: client said yes to "Хотите записаться?" AND date not yet chosen
     _needs_schedule  = _booking_intent and _no_date_yet and not _schedule_cached
 
     print(
@@ -1167,7 +1214,15 @@ def _test_chat_send():
         flush=True,
     )
 
-    # Fetch slots for a specific date when client names one
+    if _needs_schedule:
+        reply = "Одну минуту, проверяю расписание 🐾"
+        history.append({"role": "assistant", "content": reply})
+        avail["schedule_loading"] = True
+        threading.Thread(target=_fetch_schedule_bg, args=(sid,), daemon=True).start()
+        sess["state"] = new_state
+        return jsonify({"reply": reply, "state": new_state, "booked": False})
+
+    # ── Fetch slots for a specific date when client names one ─────────────────
     curr_date = new_state.get("date")
     curr_time = new_state.get("time")
     if curr_date and curr_date != avail.get("cached_date"):
@@ -1183,71 +1238,39 @@ def _test_chat_send():
     elif curr_time and curr_time != avail.get("requested_time"):
         avail["requested_time"] = curr_time
 
-    second_reply = None
-
-    if _needs_schedule:
-        # Phase 1: immediate acknowledgment (always safe)
-        reply = "Одну минуту, проверяю расписание 🐾"
-        history.append({"role": "assistant", "content": reply})
-
-        # Phase 2: GS queries + Claude — wrapped so any error returns a clean fallback
-        try:
-            schedule = _build_schedule_for_days()
-            if schedule:
-                avail["full_schedule"] = schedule
-                avail.pop("ask_for_date", None)
-                resp2 = client_ai.messages.create(
-                    model="claude-haiku-4-5-20251001",
-                    max_tokens=500,
-                    system=TEST_CHAT_SYSTEM_PROMPT + _state_context(new_state)
-                           + f"\n\n📅 РАСПИСАНИЕ (актуально):\n{schedule}",
-                    messages=history,
-                )
-                second_reply = resp2.content[0].text.strip()
-                second_reply = _add_price_disclaimer(second_reply, new_state.get("breed"))
-            else:
-                second_reply = ("К сожалению, не удалось получить расписание. "
-                                "Назовите удобную дату — я проверю наличие слотов 🤍")
-        except Exception as e:
-            print(f"[test-chat] schedule phase-2 error: {e}", flush=True)
-            second_reply = ("Не удалось загрузить расписание. "
-                            "Пожалуйста, назовите удобную дату — я проверю наличие слотов 🤍")
-        history.append({"role": "assistant", "content": second_reply})
-    else:
-        # Normal single-reply flow
-        try:
-            response = client_ai.messages.create(
-                model="claude-haiku-4-5-20251001",
-                max_tokens=400,
-                system=TEST_CHAT_SYSTEM_PROMPT + _state_context(new_state) + _avail_context(avail),
-                messages=history,
-            )
-            reply = response.content[0].text.strip()
-            reply = _add_price_disclaimer(reply, new_state.get("breed"))
-        except Exception as e:
-            print(f"[test-chat] claude error: {e}", flush=True)
-            reply = "Произошла ошибка. Пожалуйста, попробуйте ещё раз 🤍"
-        history.append({"role": "assistant", "content": reply})
+    # ── Normal single-reply flow ──────────────────────────────────────────────
+    try:
+        response = client_ai.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=400,
+            system=TEST_CHAT_SYSTEM_PROMPT + _state_context(new_state) + _avail_context(avail),
+            messages=history,
+        )
+        reply = response.content[0].text.strip()
+        reply = _add_price_disclaimer(reply, new_state.get("breed"))
+    except Exception as e:
+        print(f"[test-chat] claude error: {e}", flush=True)
+        reply = "Произошла ошибка. Пожалуйста, попробуйте ещё раз 🤍"
+    history.append({"role": "assistant", "content": reply})
 
     sess["state"] = new_state
 
-    # Always log state after extraction so we can debug confirmed/missing fields
+    # ── State logging ─────────────────────────────────────────────────────────
     _required = ("breed", "service", "date", "time", "ownerName", "petName")
     _missing = [k for k in _required if not new_state.get(k)]
-    # Treat date as missing if it's not a real parseable date ("среда", "завтра" etc.)
     if "date" not in _missing and new_state.get("date"):
         if _parse_date_to_iso(new_state["date"]) is None:
             _missing.append("date")
-            print(f"[test-chat] date {new_state['date']!r} not parseable — keeping as missing", flush=True)
+            print(f"[test-chat] date {new_state['date']!r} not parseable", flush=True)
     print(
         f"[test-chat] state: confirmed={new_state.get('confirmed')} missing={_missing} | "
         f"breed={new_state.get('breed')!r} service={new_state.get('service')!r} "
         f"date={new_state.get('date')!r} time={new_state.get('time')!r} "
-        f"owner={new_state.get('ownerName')!r} pet={new_state.get('petName')!r} "
-        f"phone={new_state.get('clientPhone')!r}",
+        f"owner={new_state.get('ownerName')!r} pet={new_state.get('petName')!r}",
         flush=True,
     )
 
+    # ── Booking ───────────────────────────────────────────────────────────────
     booked = new_state.get("confirmed") and not _missing
     if booked:
         booking_date = _to_booking_date(new_state["date"])
@@ -1259,27 +1282,19 @@ def _test_chat_send():
             "phone": new_state.get("clientPhone") or "test-chat",
             "lang": "ru", "source": "test-chat",
         }
-        print(
-            f"[test-chat] ✅ All fields confirmed — writing to calendar.\n"
-            f"  date_raw={new_state['date']!r} → date_fmt={booking_date!r}\n"
-            f"  payload={payload}",
-            flush=True,
-        )
+        print(f"[test-chat] ✅ booking: {payload}", flush=True)
         if GOOGLE_SCRIPT:
             try:
                 gs_resp = requests.get(GOOGLE_SCRIPT, params=payload, timeout=15)
-                print(f"[test-chat] Google Script → {gs_resp.status_code}: {gs_resp.text[:500]}", flush=True)
+                print(f"[test-chat] GS → {gs_resp.status_code}: {gs_resp.text[:300]}", flush=True)
             except Exception as e:
-                print(f"[test-chat] Google Script call failed: {e}", flush=True)
+                print(f"[test-chat] GS call failed: {e}", flush=True)
         else:
-            print("[test-chat] ⚠️ GOOGLE_SCRIPT env var not set — calendar write skipped", flush=True)
+            print("[test-chat] ⚠️ GOOGLE_SCRIPT not set", flush=True)
         del _chat_sessions[sid]
         session.pop("chat_sid", None)
 
-    result = {"reply": reply, "state": new_state, "booked": bool(booked)}
-    if second_reply:
-        result["second_reply"] = second_reply
-    return jsonify(result)
+    return jsonify({"reply": reply, "state": new_state, "booked": bool(booked)})
 
 @app.route("/test-chat/reset", methods=["POST"])
 def test_chat_reset():
