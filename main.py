@@ -61,6 +61,8 @@ _FUNNEL_RULES = """
 Шаг 8 — Покажи карточку: Порода | Услуга | Дата | Время | Владелец | Питомец.
          Спроси «Всё верно?». После «да» — «Запись принята! Ждём вас 🐾»
 
+ЖЁСТКОЕ ПРАВИЛО ЦЕНЫ: когда клиент говорит «да», «хочу», «хорошо», «давайте» на рекомендацию услуги —
+В ТОМ ЖЕ ответе (не в следующем!) написать: «[Услуга] — от [N]€.» + дисклеймер + «Хотите записаться?»
 ЗАПРЕЩЕНО: переход к шагу 5 без называния цены на шаге 4.
 ЗАПРЕЩЕНО: цена до подтверждения услуги клиентом.
 ЗАПРЕЩЕНО: спрашивать дату/время до показа расписания.
@@ -289,8 +291,9 @@ def _build_schedule_for_days():
         return None
 
     lines = [
-        f"• {_iso_to_ru_date(_parse_date_to_iso(d))}: {', '.join(sorted(day_slots[d]))}"
+        f"• {_iso_to_ru_date(_parse_date_to_iso(d))}: {', '.join(s for s in sorted(day_slots[d]) if s.endswith(':00'))}"
         for d in sorted_dates if d in day_slots
+        and any(s.endswith(':00') for s in day_slots[d])
     ]
     result = "Свободные места:\n" + "\n".join(lines)
     print(f"[schedule] ready:\n{result}", flush=True)
