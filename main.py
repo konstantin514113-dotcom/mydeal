@@ -50,8 +50,10 @@ _FUNNEL_RULES = """
 Шаг 1 — Узнай породу и вес питомца.
 Шаг 2 — Узнай потребность: что беспокоит? (шерсть, стрижка, когти, запах, линька?)
 Шаг 3 — Порекомендуй услугу: описание без цены. Спроси «Вам подходит?». Жди подтверждения.
-         Если клиент говорит «не знаю», «всё равно», «что посоветуете» — рекомендуй САМУЮ ДОРОГУЮ
-         доступную услугу для его породы (указана в ТЕКУЩИЕ ДАННЫЕ КЛИЕНТА).
+         Если клиент говорит «не знаю», «всё равно», «что посоветуете» —
+         ВЫПОЛНЯЕТСЯ КОДОМ АВТОМАТИЧЕСКИ: система опишет все доступные услуги для породы
+         от простого к сложному, подчеркнёт преимущества комплексного ухода и мягко
+         рекомендует его. Тебе НЕ НУЖНО генерировать этот ответ самостоятельно.
 Шаг 4 — ВЫПОЛНЯЕТСЯ КОДОМ АВТОМАТИЧЕСКИ: как только клиент подтверждает услугу,
          система сама отправит цену «от N€» + дисклеймер + «Хотите записаться?».
          Тебе НЕ НУЖНО и ЗАПРЕЩЕНО называть цену — она придёт следующим сообщением.
@@ -106,6 +108,20 @@ _SVC_KW = {
     'вычес':         'Вычес',
 }
 
+# Order for listing services simple → complex
+_SVC_ORDER = ['Базовый уход', 'Гигиенический уход', 'Комплексный уход',
+              'Тримминг', 'Вычес', 'Экспресс-линька', 'SPA-уход']
+
+_SVC_DESCRIPTIONS = {
+    'Базовый уход':       'мытьё профессиональными средствами + сушка',
+    'Гигиенический уход': 'купание, сушка, стрижка когтей, чистка ушей, глаз и лапок',
+    'Комплексный уход':   'всё из гигиенического + модельная стрижка ✨',
+    'SPA-уход':           'глубокое питание и восстановление шерсти',
+    'Тримминг':           'выщипывание старого слоя + оформление силуэта',
+    'Экспресс-линька':    'мытьё, маска, сушка — эффективное удаление подшёрстка',
+    'Вычес':              'вычёсывание + стрижка когтей + уход за глазами и ушами',
+}
+
 def _lookup_price(breed, service):
     """Look up price from WA_SYSTEM_PROMPT price list by breed + service keywords."""
     if not breed or not service or not WA_SYSTEM_PROMPT:
@@ -158,6 +174,31 @@ def _lookup_most_expensive_service(breed):
             if p > best_price:
                 best_price, best_service = p, canonical
     return best_service, best_price
+
+def _get_all_services_for_breed(breed):
+    """Return ordered list of (service, price) for breed, simple→complex."""
+    if not breed or not WA_SYSTEM_PROMPT:
+        return []
+    breed_words = [w.strip(',.()кгКГ') for w in breed.lower().split()
+                   if len(w) > 3 and not re.match(r'^\d', w)]
+    if not breed_words:
+        return []
+    best_line, best_score = "", 0
+    for line in WA_SYSTEM_PROMPT.split('\n'):
+        if ':' not in line:
+            continue
+        ll = line.lower()
+        score = sum(1 for w in breed_words if w in ll)
+        if score > best_score:
+            best_score, best_line = score, line
+    if not best_line or best_score == 0:
+        return []
+    result = []
+    for canonical in _SVC_ORDER:
+        m = re.search(rf'{re.escape(canonical)}\s+(\d+)', best_line)
+        if m:
+            result.append((canonical, int(m.group(1))))
+    return result
 
 def _extract_price_from_history(history):
     """Find last 'от N€' price mentioned by Anna in conversation."""
@@ -1290,13 +1331,26 @@ def _test_chat_send():
         and any(p in text.lower() for p in _unsure_phrases)
     )
     if _client_unsure_service:
-        top_svc, top_price = _lookup_most_expensive_service(new_state["breed"])
-        if top_svc:
-            reply = (f"Тогда рекомендую {top_svc} — для вашей породы это лучший выбор. "
-                     "Вам подходит?")
+        services = _get_all_services_for_breed(new_state["breed"])
+        if services:
+            lines = [f"• {svc} — {_SVC_DESCRIPTIONS.get(svc, '')}" for svc, _ in services]
+            comp = next((svc for svc, _ in services if 'комплексный' in svc.lower()), None)
+            gig  = next((svc for svc, _ in services if 'гигиенический' in svc.lower()), None)
+            recommend = comp or gig or services[-1][0]
+            msg = "Для вашей породы доступны следующие услуги:\n" + "\n".join(lines)
+            if comp:
+                msg += (f"\n\nКомплексный уход — самый полный вариант: питомец выходит "
+                        f"полностью ухоженным — шерсть, когти, уши, глаза и стрижка 🤍 "
+                        f"Многие клиенты выбирают именно его.\n\n"
+                        f"Я бы посоветовала {recommend}. Вам подходит?")
+            else:
+                msg += (f"\n\nЯ бы посоветовала {recommend} — для вашей породы это "
+                        "наиболее полный вариант ухода. Вам подходит?")
+            reply = msg
             history.append({"role": "assistant", "content": reply})
             sess["state"] = new_state
-            print(f"[test-chat] recommend-most-expensive: breed={new_state['breed']!r} svc={top_svc!r}", flush=True)
+            print(f"[test-chat] describe-services: breed={new_state['breed']!r} "
+                  f"services={[s for s,_ in services]} recommend={recommend!r}", flush=True)
             return jsonify({"reply": reply, "state": new_state, "booked": False})
 
     # ── Step 4 (strict): service just confirmed → inject price from Python ─────
