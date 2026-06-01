@@ -1138,14 +1138,21 @@ def test_chat_send():
     # Extract state BEFORE generating reply so bot knows about slot availability
     new_state = _extract_state(history, state)
 
-    # Two-phase schedule fetch: triggered when service is selected, no date yet,
-    # and client explicitly asks about dates/availability.
-    _service_set = bool(new_state.get("service"))
-    _no_date_yet = not new_state.get("date")
+    # Two-phase schedule fetch conditions
+    _service_set      = bool(new_state.get("service"))
+    _no_date_yet      = not new_state.get("date")
+    _schedule_cached  = "full_schedule" in avail
     _client_wants_dates = bool(_SCHEDULE_KW.search(text))
-    _needs_schedule = (
-        _service_set and _no_date_yet and _client_wants_dates
-        and "full_schedule" not in avail
+    # Trigger automatically as soon as service is selected and date not yet known
+    _needs_schedule   = _service_set and _no_date_yet and not _schedule_cached
+
+    print(
+        f"[schedule-trigger] service={new_state.get('service')!r} "
+        f"date={new_state.get('date')!r} "
+        f"service_set={_service_set} no_date_yet={_no_date_yet} "
+        f"cached={_schedule_cached} kw_match={_client_wants_dates} "
+        f"→ needs_schedule={_needs_schedule}",
+        flush=True,
     )
 
     # Mark date-selection step so avail_context can guide Anna
