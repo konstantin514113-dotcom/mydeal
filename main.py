@@ -1136,6 +1136,15 @@ def test_chat():
 
 @app.route("/test-chat/send", methods=["POST"])
 def test_chat_send():
+    try:
+        return _test_chat_send()
+    except Exception:
+        import traceback
+        print(f"[test-chat] UNHANDLED ERROR:\n{traceback.format_exc()}", flush=True)
+        return jsonify({"reply": "Произошла ошибка сервера. Попробуйте ещё раз 🤍",
+                        "state": {}, "booked": False}), 200
+
+def _test_chat_send():
     data = request.get_json() or {}
     text = data.get("text", "").strip()
     if not text:
