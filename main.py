@@ -1279,9 +1279,29 @@ def _test_chat_send():
 
     booking_intent = bool(new_state.get("booking_intent"))
 
-    # ── Step 2 (strict): service just confirmed → inject price from Python ────
+    # ── Step 3 (strict): client unsure about service → recommend most expensive ──
+    _unsure_phrases = ["не знаю", "всё равно", "все равно", "посоветуйте",
+                       "что посоветуете", "что лучше", "не важно", "неважно",
+                       "без разниц", "на ваш выбор", "любую", "любой", "любое"]
+    _client_unsure_service = (
+        new_state.get("breed")
+        and not new_state.get("service")
+        and not new_state.get("service_confirmed")
+        and any(p in text.lower() for p in _unsure_phrases)
+    )
+    if _client_unsure_service:
+        top_svc, top_price = _lookup_most_expensive_service(new_state["breed"])
+        if top_svc:
+            reply = (f"Тогда рекомендую {top_svc} — для вашей породы это лучший выбор. "
+                     "Вам подходит?")
+            history.append({"role": "assistant", "content": reply})
+            sess["state"] = new_state
+            print(f"[test-chat] recommend-most-expensive: breed={new_state['breed']!r} svc={top_svc!r}", flush=True)
+            return jsonify({"reply": reply, "state": new_state, "booked": False})
+
+    # ── Step 4 (strict): service just confirmed → inject price from Python ─────
     just_confirmed_service = (not prev_service_confirmed) and bool(new_state.get("service_confirmed"))
-    if just_confirmed_service and not booking_intent:
+    if just_confirmed_service:
         breed   = new_state.get("breed")
         service = new_state.get("service")
         price   = _lookup_price(breed, service)
@@ -1294,18 +1314,21 @@ def _test_chat_send():
                      "Точную стоимость мастер озвучит при осмотре — она зависит от состояния шерсти.\n\n"
                      "Хотите записаться?")
         history.append({"role": "assistant", "content": reply})
+        new_state["booking_intent"] = False  # reset: next "да" must be answer to "Хотите записаться?"
         sess["state"] = new_state
+        sess["price_shown"] = True
         print(f"[test-chat] price-inject: breed={breed!r} service={service!r} price={price}", flush=True)
         return jsonify({"reply": reply, "state": new_state, "booked": False})
 
     # ── Schedule trigger ──────────────────────────────────────────────────────
     _no_date_yet     = not new_state.get("date")
     _schedule_cached = "full_schedule" in avail
-    _needs_schedule  = booking_intent and _no_date_yet and not _schedule_cached
+    _price_shown     = sess.get("price_shown", False)
+    _needs_schedule  = booking_intent and _price_shown and _no_date_yet and not _schedule_cached
 
     print(
         f"[schedule-trigger] service={new_state.get('service')!r} "
-        f"booking_intent={booking_intent} date={new_state.get('date')!r} "
+        f"booking_intent={booking_intent} price_shown={_price_shown} date={new_state.get('date')!r} "
         f"cached={_schedule_cached} → needs_schedule={_needs_schedule}",
         flush=True,
     )
