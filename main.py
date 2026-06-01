@@ -224,21 +224,31 @@ _SCHEDULE_KW = re.compile(
     re.IGNORECASE
 )
 
-def _build_schedule_for_days(days_ahead=14):
-    """Query GS per master for next N calendar days; merge and return schedule string."""
+def _build_schedule_for_days():
+    """Query GS per master for all remaining days of the current month; merge results."""
     now = datetime.now()
-    next_n = set()
-    for i in range(1, days_ahead + 1):
-        d = now + timedelta(days=i)
-        next_n.add(f"{d.day:02d}.{d.month:02d}.{d.year}")
+    # Last day of current month
+    if now.month == 12:
+        last_day = 31
+    else:
+        last_day = (datetime(now.year, now.month + 1, 1) - timedelta(days=1)).day
+    # All days from today through end of month as DD.MM.YYYY
+    month_days = {
+        f"{day:02d}.{now.month:02d}.{now.year}"
+        for day in range(now.day, last_day + 1)
+    }
+    print(
+        f"[schedule] querying {len(_MASTERS)} masters × {len(month_days)} days "
+        f"({now.day:02d}.{now.month:02d}–{last_day:02d}.{now.month:02d}.{now.year}), timeout=8s each",
+        flush=True,
+    )
 
-    print(f"[schedule] querying {len(_MASTERS)} masters × ≤{days_ahead} days, timeout=8s each", flush=True)
     day_slots: dict = {}  # DD.MM.YYYY → set of time strings
 
     for master in _MASTERS:
         avail_days = _fetch_available_days(master=master)
-        master_days = [d for d in avail_days if d in next_n]
-        print(f"[schedule] master={master!r} → {len(master_days)} days available", flush=True)
+        master_days = [d for d in avail_days if d in month_days]
+        print(f"[schedule] master={master!r} → {len(master_days)} days available this month", flush=True)
         for day_str in master_days:
             iso = _parse_date_to_iso(day_str)
             if not iso:
@@ -248,14 +258,16 @@ def _build_schedule_for_days(days_ahead=14):
                 day_slots.setdefault(day_str, set()).update(slots)
 
     if not day_slots:
-        print("[schedule] no slots found across all masters", flush=True)
+        print("[schedule] no slots found this month", flush=True)
         return None
 
     sorted_dates = sorted(day_slots, key=lambda d: _parse_date_to_iso(d) or d)
-    lines = [f"• {_iso_to_ru_date(_parse_date_to_iso(d))}: {', '.join(sorted(day_slots[d]))}"
-             for d in sorted_dates[:7]]
-    result = "Свободные места:\n" + "\n".join(lines)
-    print(f"[schedule] ready:\n{result}", flush=True)
+    lines = [
+        f"• {_iso_to_ru_date(_parse_date_to_iso(d))}: {', '.join(sorted(day_slots[d]))}"
+        for d in sorted_dates
+    ]
+    result = "Свободные места в этом месяце:\n" + "\n".join(lines)
+    print(f"[schedule] ready: {len(sorted_dates)} days with slots", flush=True)
     return result
 
 def _fetch_full_schedule(max_days=5):
@@ -1164,7 +1176,7 @@ def test_chat_send():
         history.append({"role": "assistant", "content": reply})
 
         # Phase 2: sequential GS queries per master (timeout=8s each)
-        schedule = _build_schedule_for_days(days_ahead=14)
+        schedule = _build_schedule_for_days()
         if schedule:
             avail["full_schedule"] = schedule
             avail.pop("ask_for_date", None)
