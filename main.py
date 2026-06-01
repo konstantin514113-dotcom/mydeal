@@ -44,7 +44,27 @@ def _load_wa_prompt():
 
 WA_SYSTEM_PROMPT = _load_wa_prompt()
 
-TEST_CHAT_SYSTEM_PROMPT = WA_SYSTEM_PROMPT
+_FUNNEL_RULES = """
+
+═══ ВОРОНКА /test-chat (приоритет над всем выше — строго по шагам) ═══
+Шаг 1 — Узнай породу и вес питомца.
+Шаг 2 — Узнай потребность: что беспокоит? (шерсть, стрижка, когти, запах, линька?)
+Шаг 3 — Порекомендуй услугу: описание без цены. Жди пока клиент подтвердит («хочу», «хорошо», «давайте»).
+Шаг 4 — После подтверждения услуги: назови цену с «от» («Комплексный уход — от 55€.») и дисклеймер.
+         Затем спроси ТОЛЬКО: «Хотите записаться?»
+Шаг 5 — После «да» на запись: ответь ТОЛЬКО «Одну минуту, проверяю расписание 🐾»
+         Расписание придёт следующим сообщением автоматически — ничего больше не пиши.
+Шаг 6 — После расписания: жди пока клиент назовёт конкретную дату и время.
+Шаг 7 — Собери имя владельца и кличку питомца (если не известны).
+Шаг 8 — Покажи карточку: Порода | Услуга | Дата | Время | Владелец | Питомец.
+         Спроси «Всё верно?». После «да» — «Запись принята! Ждём вас 🐾»
+
+ЗАПРЕЩЕНО: цена до подтверждения услуги клиентом.
+ЗАПРЕЩЕНО: спрашивать дату/время до показа расписания.
+ЗАПРЕЩЕНО: два вопроса в одном сообщении.
+ЗАПРЕЩЕНО: предлагать бронирование через сайт."""
+
+TEST_CHAT_SYSTEM_PROMPT = WA_SYSTEM_PROMPT + _FUNNEL_RULES
 
 # ── Test-chat in-memory sessions ─────────────────────────────────────────────
 _chat_sessions = {}  # sid -> {history, state}
@@ -52,7 +72,7 @@ _chat_sessions = {}  # sid -> {history, state}
 def _blank_state():
     return {"breed": None, "service": None, "date": None, "time": None,
             "ownerName": None, "petName": None, "master": None,
-            "clientPhone": None, "confirmed": False}
+            "clientPhone": None, "confirmed": False, "booking_intent": False}
 
 def _state_context(state):
     labels = {"breed": "Порода/вес", "service": "Услуга", "date": "Дата",
@@ -72,7 +92,9 @@ def _extract_state(history, state):
         "Поля: breed, service, date, time, ownerName, petName, "
         "master (null если клиент не называл мастера), "
         "clientPhone (null если клиент не называл другой номер), "
-        "confirmed (boolean — true только если клиент явно написал "
+        "booking_intent (boolean — true если клиент ответил утвердительно «да»/«хочу»/«записывайте»/«yes» "
+        "на вопрос Анны «Хотите записаться?» — НЕ путать с финальным подтверждением данных).\n"
+        "confirmed (boolean — true только если клиент явно подтвердил итоговую карточку записи: "
         "\"да\", \"подтверждаю\", \"всё верно\", \"yes\", \"jah\").\n"
         "ВАЖНО: если поле уже есть в «Текущие» и в диалоге не изменилось — "
         "оставь его значение, не возвращай null.\n"
@@ -308,9 +330,7 @@ def _avail_context(avail):
     if not avail:
         return ""
     lines = []
-    if avail.get("ask_for_date") and "slots" not in avail:
-        lines.append("Попроси клиента назвать конкретную дату в формате «3 июня» — ты проверишь наличие свободных слотов.")
-    # Full schedule (days + slots) — currently disabled, kept for future use
+    # Full schedule (days + slots) shown after client confirms booking intent
     if avail.get("full_schedule"):
         lines.append(avail["full_schedule"])
     elif avail.get("available_days"):
@@ -1138,26 +1158,19 @@ def test_chat_send():
     # Extract state BEFORE generating reply so bot knows about slot availability
     new_state = _extract_state(history, state)
 
-    # Two-phase schedule fetch conditions
-    _service_set      = bool(new_state.get("service"))
-    _no_date_yet      = not new_state.get("date")
-    _schedule_cached  = "full_schedule" in avail
-    _client_wants_dates = bool(_SCHEDULE_KW.search(text))
-    # Trigger automatically as soon as service is selected and date not yet known
-    _needs_schedule   = _service_set and _no_date_yet and not _schedule_cached
+    # Schedule fetch trigger conditions
+    _booking_intent  = bool(new_state.get("booking_intent"))
+    _no_date_yet     = not new_state.get("date")
+    _schedule_cached = "full_schedule" in avail
+    # Trigger: client said yes to "Хотите записаться?" AND date not yet chosen
+    _needs_schedule  = _booking_intent and _no_date_yet and not _schedule_cached
 
     print(
         f"[schedule-trigger] service={new_state.get('service')!r} "
-        f"date={new_state.get('date')!r} "
-        f"service_set={_service_set} no_date_yet={_no_date_yet} "
-        f"cached={_schedule_cached} kw_match={_client_wants_dates} "
-        f"→ needs_schedule={_needs_schedule}",
+        f"booking_intent={_booking_intent} date={new_state.get('date')!r} "
+        f"cached={_schedule_cached} → needs_schedule={_needs_schedule}",
         flush=True,
     )
-
-    # Mark date-selection step so avail_context can guide Anna
-    if _service_set and _no_date_yet:
-        avail["ask_for_date"] = True
 
     # Fetch slots for a specific date when client names one
     curr_date = new_state.get("date")
