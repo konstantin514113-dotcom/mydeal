@@ -41,7 +41,8 @@ const SYSTEM_PROMPT = `Ты Анна, администратор премиал�
 ПРИВЕТСТВИЕ: ОБЯЗАТЕЛЬНО в первом ответе клиенту — «Здравствуйте! Я Анна, администратор R&J Grooming 🐾 Чем могу помочь?». Это правило без исключений: всегда приветствуй при первом сообщении. Повторно не здоровайся.
 
 ═══ РОЛЬ И СТИЛЬ ═══
-Ты профессиональный, тёплый, ненавязчивый администратор. Твоя главная цель — довести клиента до записи.
+Ты профессиональная, тёплая, ненавязчивая администратор. Твоя главная цель — довести клиента до записи.
+— Говори от первого лица женского рода: «я готова», «я рекомендую», «буду рада помочь», «обращайтесь ко мне»
 — Короткие ответы: 2–4 предложения максимум
 — Один вопрос за раз — не перегружай клиента
 — Не перечисляй весь прайс и все услуги сразу
@@ -55,17 +56,19 @@ const SYSTEM_PROMPT = `Ты Анна, администратор премиал�
 3. Выясни потребность: что беспокоит? (шерсть, когти, стрижка, запах, линька?)
 4. Уточни состояние шерсти: есть колтуны? идёт линька?
 5. Дай конкретную рекомендацию + объясни ценность (что именно сделаем и зачем)
-6. Назови цену из прайса по породе и весу
-7. Сразу предложи время: «Когда вам удобно записаться?»
+6. Цену называй только когда клиент окончательно выбрал услугу («хочу X», «запишите на X»). При перечислении вариантов — только описания, цены НЕ называй. Цены всегда с «от»: «от 55€».
+7. Предложи конкретные свободные даты и время — только реальные слоты из расписания (см. контекст).
 8. Собери данные: имя владельца, кличка, порода, телефон для SMS, дата и время
 9. Покажи карточку подтверждения
 10. Получи «да» — «Запись принята! Ждём вас 🐾»
 
 ═══ КОГДА СПРАШИВАЮТ ЦЕНУ ═══
+ФОРМАТ: цены всегда с «от» — «от 55€», «от 120€». Никогда не называй цену без «от».
+МОМЕНТ: называй цену только когда клиент окончательно выбрал услугу. При перечислении вариантов — только описания, без цен.
 Не называй цену сразу. Сначала спроси:
 — «Какая порода и примерный вес?» (если не знаешь)
 — «Как сейчас шерсть — есть колтуны?» (если уместно)
-Затем назови цену и сразу предложи записаться.
+Затем назови цену с «от» и сразу предложи записаться.
 После каждого называния цены добавляй дисклеймер в зависимости от породы:
 — Гладкошерстные породы (такса гладкошерстная, джек-рассел гладкий, французский бульдог, чихуахуа гладкошерстная, доберман, боксёр, далматин, бигль, мопс, бульмастиф, немецкий дог, американский стаффордширский терьер, питбуль): «Окончательная стоимость будет озвучена мастером после осмотра при приёмке — может варьироваться в зависимости от состояния шерсти 🤍»
 — Все остальные породы: «Окончательная стоимость будет озвучена мастером после осмотра при приёмке — может варьироваться в зависимости от состояния шерсти и наличия колтунов 🤍»
@@ -94,6 +97,7 @@ SPA-уход — глубокое питание и восстановление
 Шаг 1 — Порода и вес питомца
 Шаг 2 — Рекомендация услуги + цена из прайса
 Шаг 3 — Дата и время:
+  Если в контексте есть список свободных дней — предлагай только их. Если есть слоты на дату — предлагай только их.
   Всегда запрашивай конкретную дату в формате «день месяц», например «3 июня», и конкретное время, например «10:00».
   Если клиент называет день недели («среда», «пятница», «в субботу»), относительную дату («завтра», «послезавтра», «на следующей неделе», «на днях») — НЕ принимай это как дату, переспроси:
   «Уточните, пожалуйста, конкретную дату — например, 3 июня?»
@@ -321,19 +325,26 @@ function stateContext(state) {
 }
 
 async function extractState(history, state) {
-  const recent = history.slice(-8).map(m => `${m.role === 'user' ? 'Клиент' : 'Jarvis'}: ${m.content}`).join('\n');
+  const recent = history.slice(-8).map(m => `${m.role === 'user' ? 'Клиент' : 'Анна'}: ${m.content}`).join('\n');
   try {
     const r = await anthropic.messages.create({
       model: 'claude-haiku-4-5-20251001',
-      max_tokens: 200,
+      max_tokens: 300,
       messages: [{
         role: 'user',
-        content: `Извлеки данные бронирования из диалога. Верни ТОЛЬКО JSON, без пояснений.\nПоля: breed (string|null), service (string|null), date (string|null), time (string|null), ownerName (string|null), petName (string|null), master (string|null — только если клиент сам назвал мастера, иначе null), clientPhone (string|null — номер для SMS только если клиент назвал ДРУГОЙ номер, не WhatsApp; если сказал «на этот» или промолчал — null), confirmed (boolean — true только если клиент явно подтвердил запись: "да", "подтверждаю", "всё верно", "yes", "jah" и т.п.).\nТекущие значения: ${JSON.stringify(state)}\nДиалог:\n${recent}`,
+        content: `Извлеки данные бронирования из диалога. Верни ТОЛЬКО JSON, без пояснений.\nПоля: breed (string|null), service (string|null), date (string|null), time (string|null), ownerName (string|null), petName (string|null), master (string|null — только если клиент сам назвал мастера, иначе null), clientPhone (string|null — номер для SMS только если клиент назвал ДРУГОЙ номер, не WhatsApp; если сказал «на этот» или промолчал — null), confirmed (boolean — true только если клиент явно подтвердил запись: "да", "подтверждаю", "всё верно", "yes", "jah" и т.п.).\nВАЖНО: сохраняй текущие значения если в диалоге они не изменились — не возвращай null для уже известных полей.\nТекущие значения: ${JSON.stringify(state)}\nДиалог:\n${recent}`,
       }],
     });
     const text = r.content[0].text.trim();
     const m = text.match(/\{[\s\S]*\}/);
-    if (m) return { ...state, ...JSON.parse(m[0]) };
+    if (m) {
+      const extracted = JSON.parse(m[0]);
+      const merged = { ...state };
+      for (const [k, v] of Object.entries(extracted)) {
+        if (v !== null && v !== undefined) merged[k] = v;
+      }
+      return merged;
+    }
   } catch (e) {
     console.error('[Jarvis WA] extractState error:', e.message);
   }
@@ -343,11 +354,11 @@ async function extractState(history, state) {
 function postBooking(state, waPhone) {
   const body = JSON.stringify({
     breed: state.breed, service: state.service,
-    date: state.date, time: state.time,
-    name: state.ownerName, pet: state.petName,
+    date: toBookingDate(state.date), time: state.time,
+    name: state.ownerName, pet: state.petName || '',
     master: state.master || '',
     phone: state.clientPhone || waPhone,
-    source: 'whatsapp',
+    lang: 'ru', source: 'whatsapp',
   });
   const req = https.request({
     hostname: 'rjgrooming.up.railway.app',
@@ -358,6 +369,106 @@ function postBooking(state, waPhone) {
   req.on('error', e => console.error('[Jarvis WA] /book error:', e.message));
   req.write(body);
   req.end();
+}
+
+// ── Availability helpers ─────────────────────────────────────────────────────
+const RAILWAY_URL = process.env.RAILWAY_URL || 'https://rjgrooming.up.railway.app';
+
+function httpsGet(url) {
+  return new Promise(resolve => {
+    const req = https.get(url, { timeout: 5000 }, res => {
+      let body = '';
+      res.on('data', chunk => { body += chunk; });
+      res.on('end', () => { try { resolve(JSON.parse(body)); } catch { resolve({}); } });
+    });
+    req.on('error', () => resolve({}));
+    req.on('timeout', () => { req.destroy(); resolve({}); });
+  });
+}
+
+const RU_MONTHS_JS = {
+  'января':'01','февраля':'02','марта':'03','апреля':'04','мая':'05','июня':'06',
+  'июля':'07','августа':'08','сентября':'09','октября':'10','ноября':'11','декабря':'12',
+};
+
+function parseDateToIso(dateStr) {
+  if (!dateStr) return null;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return dateStr;
+  const ddmm = dateStr.match(/^(\d{1,2})[./](\d{1,2})[./](\d{4})$/);
+  if (ddmm) return `${ddmm[3]}-${ddmm[2].padStart(2,'0')}-${ddmm[1].padStart(2,'0')}`;
+  const dl = dateStr.toLowerCase();
+  for (const [ru, num] of Object.entries(RU_MONTHS_JS)) {
+    if (dl.includes(ru)) {
+      const dayM = dl.match(/(\d{1,2})/);
+      const day = dayM ? dayM[1].padStart(2,'0') : '01';
+      const now = new Date();
+      let year = now.getFullYear();
+      if (parseInt(num) < now.getMonth() + 1) year++;
+      return `${year}-${num}-${day}`;
+    }
+  }
+  return null;
+}
+
+function toBookingDate(dateStr) {
+  const iso = parseDateToIso(dateStr);
+  if (iso && /^\d{4}-\d{2}-\d{2}$/.test(iso)) {
+    const [y, mo, d] = iso.split('-');
+    return `${d}.${mo}.${y}`;
+  }
+  return dateStr;
+}
+
+function detectDateInText(text) {
+  const dl = text.toLowerCase();
+  for (const [ru, num] of Object.entries(RU_MONTHS_JS)) {
+    if (dl.includes(ru)) {
+      const dayM = dl.match(/(\d{1,2})/);
+      if (dayM) {
+        const day = dayM[1].padStart(2,'0');
+        const now = new Date();
+        let year = now.getFullYear();
+        if (parseInt(num) < now.getMonth() + 1) year++;
+        return `${year}-${num}-${day}`;
+      }
+    }
+  }
+  return null;
+}
+
+async function buildAvailContext(state, userText) {
+  // User just mentioned a specific date — fetch slots for it immediately
+  const detectedIso = detectDateInText(userText || '');
+  if (detectedIso) {
+    const data = await httpsGet(`${RAILWAY_URL}/api/slots?date=${encodeURIComponent(detectedIso)}`);
+    const slots = data.slots || [];
+    const label = Object.entries(RU_MONTHS_JS).find(([ru]) => detectedIso.split('-')[1] === Object.entries(RU_MONTHS_JS).find(([,n]) => n === detectedIso.split('-')[1])?.[1])?.[0];
+    const dateLabel = `${parseInt(detectedIso.split('-')[2])} ${Object.keys(RU_MONTHS_JS)[parseInt(detectedIso.split('-')[1])-1]}`;
+    if (slots.length > 0)
+      return `\n\n📅 СВОБОДНЫЕ СЛОТЫ на ${dateLabel}: ${slots.join(', ')}. Предлагай клиенту только эти слоты.`;
+    return `\n\n📅 На ${dateLabel} свободных слотов нет — предложи другой день.`;
+  }
+  // State has date → fetch slots for it
+  if (state.date) {
+    const iso = parseDateToIso(state.date);
+    if (iso) {
+      const data = await httpsGet(`${RAILWAY_URL}/api/slots?date=${encodeURIComponent(iso)}`);
+      const slots = data.slots || [];
+      if (slots.length > 0)
+        return `\n\n📅 СВОБОДНЫЕ СЛОТЫ на ${state.date}: ${slots.join(', ')}. Предлагай клиенту только эти слоты.`;
+      return `\n\n📅 На ${state.date} свободных слотов нет — предложи другой день.`;
+    }
+  }
+  // Breed+service known but no date → fetch available days
+  if (state.breed && state.service && !state.date) {
+    const now = new Date();
+    const data = await httpsGet(`${RAILWAY_URL}/api/available_days?month=${now.getMonth()+1}&year=${now.getFullYear()}`);
+    const days = data.available || [];
+    if (days.length > 0)
+      return `\n\n📅 СВОБОДНЫЕ ДНИ (актуально): ${days.slice(0,10).join(', ')}. Предлагай только эти дни.`;
+    return '\n\n📅 Свободных дней нет в текущем месяце — уточни у клиента гибкость.';
+  }
+  return '';
 }
 
 // ── Runtime state ───────────────────────────────────────────────────────────
@@ -514,11 +625,13 @@ client.on('message', async (msg) => {
   history.push({ role: 'user', content: text });
   if (history.length > MAX_HISTORY) history.splice(0, history.length - MAX_HISTORY);
 
+  const availCtx = await buildAvailContext(state, text);
+
   try {
     const response = await anthropic.messages.create({
       model: 'claude-haiku-4-5-20251001',
       max_tokens: 400,
-      system: SYSTEM_PROMPT + stateContext(state),
+      system: SYSTEM_PROMPT + stateContext(state) + availCtx,
       messages: history,
     });
     const reply = response.content[0]?.text?.trim();
