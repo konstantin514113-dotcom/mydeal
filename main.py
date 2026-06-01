@@ -173,7 +173,7 @@ def _fetch_slots_for_date(date_iso, master=""):
     params = {"action": action, "date": date_gs, "master": master}
     print(f"[slots] action={action!r} master={master!r} GET {_gs_url(params)}", flush=True)
     try:
-        r = requests.get(GOOGLE_SCRIPT, params=params, timeout=25)
+        r = requests.get(GOOGLE_SCRIPT, params=params, timeout=8)
         print(f"[slots] → {r.status_code}: {r.text[:300]}", flush=True)
         slots = [str(s) for s in r.json().get("slots", [])]
         _cache_set(cache_key, slots)
@@ -223,6 +223,40 @@ _SCHEDULE_KW = re.compile(
     r'слот|ближайш|доступн|прийти|записа|выбрать|в какое|какие',
     re.IGNORECASE
 )
+
+def _build_schedule_for_days(days_ahead=14):
+    """Query GS per master for next N calendar days; merge and return schedule string."""
+    now = datetime.now()
+    next_n = set()
+    for i in range(1, days_ahead + 1):
+        d = now + timedelta(days=i)
+        next_n.add(f"{d.day:02d}.{d.month:02d}.{d.year}")
+
+    print(f"[schedule] querying {len(_MASTERS)} masters × ≤{days_ahead} days, timeout=8s each", flush=True)
+    day_slots: dict = {}  # DD.MM.YYYY → set of time strings
+
+    for master in _MASTERS:
+        avail_days = _fetch_available_days(master=master)
+        master_days = [d for d in avail_days if d in next_n]
+        print(f"[schedule] master={master!r} → {len(master_days)} days available", flush=True)
+        for day_str in master_days:
+            iso = _parse_date_to_iso(day_str)
+            if not iso:
+                continue
+            slots = _fetch_slots_for_date(iso, master=master)
+            if slots:
+                day_slots.setdefault(day_str, set()).update(slots)
+
+    if not day_slots:
+        print("[schedule] no slots found across all masters", flush=True)
+        return None
+
+    sorted_dates = sorted(day_slots, key=lambda d: _parse_date_to_iso(d) or d)
+    lines = [f"• {_iso_to_ru_date(_parse_date_to_iso(d))}: {', '.join(sorted(day_slots[d]))}"
+             for d in sorted_dates[:7]]
+    result = "Свободные места:\n" + "\n".join(lines)
+    print(f"[schedule] ready:\n{result}", flush=True)
+    return result
 
 def _fetch_full_schedule(max_days=5):
     """Fetch available days + slots across all masters, merge results."""
@@ -1041,6 +1075,13 @@ async function send(){
     const d=await r.json();
     typing.style.display='none';st.textContent='онлайн';
     if(d.reply)addBubble(d.reply,'jarvis');
+    if(d.second_reply){
+      await new Promise(r=>setTimeout(r,900));
+      typing.style.display='flex';msgs.scrollTop=msgs.scrollHeight;
+      await new Promise(r=>setTimeout(r,700));
+      typing.style.display='none';
+      addBubble(d.second_reply,'jarvis');
+    }
     if(d.booked){st.textContent='запись принята ✓';setTimeout(()=>st.textContent='онлайн',4000);}
   }catch(e){
     typing.style.display='none';st.textContent='ошибка';
@@ -1085,11 +1126,18 @@ def test_chat_send():
     # Extract state BEFORE generating reply so bot knows about slot availability
     new_state = _extract_state(history, state)
 
-    # _fetch_full_schedule disabled to avoid GS timeout.
-    # When client asks about dates, Anna asks them to name a specific date.
-    _at_date_step = (new_state.get("breed") and new_state.get("service")
-                     and not new_state.get("date"))
-    if _at_date_step:
+    # Two-phase schedule fetch: triggered when service is selected, no date yet,
+    # and client explicitly asks about dates/availability.
+    _service_set = bool(new_state.get("service"))
+    _no_date_yet = not new_state.get("date")
+    _client_wants_dates = bool(_SCHEDULE_KW.search(text))
+    _needs_schedule = (
+        _service_set and _no_date_yet and _client_wants_dates
+        and "full_schedule" not in avail
+    )
+
+    # Mark date-selection step so avail_context can guide Anna
+    if _service_set and _no_date_yet:
         avail["ask_for_date"] = True
 
     # Fetch slots for a specific date when client names one
@@ -1108,16 +1156,43 @@ def test_chat_send():
     elif curr_time and curr_time != avail.get("requested_time"):
         avail["requested_time"] = curr_time
 
-    # Generate reply with state context + live availability data
-    response = client_ai.messages.create(
-        model="claude-haiku-4-5-20251001",
-        max_tokens=400,
-        system=TEST_CHAT_SYSTEM_PROMPT + _state_context(new_state) + _avail_context(avail),
-        messages=history,
-    )
-    reply = response.content[0].text.strip()
-    reply = _add_price_disclaimer(reply, new_state.get("breed"))
-    history.append({"role": "assistant", "content": reply})
+    second_reply = None
+
+    if _needs_schedule:
+        # Phase 1: immediate acknowledgment
+        reply = "Одну минуту, проверяю расписание 🐾"
+        history.append({"role": "assistant", "content": reply})
+
+        # Phase 2: sequential GS queries per master (timeout=8s each)
+        schedule = _build_schedule_for_days(days_ahead=14)
+        if schedule:
+            avail["full_schedule"] = schedule
+            avail.pop("ask_for_date", None)
+            resp2 = client_ai.messages.create(
+                model="claude-haiku-4-5-20251001",
+                max_tokens=500,
+                system=TEST_CHAT_SYSTEM_PROMPT + _state_context(new_state)
+                       + f"\n\n📅 РАСПИСАНИЕ (актуально):\n{schedule}",
+                messages=history,
+            )
+            second_reply = resp2.content[0].text.strip()
+            second_reply = _add_price_disclaimer(second_reply, new_state.get("breed"))
+        else:
+            second_reply = ("К сожалению, не удалось получить расписание. "
+                            "Назовите удобную дату — я проверю наличие слотов 🤍")
+        history.append({"role": "assistant", "content": second_reply})
+    else:
+        # Normal single-reply flow
+        response = client_ai.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=400,
+            system=TEST_CHAT_SYSTEM_PROMPT + _state_context(new_state) + _avail_context(avail),
+            messages=history,
+        )
+        reply = response.content[0].text.strip()
+        reply = _add_price_disclaimer(reply, new_state.get("breed"))
+        history.append({"role": "assistant", "content": reply})
+
     sess["state"] = new_state
 
     # Always log state after extraction so we can debug confirmed/missing fields
@@ -1165,7 +1240,10 @@ def test_chat_send():
         del _chat_sessions[sid]
         session.pop("chat_sid", None)
 
-    return jsonify({"reply": reply, "state": new_state, "booked": bool(booked)})
+    result = {"reply": reply, "state": new_state, "booked": bool(booked)}
+    if second_reply:
+        result["second_reply"] = second_reply
+    return jsonify(result)
 
 @app.route("/test-chat/reset", methods=["POST"])
 def test_chat_reset():
