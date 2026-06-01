@@ -262,7 +262,9 @@ def _avail_context(avail):
     if not avail:
         return ""
     lines = []
-    # Full schedule (days + slots) takes priority over bare available_days list
+    if avail.get("ask_for_date") and "slots" not in avail:
+        lines.append("Попроси клиента назвать конкретную дату в формате «3 июня» — ты проверишь наличие свободных слотов.")
+    # Full schedule (days + slots) — currently disabled, kept for future use
     if avail.get("full_schedule"):
         lines.append(avail["full_schedule"])
     elif avail.get("available_days"):
@@ -1083,22 +1085,12 @@ def test_chat_send():
     # Extract state BEFORE generating reply so bot knows about slot availability
     new_state = _extract_state(history, state)
 
-    # Detect if user is asking about schedule / availability
-    _wants_schedule = bool(_SCHEDULE_KW.search(text))
+    # _fetch_full_schedule disabled to avoid GS timeout.
+    # When client asks about dates, Anna asks them to name a specific date.
     _at_date_step = (new_state.get("breed") and new_state.get("service")
                      and not new_state.get("date"))
-
-    # Fetch full schedule (days + slots per day) when:
-    # - user explicitly asks about availability, OR
-    # - reached date-selection step and full_schedule not yet cached
-    if (_wants_schedule or _at_date_step) and "full_schedule" not in avail:
-        schedule = _fetch_full_schedule()
-        if schedule:
-            avail["full_schedule"] = schedule
-            avail.pop("available_days", None)  # superseded by full_schedule
-            print(f"[test-chat] full schedule ready:\n{schedule}", flush=True)
-        else:
-            print("[test-chat] full schedule: no data (GS empty or not configured)", flush=True)
+    if _at_date_step:
+        avail["ask_for_date"] = True
 
     # Fetch slots for a specific date when client names one
     curr_date = new_state.get("date")
