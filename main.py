@@ -71,8 +71,13 @@ _FUNNEL_RULES = """
          ❌ НЕ называй цену самостоятельно.
 Шаг 7 → Клиент «да» на «Хотите записаться?»: ответь ТОЛЬКО «Одну минуту, проверяю расписание 🐾»
 Шаг 8 → После расписания: жди конкретную дату и время.
-Шаг 9 → Собери имя владельца и кличку питомца.
-Шаг 10 → Карточка: Порода | Услуга | Дата | Время | Владелец | Питомец.
+Шаг 9 → Спроси имя владельца и кличку питомца (можно в одном сообщении).
+Шаг 9б → Спроси номер телефона для SMS-подтверждения:
+          «Укажите, пожалуйста, номер телефона в формате +372XXXXXXX 🤍»
+          Если клиент дал номер без +372 или в другом формате — уточни:
+          «Пожалуйста, укажите полный номер в формате +372XXXXXXX (например, +37253112233) 🤍»
+          Код проверяет формат автоматически и попросит исправить если нужно.
+Шаг 10 → Карточка: Порода | Услуга | Дата | Время | Владелец | Питомец | Телефон.
           «Всё верно?» → «да» → «Запись принята! Ждём вас 🐾»
 
 ЕСЛИ порода не известна → спроси породу (шаг 2).
@@ -1404,7 +1409,8 @@ def _test_chat_send():
 
     # Save flags before extraction to detect transitions
     prev_service_confirmed = bool(state.get("service_confirmed"))
-    prev_breed = state.get("breed")
+    prev_breed  = state.get("breed")
+    prev_phone  = state.get("clientPhone")
 
     # Extract state BEFORE generating reply so bot knows about slot availability
     new_state = _extract_state(history, state)
@@ -1464,7 +1470,20 @@ def _test_chat_send():
                   f"services={[s for s,_ in services]} recommend={recommend!r}", flush=True)
             return jsonify({"reply": msg, "state": new_state, "booked": False})
 
-    # ── Step 4 (strict): service just confirmed → inject price from Python ─────
+    # ── Phone validation: must be +372XXXXXXX format ─────────────────────────
+    _new_phone = new_state.get("clientPhone")
+    if _new_phone and _new_phone != prev_phone:
+        _clean = re.sub(r'[\s\-()]', '', str(_new_phone))
+        if not re.match(r'^\+372\d{6,8}$', _clean):
+            new_state["clientPhone"] = None  # reset invalid phone
+            reply = ("Пожалуйста, укажите номер телефона в формате +372XXXXXXX "
+                     "(например, +37253112233) 🤍")
+            history.append({"role": "assistant", "content": reply})
+            sess["state"] = new_state
+            print(f"[test-chat] phone-invalid: {_new_phone!r}", flush=True)
+            return jsonify({"reply": reply, "state": new_state, "booked": False})
+
+    # ── Step 6 (strict): service just confirmed → inject price from Python ─────
     just_confirmed_service = (not prev_service_confirmed) and bool(new_state.get("service_confirmed"))
     if just_confirmed_service:
         breed   = new_state.get("breed")
