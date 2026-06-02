@@ -55,13 +55,12 @@ WA_SYSTEM_PROMPT = _load_wa_prompt()
 _FUNNEL_RULES = """
 
 ═══ ВОРОНКА /test-chat (приоритет над всем выше — строго по шагам) ═══
-Шаг 1 — Узнай породу и вес питомца.
-Шаг 2 — Узнай потребность: что беспокоит? (шерсть, стрижка, когти, запах, линька?)
-Шаг 3 — Порекомендуй услугу: описание без цены. Спроси «Вам подходит?». Жди подтверждения.
-         Если клиент говорит «не знаю», «всё равно», «что посоветуете» —
-         ВЫПОЛНЯЕТСЯ КОДОМ АВТОМАТИЧЕСКИ: система опишет все доступные услуги для породы
-         от простого к сложному, подчеркнёт преимущества комплексного ухода и мягко
-         рекомендует его. Тебе НЕ НУЖНО генерировать этот ответ самостоятельно.
+Шаг 1 — Узнай породу и вес питомца. НЕ СПРАШИВАЙ «что беспокоит», «что вас интересует».
+Шаг 2 — ВЫПОЛНЯЕТСЯ КОДОМ АВТОМАТИЧЕСКИ: как только клиент назвал породу —
+         система сразу покажет все доступные услуги для этой породы от простого к дорогому.
+         Тебе НЕ НУЖНО и ЗАПРЕЩЕНО перечислять или рекомендовать услуги самостоятельно до
+         того как код это сделает.
+Шаг 3 — Жди, пока клиент подтвердит выбор услуги («да», «подходит», «хочу»).
 Шаг 4 — ВЫПОЛНЯЕТСЯ КОДОМ АВТОМАТИЧЕСКИ: как только клиент подтверждает услугу,
          система сама отправит цену «от N€» + дисклеймер + «Хотите записаться?».
          Тебе НЕ НУЖНО и ЗАПРЕЩЕНО называть цену — она придёт следующим сообщением.
@@ -73,6 +72,7 @@ _FUNNEL_RULES = """
          Спроси «Всё верно?». После «да» — «Запись принята! Ждём вас 🐾»
 
 ЖЁСТКИЕ ПРАВИЛА:
+ЗАПРЕЩЕНО: спрашивать «что беспокоит», «что вас интересует» — после породы код сам показывает услуги.
 ЗАПРЕЩЕНО: называть цену самостоятельно — цена вставляется кодом автоматически.
 ЗАПРЕЩЕНО: переход к слотам без ответа «да» клиента на «Хотите записаться?».
 ЗАПРЕЩЕНО: спрашивать дату/время до показа расписания.
@@ -1380,24 +1380,24 @@ def _test_chat_send():
 
     # Save flags before extraction to detect transitions
     prev_service_confirmed = bool(state.get("service_confirmed"))
+    prev_breed = state.get("breed")
 
     # Extract state BEFORE generating reply so bot knows about slot availability
     new_state = _extract_state(history, state)
 
     booking_intent = bool(new_state.get("booking_intent"))
 
-    # ── Step 3 (strict): client unsure about service → recommend most expensive ──
-    _unsure_phrases = ["не знаю", "всё равно", "все равно", "посоветуйте",
-                       "что посоветуете", "что лучше", "не важно", "неважно",
-                       "без разниц", "на ваш выбор", "любую", "любой", "любое"]
-    _client_unsure_service = (
-        new_state.get("breed")
-        and not new_state.get("service")
-        and not new_state.get("service_confirmed")
-        and any(p in text.lower() for p in _unsure_phrases)
-    )
-    if _client_unsure_service:
+    # ── Step 2 (strict): breed known → immediately show all services for breed ──
+    # Fires as soon as breed is extracted, but only after greeting has been sent.
+    _services_shown = sess.get("services_shown", False)
+    _breed_known    = bool(new_state.get("breed"))
+    _had_greeting   = any(m["role"] == "assistant" for m in history)
+    if (_breed_known and not _services_shown
+            and not new_state.get("service_confirmed")
+            and not booking_intent
+            and _had_greeting):
         services = _get_all_services_for_breed(new_state["breed"])
+        sess["services_shown"] = True  # mark regardless so we don't retry on empty
         if services:
             lines = [f"• {svc} — {_SVC_DESCRIPTIONS.get(svc, '')}" for svc, _ in services]
             comp = next((svc for svc, _ in services if 'комплексный' in svc.lower()), None)
@@ -1412,12 +1412,11 @@ def _test_chat_send():
             else:
                 msg += (f"\n\nЯ бы посоветовала {recommend} — для вашей породы это "
                         "наиболее полный вариант ухода. Вам подходит?")
-            reply = msg
-            history.append({"role": "assistant", "content": reply})
+            history.append({"role": "assistant", "content": msg})
             sess["state"] = new_state
-            print(f"[test-chat] describe-services: breed={new_state['breed']!r} "
+            print(f"[test-chat] auto-services: breed={new_state['breed']!r} prev={prev_breed!r} "
                   f"services={[s for s,_ in services]} recommend={recommend!r}", flush=True)
-            return jsonify({"reply": reply, "state": new_state, "booked": False})
+            return jsonify({"reply": msg, "state": new_state, "booked": False})
 
     # ── Step 4 (strict): service just confirmed → inject price from Python ─────
     just_confirmed_service = (not prev_service_confirmed) and bool(new_state.get("service_confirmed"))
