@@ -20,6 +20,14 @@ INSTAGRAM_TOKEN   = os.environ.get("INSTAGRAM_TOKEN", os.environ.get("WHATSAPP_T
 
 conversation_history = {}
 MAX_HISTORY = 20
+_msg_log = []          # recent messages: {ts, phone, channel, direction, text}
+_channel_counts = {"whatsapp": 0, "instagram": 0, "facebook": 0}
+
+def _log_msg(phone, channel, direction, text):
+    _msg_log.append({"ts": datetime.now().isoformat(), "phone": str(phone),
+                     "channel": channel, "direction": direction, "text": str(text)[:300]})
+    if len(_msg_log) > 100:
+        del _msg_log[:-100]
 jarvis_enabled    = True
 instagram_enabled = True
 pause_until       = None
@@ -535,6 +543,8 @@ def track_client(phone, channel, text):
     clients[phone]["timestamps"].append(now)
     clients[phone]["last_seen"] = now
     clients[phone]["last_text"] = text
+    _log_msg(phone, channel, "in", text)
+    _channel_counts[channel] = _channel_counts.get(channel, 0) + 1
 
 def should_reply(phone, channel="whatsapp"):
     if manual_mode: return False
@@ -581,6 +591,7 @@ def handle_message(sender_id, text, channel):
     if not should_reply(sender_id, channel):
         return None
     reply = get_ai_reply(sender_id, text)
+    _log_msg(sender_id, channel, "out", reply)
     if channel == "instagram":
         send_instagram(sender_id, reply)
     else:
@@ -950,6 +961,10 @@ def api_messages():
         result.append({"phone": phone, "ts": last.isoformat() if isinstance(last, datetime) else "", "last_text": info.get("last_text", ""), "channel": info.get("channel", "whatsapp")})
     return jsonify(result)
 
+@app.route("/admin/api/message-log")
+def api_message_log():
+    return jsonify({"log": list(reversed(_msg_log[-20:])), "counts": _channel_counts})
+
 @app.route("/admin/api/send", methods=["POST"])
 def api_send():
     data = request.get_json() or {}
@@ -1002,6 +1017,19 @@ select:focus{outline:none;border-color:#c9a84c}
 textarea{width:100%;background:#1c1c18;border:1px solid #3a3a30;border-radius:10px;color:#c8c2b8;font-family:inherit;font-size:1rem;padding:14px 12px;margin-bottom:12px;resize:vertical;min-height:100px;line-height:1.5}
 textarea:focus{outline:none;border-color:#c9a84c}
 #sendMsg{font-size:.85rem;color:#c9a84c;margin-top:10px;min-height:1.2em;text-align:center}
+.counter-row{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:4px}
+.counter-item{background:#1c1c18;border-radius:10px;padding:10px 12px;flex:1;min-width:72px;text-align:center}
+.counter-num{font-size:1.5rem;font-weight:700;color:#c9a84c;line-height:1.1}
+.counter-lbl{font-size:.65rem;color:#888;text-transform:uppercase;margin-top:3px}
+.msg-item{padding:8px 0;border-bottom:1px solid #2e2e26}
+.msg-item:last-child{border-bottom:none}
+.msg-head{display:flex;gap:6px;align-items:center;margin-bottom:2px}
+.msg-dir{font-size:.7rem;font-weight:700}
+.msg-in .msg-dir{color:#6fcf6f}
+.msg-out .msg-dir{color:#c9a84c}
+.msg-ph{font-size:.73rem;color:#a09880;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.msg-t{font-size:.68rem;color:#555;white-space:nowrap}
+.msg-body{font-size:.8rem;color:#c8c2b8;line-height:1.35;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
 </style>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700&display=swap" rel="stylesheet">
 </head>
@@ -1031,6 +1059,20 @@ textarea:focus{outline:none;border-color:#c9a84c}
 <div class="card">
   <h2>Клиенты</h2>
   <div id="clientsList"><div id="clients-empty">Нет данных</div></div>
+</div>
+
+<div class="card">
+  <h2>Статистика сообщений</h2>
+  <div class="counter-row">
+    <div class="counter-item"><div class="counter-num" id="cntWa">0</div><div class="counter-lbl">WhatsApp</div></div>
+    <div class="counter-item"><div class="counter-num" id="cntIg">0</div><div class="counter-lbl">Instagram</div></div>
+    <div class="counter-item"><div class="counter-num" id="cntFb">0</div><div class="counter-lbl">Facebook</div></div>
+  </div>
+</div>
+
+<div class="card">
+  <h2>Последние сообщения</h2>
+  <div id="msgLog"><div style="font-size:.85rem;color:#666;text-align:center;padding:12px 0">Нет данных</div></div>
 </div>
 
 <div class="card">
@@ -1122,6 +1164,30 @@ function sendManual(){
 
 loadClients();
 setInterval(loadClients, 15000);
+
+function loadMsgLog(){
+  fetch('/admin/api/message-log').then(r=>r.json()).then(data=>{
+    document.getElementById('cntWa').textContent=data.counts.whatsapp||0;
+    document.getElementById('cntIg').textContent=data.counts.instagram||0;
+    document.getElementById('cntFb').textContent=data.counts.facebook||0;
+    var log=document.getElementById('msgLog');
+    if(!data.log||!data.log.length){log.innerHTML='<div style="font-size:.85rem;color:#666;text-align:center;padding:12px 0">Нет сообщений</div>';return;}
+    log.innerHTML='';
+    data.log.forEach(function(m){
+      var ts=m.ts?new Date(m.ts).toLocaleString('ru-RU',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}):'';
+      var div=document.createElement('div');
+      div.className='msg-item msg-'+(m.direction==='in'?'in':'out');
+      div.innerHTML='<div class="msg-head"><span class="msg-dir">'+(m.direction==='in'?'←':'→')+'</span>'
+        +'<span class="c-ch">'+esc(m.channel||'wa')+'</span>'
+        +'<span class="msg-ph">'+esc(m.phone||'')+'</span>'
+        +'<span class="msg-t">'+ts+'</span></div>'
+        +'<div class="msg-body">'+esc(m.text||'')+'</div>';
+      log.appendChild(div);
+    });
+  }).catch(function(){});
+}
+loadMsgLog();
+setInterval(loadMsgLog, 15000);
 </script>
 </body>
 </html>"""
@@ -1364,9 +1430,8 @@ def _test_chat_send():
             disclaimer = _DISCLAIMER_SMOOTH if _is_smooth_coat(breed) else _DISCLAIMER_OTHER
             reply = f"{service_label} — от {price}€.\n\n{disclaimer}\n\nХотите записаться?"
         else:
-            reply = (f"{service_label} отлично подойдёт вашему питомцу 🤍\n\n"
-                     "Точную стоимость мастер озвучит при осмотре — она зависит от состояния шерсти.\n\n"
-                     "Хотите записаться?")
+            disclaimer = _DISCLAIMER_SMOOTH if _is_smooth_coat(breed) else _DISCLAIMER_OTHER
+            reply = f"{service_label} отлично подойдёт вашему питомцу 🤍\n\n{disclaimer}\n\nХотите записаться?"
         history.append({"role": "assistant", "content": reply})
         new_state["booking_intent"] = False  # reset: next "да" must be answer to "Хотите записаться?"
         sess["state"] = new_state
