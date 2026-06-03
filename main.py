@@ -112,7 +112,8 @@ def _blank_state():
     return {"breed": None, "weight": None, "service": None, "date": None, "time": None,
             "ownerName": None, "petName": None, "master": None,
             "clientPhone": None, "confirmed": False,
-            "service_confirmed": False, "booking_intent": False}
+            "service_confirmed": False, "booking_intent": False,
+            "price_shown": False}
 
 def _state_context(state):
     labels = {"breed": "Порода", "weight": "Вес", "service": "Услуга", "date": "Дата",
@@ -1583,21 +1584,24 @@ def _test_chat_send():
             reply = f"{service_label} отлично подойдёт вашему питомцу 🤍\n\n{disclaimer}\n\nХотите записаться?"
         history.append({"role": "assistant", "content": reply})
         new_state["booking_intent"] = False  # reset: next "да" must be answer to "Хотите записаться?"
-        sess["state"] = new_state
-        sess["price_shown"] = True
+        new_state["price_shown"]    = True   # persist in state so it survives across requests
+        sess["state"]       = new_state
+        sess["price_shown"] = True           # also in session for same-request reads
         print(f"[test-chat] price-inject: breed={breed!r} service={service!r} price={price}", flush=True)
         return jsonify({"reply": reply, "state": new_state, "booked": False})
 
     # ── Schedule trigger ──────────────────────────────────────────────────────
     _no_date_yet     = not new_state.get("date")
     _schedule_cached = "full_schedule" in avail
-    _price_shown     = sess.get("price_shown", False)
+    # Read price_shown from state (persists via extraction merge) OR session fallback
+    _price_shown     = bool(new_state.get("price_shown")) or sess.get("price_shown", False)
     _needs_schedule  = booking_intent and _price_shown and _no_date_yet and not _schedule_cached
 
     print(
         f"[schedule-trigger] service={new_state.get('service')!r} "
-        f"booking_intent={booking_intent} price_shown={_price_shown} date={new_state.get('date')!r} "
-        f"cached={_schedule_cached} → needs_schedule={_needs_schedule}",
+        f"booking_intent={booking_intent} price_shown={_price_shown} "
+        f"(state={new_state.get('price_shown')} sess={sess.get('price_shown', False)}) "
+        f"date={new_state.get('date')!r} cached={_schedule_cached} → needs_schedule={_needs_schedule}",
         flush=True,
     )
 
