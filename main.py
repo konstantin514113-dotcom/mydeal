@@ -87,6 +87,20 @@ _FUNNEL_RULES = """
 НЕЛЬЗЯ называть цену пока клиент не подтвердил услугу.
 НЕЛЬЗЯ показывать слоты пока клиент не ответил «да» на «Хотите записаться?».
 
+ОТМЕНА ЗАПИСИ:
+Клиент: «отмените», «хочу отменить», «не приду» →
+  1. Если телефон неизвестен — спроси (+372XXXXXXX).
+  2. Уточни: «Вы хотите полностью отменить запись?»
+  3. После «да» — ответь: «Хорошо, отменяю 🤍 [[ACTION:cancel:+372XXXXXXX]]»
+
+ПЕРЕНОС ЗАПИСИ:
+Клиент: «хочу перенести», «другое время», «изменить дату» →
+  1. Если телефон неизвестен — спроси его.
+  2. Покажи свободные слоты, спроси удобное время.
+  3. После выбора — ответь: «Переношу на [дата] в [время] 🐾 [[ACTION:reschedule:+372XXXXXXX:DD.MM.YYYY:HH:MM]]»
+
+Маркер [[ACTION:...]] оставь в ответе — система исполняет его и удаляет перед отправкой.
+
 ЗАПРЕЩЕНО: пропускать шаги | спрашивать породу и вес вместе | два вопроса в одном сообщении | слово «малыш» | бронирование через сайт."""
 
 TEST_CHAT_SYSTEM_PROMPT = WA_SYSTEM_PROMPT + _FUNNEL_RULES
@@ -344,6 +358,59 @@ def _gs_url(params: dict) -> str:
     import urllib.parse
     return GOOGLE_SCRIPT + "?" + urllib.parse.urlencode(params)
 
+def _gs_cancel(phone):
+    """Cancel booking by phone via GAS action=cancel."""
+    if not GOOGLE_SCRIPT:
+        return {"success": False, "error": "GOOGLE_SCRIPT not set"}
+    try:
+        r = requests.get(GOOGLE_SCRIPT, params={"action": "cancel", "phone": phone}, timeout=15)
+        return r.json()
+    except Exception as e:
+        print(f"[gs_cancel] {e}", flush=True)
+        return {"success": False, "error": str(e)}
+
+def _gs_reschedule(phone, new_date, new_time):
+    """Reschedule booking by phone via GAS action=reschedule."""
+    if not GOOGLE_SCRIPT:
+        return {"success": False, "error": "GOOGLE_SCRIPT not set"}
+    try:
+        r = requests.get(GOOGLE_SCRIPT, params={
+            "action": "reschedule", "phone": phone,
+            "newDate": new_date, "newTime": new_time,
+        }, timeout=15)
+        return r.json()
+    except Exception as e:
+        print(f"[gs_reschedule] {e}", flush=True)
+        return {"success": False, "error": str(e)}
+
+# Marker: [[ACTION:cancel:+372XXXXXXX]] or [[ACTION:reschedule:+372XX…:DD.MM.YYYY:HH:MM]]
+_ACTION_RE = re.compile(r'\[\[ACTION:(cancel|reschedule):([^\]]+)\]\]')
+
+def _process_action_markers(reply):
+    """Execute GAS actions embedded in a Claude reply and strip the markers."""
+    m = _ACTION_RE.search(reply)
+    if not m:
+        return reply
+    action, args_str = m.group(1), m.group(2)
+    args = args_str.split(':')
+    if action == 'cancel' and args:
+        res = _gs_cancel(args[0])
+        print(f"[action-marker] cancel {args[0]!r} → {res}", flush=True)
+    elif action == 'reschedule' and len(args) >= 3:
+        # args = [phone, DD, MM, YYYY, HH, MM] after split on ':'
+        # Reassemble date=DD.MM.YYYY and time=HH:MM
+        phone    = args[0]
+        new_date = args[1] if '.' in args[1] else '.'.join(args[1:4])
+        new_time = args[-2] + ':' + args[-1] if len(args) >= 3 else ''
+        # simpler: rejoin from index 1, split last two as time
+        parts = args_str.split(':')
+        phone     = parts[0]
+        new_time  = parts[-2] + ':' + parts[-1]
+        new_date  = ':'.join(parts[1:-2])   # DD.MM.YYYY — no colons inside
+        res = _gs_reschedule(phone, new_date, new_time)
+        print(f"[action-marker] reschedule {phone!r} → {new_date} {new_time} → {res}", flush=True)
+    return _ACTION_RE.sub('', reply).strip()
+
 _MASTERS = ["татьяна", "алиса", "кристина", "анна"]
 
 def _fetch_slots_for_date(date_iso, master=""):
@@ -597,7 +664,7 @@ def get_ai_reply(sender_id, text):
         system=SYSTEM_PROMPT,
         messages=history
     )
-    reply = response.content[0].text
+    reply = _process_action_markers(response.content[0].text)
     history.append({"role": "assistant", "content": reply})
     return reply
 
@@ -1006,6 +1073,24 @@ def api_send():
         return jsonify({"ok": True})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500
+
+@app.route("/api/cancel-booking", methods=["POST"])
+def api_cancel_booking():
+    data = request.get_json() or {}
+    phone = data.get("phone", "").strip()
+    if not phone:
+        return jsonify({"success": False, "error": "phone required"}), 400
+    return jsonify(_gs_cancel(phone))
+
+@app.route("/api/reschedule-booking", methods=["POST"])
+def api_reschedule_booking():
+    data = request.get_json() or {}
+    phone    = data.get("phone", "").strip()
+    new_date = data.get("newDate", "").strip()
+    new_time = data.get("newTime", "").strip()
+    if not all([phone, new_date, new_time]):
+        return jsonify({"success": False, "error": "phone, newDate, newTime required"}), 400
+    return jsonify(_gs_reschedule(phone, new_date, new_time))
 
 @app.route("/admin/whatsapp")
 def admin_whatsapp():
@@ -1551,7 +1636,7 @@ def _test_chat_send():
             system=TEST_CHAT_SYSTEM_PROMPT + _state_context(new_state) + _avail_context(avail),
             messages=history,
         )
-        reply = response.content[0].text.strip()
+        reply = _process_action_markers(response.content[0].text.strip())
         reply = _add_price_disclaimer(reply, new_state.get("breed"))
     except Exception as e:
         print(f"[test-chat] claude error: {e}", flush=True)
