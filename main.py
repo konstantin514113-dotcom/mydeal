@@ -734,81 +734,75 @@ def confirm():
     if lang not in ("ru", "en", "et"):
         lang = "ru"
 
-    if not email:
-        return "Email не указан", 400
-
-    resend_api_key = os.environ.get("RESEND_API_KEY")
-    if not resend_api_key:
-        return "RESEND_API_KEY не настроен", 500
-
-    # ── Email body ──────────────────────────────────────────────────────────────
-    td = "padding:8px;border-bottom:1px solid #eee"
-    tl = f"{td};color:#666"
-    if lang == "en":
-        heading  = f"Thank you for booking, {name}!"
-        subhead  = "Your appointment at R&amp;J Grooming is confirmed."
-        labels   = ["Date", "Time", "Service", "Groomer", "Breed", "Pet's name"]
-        footer_t = "We look forward to seeing you and your pet!"
-        address  = "Address: Allveelaeva 4, Tallinn<br>Phone: +372 587 35456"
-    elif lang == "et":
-        heading  = f"Aitäh broneeringu eest, {name}!"
-        subhead  = "Teie broneering R&amp;J Groomingus on kinnitatud."
-        labels   = ["Kuupäev", "Kellaaeg", "Teenus", "Meister", "Tõug", "Lemmiklooma nimi"]
-        footer_t = "Ootame teid ja teie lemmikut!"
-        address  = "Aadress: Allveelaeva 4, Tallinn<br>Telefon: +372 587 35456"
-    else:
-        heading  = f"Спасибо за запись, {name}!"
-        subhead  = "Ваша запись в R&amp;J Grooming подтверждена."
-        labels   = ["Дата", "Время", "Услуга", "Мастер", "Порода", "Кличка"]
-        footer_t = "Ждём вас и вашего питомца!"
-        address  = "Адрес: Allveelaeva 4, Tallinn<br>Телефон: +372 587 35456"
-
-    values = [date, time, service, master, breed, pet]
-    rows = "".join(
-        f'<tr><td style="{tl}">{l}</td>'
-        f'<td style="{td}"><b>{v}</b></td></tr>'
-        for l, v in zip(labels, values)
-    )
-    body_html = (
-        f'<!DOCTYPE html><html><body style="font-family:Arial,sans-serif;color:#222;'
-        f'max-width:600px;margin:0 auto;padding:20px;">'
-        f'<h2 style="color:#c9a84c;font-family:Georgia,serif;">{heading}</h2>'
-        f'<p>{subhead}</p>'
-        f'<table style="border-collapse:collapse;width:100%;margin:16px 0;">{rows}</table>'
-        f'<p style="color:#666;font-size:14px;">{address}</p>'
-        f'<p style="color:#c9a84c;font-style:italic;">{footer_t}</p>'
-        f'</body></html>'
-    )
-
-    # ── Email subject ───────────────────────────────────────────────────────────
-    if lang == "en":
-        subject = f"R&J Grooming booking confirmed - {date} at {time}"
-    elif lang == "et":
-        subject = f"R&J Grooming broneering kinnitatud - {date} kell {time}"
-    else:
-        subject = f"Запись в R&J Grooming подтверждена - {date} в {time}"
-
-    payload = {
-        "from": "R&J Grooming <booking@rjgrooming.salon>",
-        "to": [email.strip()],
-        "subject": subject,
-        "html": body_html
-    }
-    # Отправка email
-    email_result = "Email не отправлен"
-    try:
-        r = req_lib.post(
-            "https://api.resend.com/emails",
-            headers={"Authorization": f"Bearer {resend_api_key}", "Content-Type": "application/json"},
-            json=payload,
-            timeout=10
-        )
-        if r.status_code == 200:
-            email_result = f"Email отправлен на {email}"
+    # ── Email (optional — only sent when email address is provided) ────────────
+    email_result = "Email не указан — пропущено"
+    if email:
+        resend_api_key = os.environ.get("RESEND_API_KEY")
+        if not resend_api_key:
+            email_result = "RESEND_API_KEY не настроен — email пропущен"
         else:
-            email_result = f"Ошибка email: {r.status_code} {r.text}"
-    except Exception as e:
-        email_result = f"Ошибка email: {str(e)}"
+            td = "padding:8px;border-bottom:1px solid #eee"
+            tl = f"{td};color:#666"
+            if lang == "en":
+                heading  = f"Thank you for booking, {name}!"
+                subhead  = "Your appointment at R&amp;J Grooming is confirmed."
+                labels   = ["Date", "Time", "Service", "Groomer", "Breed", "Pet's name"]
+                footer_t = "We look forward to seeing you and your pet!"
+                address  = "Address: Allveelaeva 4, Tallinn<br>Phone: +372 587 35456"
+            elif lang == "et":
+                heading  = f"Aitäh broneeringu eest, {name}!"
+                subhead  = "Teie broneering R&amp;J Groomingus on kinnitatud."
+                labels   = ["Kuupäev", "Kellaaeg", "Teenus", "Meister", "Tõug", "Lemmiklooma nimi"]
+                footer_t = "Ootame teid ja teie lemmikut!"
+                address  = "Aadress: Allveelaeva 4, Tallinn<br>Telefon: +372 587 35456"
+            else:
+                heading  = f"Спасибо за запись, {name}!"
+                subhead  = "Ваша запись в R&amp;J Grooming подтверждена."
+                labels   = ["Дата", "Время", "Услуга", "Мастер", "Порода", "Кличка"]
+                footer_t = "Ждём вас и вашего питомца!"
+                address  = "Адрес: Allveelaeva 4, Tallinn<br>Телефон: +372 587 35456"
+
+            values = [date, time, service, master, breed, pet]
+            rows = "".join(
+                f'<tr><td style="{tl}">{l}</td>'
+                f'<td style="{td}"><b>{v}</b></td></tr>'
+                for l, v in zip(labels, values)
+            )
+            body_html = (
+                f'<!DOCTYPE html><html><body style="font-family:Arial,sans-serif;color:#222;'
+                f'max-width:600px;margin:0 auto;padding:20px;">'
+                f'<h2 style="color:#c9a84c;font-family:Georgia,serif;">{heading}</h2>'
+                f'<p>{subhead}</p>'
+                f'<table style="border-collapse:collapse;width:100%;margin:16px 0;">{rows}</table>'
+                f'<p style="color:#666;font-size:14px;">{address}</p>'
+                f'<p style="color:#c9a84c;font-style:italic;">{footer_t}</p>'
+                f'</body></html>'
+            )
+            if lang == "en":
+                subject = f"R&J Grooming booking confirmed - {date} at {time}"
+            elif lang == "et":
+                subject = f"R&J Grooming broneering kinnitatud - {date} kell {time}"
+            else:
+                subject = f"Запись в R&J Grooming подтверждена - {date} в {time}"
+
+            try:
+                r = req_lib.post(
+                    "https://api.resend.com/emails",
+                    headers={"Authorization": f"Bearer {resend_api_key}", "Content-Type": "application/json"},
+                    json={
+                        "from": "R&J Grooming <booking@rjgrooming.salon>",
+                        "to": [email.strip()],
+                        "subject": subject,
+                        "html": body_html,
+                    },
+                    timeout=10
+                )
+                if r.status_code == 200:
+                    email_result = f"Email отправлен на {email}"
+                else:
+                    email_result = f"Ошибка email: {r.status_code} {r.text}"
+            except Exception as e:
+                email_result = f"Ошибка email: {str(e)}"
 
     # Отправка SMS через Twilio
     sms_result = "SMS не отправлен"
