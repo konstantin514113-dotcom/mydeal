@@ -69,8 +69,50 @@ function rescheduleBooking(phone, newDate, newTime) {
   };
 }
 
+// ── getBookingsForDate(dateStr) ───────────────────────────────────────────────
+// Returns all calendar events on dateStr (DD.MM.YYYY) with phone numbers extracted
+// from event descriptions. Used by /cron/reminders to send SMS reminders.
+// Returns: {success, date, count, bookings: [{title, time, phone, master, lang}]}
+function getBookingsForDate(dateStr) {
+  var cal = CalendarApp.getCalendarById(CALENDAR_ID) || CalendarApp.getDefaultCalendar();
+  var dp    = dateStr.split('.');  // ['05','06','2026']
+  var start = new Date(parseInt(dp[2]), parseInt(dp[1]) - 1, parseInt(dp[0]), 0,  0,  0);
+  var end   = new Date(parseInt(dp[2]), parseInt(dp[1]) - 1, parseInt(dp[0]), 23, 59, 59);
+  var events = cal.getEvents(start, end);
+  var tz = Session.getScriptTimeZone();
+
+  var bookings = [];
+  for (var i = 0; i < events.length; i++) {
+    var ev   = events[i];
+    var desc = ev.getDescription() || '';
+    var time = Utilities.formatDate(ev.getStartTime(), tz, 'HH:mm');
+
+    // Extract phone: E.164 format (+372XXXXXXX) from description
+    var phoneMatch  = desc.match(/\+\d{7,15}/);
+    var phone       = phoneMatch ? phoneMatch[0] : '';
+
+    // Extract master (looks for "Мастер: Name" or "master: Name" in description)
+    var masterMatch = desc.match(/[Мм]астер[:\s]+([^\n,]+)/);
+    var master      = masterMatch ? masterMatch[1].trim() : '';
+
+    // Detect language
+    var lang = 'ru';
+    if (desc.indexOf('lang: et') !== -1 || desc.indexOf('"lang":"et"') !== -1) lang = 'et';
+    else if (desc.indexOf('lang: en') !== -1 || desc.indexOf('"lang":"en"') !== -1) lang = 'en';
+
+    bookings.push({
+      title:  ev.getTitle(),
+      time:   time,
+      phone:  phone,
+      master: master,
+      lang:   lang,
+    });
+  }
+  return {success: true, date: dateStr, count: bookings.length, bookings: bookings};
+}
+
 // ── doGet additions ────────────────────────────────────────────────────────────
-// Add these two blocks inside your existing doGet(e) function,
+// Add these blocks inside your existing doGet(e) function,
 // before the default response (e.g. before the slots/days/book handling):
 //
 // var action = (e.parameter.action || '').toLowerCase();
@@ -87,6 +129,12 @@ function rescheduleBooking(phone, newDate, newTime) {
 //     e.parameter.newDate || '',
 //     e.parameter.newTime || ''
 //   );
+//   return ContentService.createTextOutput(JSON.stringify(res))
+//            .setMimeType(ContentService.MimeType.JSON);
+// }
+//
+// if (action === 'bookings') {
+//   var res = getBookingsForDate(e.parameter.date || '');
 //   return ContentService.createTextOutput(JSON.stringify(res))
 //            .setMimeType(ContentService.MimeType.JSON);
 // }

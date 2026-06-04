@@ -1155,6 +1155,101 @@ def api_reschedule_booking():
         return jsonify({"success": False, "error": "phone, newDate, newTime required"}), 400
     return jsonify(_gs_reschedule(phone, new_date, new_time))
 
+@app.route("/cron/reminders")
+def cron_reminders():
+    """Send SMS reminders for tomorrow's bookings.
+    Railway cron: 0 10 * * *
+    Command:      curl https://rjgrooming.up.railway.app/cron/reminders
+    Requires GAS action=bookings (see gas_cancel_reschedule.gs).
+    """
+    import datetime as _dt
+
+    secret = os.environ.get("CRON_SECRET", "")
+    if secret and request.args.get("secret") != secret:
+        return "Unauthorized", 401
+
+    if not GOOGLE_SCRIPT:
+        return "GOOGLE_SCRIPT not configured", 500
+
+    twilio_sid   = os.environ.get("TWILIO_ACCOUNT_SID")
+    twilio_token = os.environ.get("TWILIO_AUTH_TOKEN")
+    twilio_from  = os.environ.get("TWILIO_PHONE", "+37266922128")
+
+    tomorrow  = _dt.date.today() + _dt.timedelta(days=1)
+    date_gs   = tomorrow.strftime("%d.%m.%Y")   # DD.MM.YYYY for GAS
+
+    # ── Fetch tomorrow's bookings from Google Script ──────────────────────
+    try:
+        r = requests.get(GOOGLE_SCRIPT,
+                         params={"action": "bookings", "date": date_gs},
+                         timeout=30)
+        data = r.json()
+    except Exception as e:
+        print(f"[cron/reminders] GAS error: {e}", flush=True)
+        return f"GAS error: {e}", 500
+
+    bookings = data.get("bookings", [])
+    print(f"[cron/reminders] {date_gs}: {len(bookings)} bookings", flush=True)
+
+    sent, failed, skipped = [], [], []
+
+    for b in bookings:
+        phone  = re.sub(r'[\s\-()]', '', str(b.get("phone", "")).strip())
+        time_  = b.get("time", "")
+        master = b.get("master", "")
+        lang   = b.get("lang", "ru")
+
+        if not phone:
+            skipped.append(f"no phone — {b.get('title', '?')}")
+            continue
+        if not phone.startswith("+"):
+            phone = "+" + phone
+
+        master_part = f"Мастер: {master}. " if master else ""
+
+        if lang == "en":
+            body = (f"R&J Grooming reminder: your appointment is tomorrow "
+                    f"{date_gs} at {time_}. Groomer: {master}. "
+                    "Address: Allveelaeva 4, Noblessner. See you! 🐾")
+        elif lang == "et":
+            body = (f"R&J Grooming meeldetuletus: teie broneering on homme "
+                    f"{date_gs} kell {time_}. Meister: {master}. "
+                    "Aadress: Allveelaeva 4, Noblessner. Ootame teid! 🐾")
+        else:
+            body = (f"Напоминаем о вашей записи в R&J Grooming завтра "
+                    f"{date_gs} в {time_}. {master_part}"
+                    "Адрес: Allveelaeva 4, Noblessner. Ждём вас! 🐾")
+
+        if twilio_sid and twilio_token:
+            try:
+                resp = requests.post(
+                    f"https://api.twilio.com/2010-04-01/Accounts/{twilio_sid}/Messages.json",
+                    auth=(twilio_sid, twilio_token),
+                    data={"From": twilio_from, "To": phone, "Body": body},
+                    timeout=10,
+                )
+                if resp.status_code == 201:
+                    sent.append(phone)
+                    print(f"[cron/reminders] ✓ {phone}", flush=True)
+                else:
+                    failed.append(f"{phone}: {resp.status_code} {resp.text[:80]}")
+                    print(f"[cron/reminders] ✗ {phone}: {resp.status_code}", flush=True)
+            except Exception as e:
+                failed.append(f"{phone}: {e}")
+                print(f"[cron/reminders] ✗ {phone}: {e}", flush=True)
+        else:
+            skipped.append(f"Twilio not configured — would send to {phone}")
+            print(f"[cron/reminders] Twilio not set — skipping {phone}", flush=True)
+
+    summary = (f"Reminders {date_gs}: {len(bookings)} bookings | "
+               f"sent={len(sent)} failed={len(failed)} skipped={len(skipped)}")
+    print(f"[cron/reminders] {summary}", flush=True)
+    lines = ([summary]
+             + [f"✓ {p}" for p in sent]
+             + [f"✗ {e}" for e in failed]
+             + [f"- {s}" for s in skipped])
+    return "\n".join(lines), 200
+
 @app.route("/admin/whatsapp")
 def admin_whatsapp():
     global jarvis_enabled, instagram_enabled
