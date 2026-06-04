@@ -990,6 +990,24 @@ def booking_app():
         "booking.pet=document.getElementById('cPet').value;",
         "booking.pet=document.getElementById('cPet').value; booking.email=document.getElementById('cEmail').value;"
     )
+    # ── Phone validation: must start with + and have at least 10 digits ──────
+    html = html.replace(
+        "if(!name||!phone){alert(T[LANG].alert_fill);return;}",
+        "if(!name||!phone){alert(T[LANG].alert_fill);return;}"
+        "if(!/^\\+\\d{10,}$/.test(phone.trim())){alert(T[LANG].alert_phone);return;}"
+    )
+    html = html.replace(
+        "alert_fill:'Введите имя и телефон',",
+        "alert_fill:'Введите имя и телефон',alert_phone:'Введите номер в формате +37212345678',"
+    )
+    html = html.replace(
+        "alert_fill:'Please enter name and phone',",
+        "alert_fill:'Please enter name and phone',alert_phone:'Enter phone number in format +37212345678',"
+    )
+    html = html.replace(
+        "alert_fill:'Palun sisestage nimi ja telefon',",
+        "alert_fill:'Palun sisestage nimi ja telefon',alert_phone:'Sisestage telefoninumber vormingus +37212345678',"
+    )
     anna_filter_script = """
 <script>
 (function(){

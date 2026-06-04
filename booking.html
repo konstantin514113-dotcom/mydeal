@@ -1,0 +1,767 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="theme-color" content="#1c1c18">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>R&J Grooming</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,600;1,400&family=Montserrat:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{min-height:100vh;background:#1c1c18;color:#c8c2b8;font-family:'Montserrat',sans-serif;font-weight:300}
+.screen{display:none;min-height:100vh;flex-direction:column;align-items:center;padding:40px 0 48px}
+.screen.active{display:flex}
+.con{width:100%;max-width:400px;padding:0 28px}
+.back-btn{display:flex;align-items:center;gap:8px;color:#8a8a55;font-size:.62rem;letter-spacing:.18em;text-transform:uppercase;background:none;border:none;cursor:pointer;padding:0;margin-bottom:24px;font-family:'Montserrat',sans-serif}
+.logo-rj{font-family:'Cormorant Garamond',serif;font-size:2rem;font-weight:600;color:#e8e0d0}
+.logo-sub{font-size:.46rem;font-weight:600;letter-spacing:.4em;text-transform:uppercase;color:#8a8a55;margin-top:3px;padding-bottom:14px;border-bottom:1px solid rgba(201,168,76,.2);margin-bottom:20px}
+.home-rj{font-family:'Cormorant Garamond',serif;font-size:2.6rem;font-weight:600;color:#e8e0d0;line-height:1}
+.logo-tag{font-size:.52rem;letter-spacing:.12em;text-transform:uppercase;color:#666660;line-height:1.5}
+.logo-row{display:flex;align-items:flex-end;gap:12px;margin-bottom:4px;padding-bottom:18px;border-bottom:1px solid rgba(201,168,76,.2)}
+.home-gsub{font-size:.46rem;font-weight:600;letter-spacing:.4em;text-transform:uppercase;color:#8a8a55;margin-top:6px;margin-bottom:22px}
+.home-h1{font-family:'Cormorant Garamond',serif;font-size:2.2rem;font-weight:600;color:#d8d0c0;line-height:1.1;margin-bottom:5px}
+.home-h1 em{font-style:italic;color:#c9a84c}
+.home-sub{font-size:.62rem;letter-spacing:.15em;text-transform:uppercase;color:#555550;margin-bottom:22px}
+.opt{display:flex;align-items:center;gap:16px;padding:15px 0;border-bottom:1px solid rgba(255,255,255,.06);text-decoration:none;color:#c8c2b8;transition:all .2s;cursor:pointer;background:none;border-top:none;border-left:none;border-right:none;width:100%;font-family:'Montserrat',sans-serif}
+.opt:hover{color:#c9a84c;padding-left:6px}
+.opt-icon{width:40px;height:40px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.opt-text{flex:1;text-align:left}
+.opt-title{font-size:.88rem;font-weight:500;color:#9a9590;margin-bottom:2px;transition:color .2s}
+.opt:hover .opt-title{color:#c9a84c}
+.opt-handle{font-size:.68rem;color:#555550}
+.opt-arrow{color:#8a8a55;font-size:.9rem;flex-shrink:0}
+.divider{display:flex;align-items:center;gap:12px;padding:10px 0}
+.divider::before,.divider::after{content:'';flex:1;height:1px;background:rgba(255,255,255,.06)}
+.divider span{font-size:.52rem;letter-spacing:.2em;text-transform:uppercase;color:#444440}
+.home-foot{margin-top:28px;padding-top:18px;border-top:1px solid rgba(201,168,76,.12);display:flex;justify-content:space-between;align-items:center}
+.home-foot span{font-size:.58rem;letter-spacing:.18em;text-transform:uppercase;color:#8a8a78}
+.fdot{width:3px;height:3px;border-radius:50%;background:#8a8a55}
+.progress{display:flex;align-items:center;margin-bottom:24px;overflow:hidden}
+.ps{display:flex;align-items:center;gap:4px;font-size:.52rem;letter-spacing:.1em;text-transform:uppercase;color:#444440;white-space:nowrap}
+.ps.done{color:#8a8a55}.ps.active{color:#c9a84c}
+.pdot{width:5px;height:5px;border-radius:50%;background:#2a2a24;flex-shrink:0}
+.ps.done .pdot{background:#8a8a55}.ps.active .pdot{background:#c9a84c}
+.pl{flex:1;height:1px;background:#2a2a24;margin:0 5px;min-width:8px}
+.pl.done{background:#8a8a55}
+.step{display:none}.step.show{display:block;animation:fu .4s ease both}
+.slbl{font-size:.56rem;letter-spacing:.22em;text-transform:uppercase;color:#c9a84c;margin-bottom:10px;font-weight:500}
+.sbox{display:flex;align-items:center;gap:10px;background:#141410;border:1px solid rgba(201,168,76,.3);padding:0 14px}
+.sbox:focus-within{border-color:#c9a84c}
+.si{opacity:.4;font-size:.85rem;flex-shrink:0}
+#bInput{flex:1;background:transparent;border:none;outline:none;font-family:'Montserrat',sans-serif;font-size:.85rem;color:#c8c2b8;padding:13px 0}
+#bInput::placeholder{color:#444440}
+.clr{background:none;border:none;color:#555550;cursor:pointer;font-size:.8rem;display:none}
+.clr.show{display:block}
+.bwrap{position:relative;margin-bottom:8px}
+.drop{position:absolute;left:0;right:0;background:#141410;border:1px solid rgba(201,168,76,.25);border-top:none;max-height:200px;overflow-y:auto;z-index:50;display:none}
+.drop.open{display:block}
+.ditem{padding:11px 14px;font-size:.8rem;color:#c8c2b8;cursor:pointer;border-bottom:1px solid rgba(255,255,255,.04)}
+.ditem:hover{background:rgba(201,168,76,.1);color:#c9a84c}
+.ditem mark{background:transparent;color:#c9a84c;font-weight:600}
+.nores{padding:14px;font-size:.75rem;color:#555550;font-style:italic}
+.no-breed-banner{display:flex;align-items:center;gap:12px;padding:14px 16px;background:rgba(201,168,76,.06);border:1px solid rgba(201,168,76,.2);cursor:pointer;transition:all .2s;margin-top:2px;}
+.no-breed-banner:hover{background:rgba(201,168,76,.12);border-color:rgba(201,168,76,.4);}
+.no-breed-banner-icon{font-size:1.3rem;flex-shrink:0;}
+.no-breed-banner-text{flex:1;}
+.no-breed-banner-title{font-size:.78rem;color:#c9a84c;font-weight:500;margin-bottom:2px;}
+.no-breed-banner-sub{font-size:.68rem;color:#666660;line-height:1.4;}
+.no-breed-banner-arrow{color:#8a8a55;font-size:.9rem;flex-shrink:0;}
+.sbadge{display:none;align-items:center;gap:10px;margin-bottom:16px}
+.sbadge.show{display:flex}
+.bname{background:rgba(201,168,76,.1);border:1px solid rgba(201,168,76,.3);color:#c9a84c;padding:4px 12px;font-size:.7rem}
+.bchg{font-size:.6rem;color:#555550;cursor:pointer;text-decoration:underline}
+.svbtn{display:block;padding:0;background:#141410;border:1px solid rgba(255,255,255,.07);border-left:3px solid transparent;color:#c8c2b8;font-family:'Montserrat',sans-serif;cursor:pointer;text-align:left;transition:all .2s;width:100%;margin-bottom:6px;overflow:hidden;position:relative;}
+.svbtn:hover,.svbtn.active{border-left-color:#c9a84c;background:rgba(201,168,76,.04);}
+.svp{font-weight:600;color:#c9a84c;flex-shrink:0}
+.masters{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.mbtn{background:#141410;border:1px solid rgba(255,255,255,.08);padding:16px 12px;text-align:center;cursor:pointer;transition:all .2s;font-family:'Montserrat',sans-serif}
+.mbtn:hover,.mbtn.active{border-color:#c9a84c;background:rgba(201,168,76,.08)}
+.mav{width:46px;height:46px;border-radius:50%;background:rgba(201,168,76,.15);border:1px solid rgba(201,168,76,.3);display:flex;align-items:center;justify-content:center;margin:0 auto 10px;font-family:'Cormorant Garamond',serif;font-size:1rem;font-weight:600;color:#c9a84c}
+.mbtn.active .mav{background:rgba(201,168,76,.25);border-color:#c9a84c}
+.mname{font-size:.8rem;font-weight:500;color:#c8c2b8}
+.mbtn.active .mname{color:#c9a84c}
+.mtitle{font-size:.58rem;color:#555550;margin-top:2px}
+.gbtn{display:flex;align-items:center;padding:13px 16px;background:#141410;border:1px solid rgba(255,255,255,.07);border-left:2px solid transparent;color:#c8c2b8;font-family:'Montserrat',sans-serif;font-size:.82rem;cursor:pointer;width:100%;margin-bottom:4px;transition:all .2s}
+.gbtn:hover,.gbtn.active{border-left-color:#c9a84c;color:#c9a84c;background:#1a1a14}
+.cal-h{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+.cal-m{font-family:'Cormorant Garamond',serif;font-size:1rem;color:#c8c2b8}
+.cal-n{background:none;border:none;color:#8a8a55;cursor:pointer;font-size:.9rem;padding:4px 8px}
+.cg{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;margin-bottom:8px}
+.cdn{text-align:center;font-size:.52rem;color:#444440;padding:4px 0;text-transform:uppercase}
+.cd{text-align:center;padding:8px 4px;font-size:.78rem;cursor:pointer;color:#888880;border:1px solid transparent;transition:all .2s}
+.cd:hover:not(.dis):not(.pad) .cd-inner,.cd.sel .cd-inner{background:#c9a84c!important;color:#1c1c18!important;font-weight:700!important;border:none!important;border-radius:50%!important;}
+.cd.tod{color:#c8c2b8;font-weight:600;text-decoration:underline;text-underline-offset:3px;}
+.cd.dis{color:#2a2a24;cursor:default}
+.tg{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.tbtn{background:#141410;border:1px solid rgba(255,255,255,.08);padding:10px 4px;text-align:center;font-size:.72rem;color:#c8c2b8;cursor:pointer;font-family:'Montserrat',sans-serif;transition:all .2s}
+.tbtn:hover,.tbtn.active{border-color:#c9a84c;background:rgba(201,168,76,.08);color:#c9a84c}
+.sum{background:#141410;border:1px solid rgba(201,168,76,.2);border-top:2px solid #c9a84c;padding:20px;margin-bottom:14px}
+.sr{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.05);font-size:.78rem}
+.sr:last-child{border-bottom:none;padding-top:10px}
+.sl{color:#666660}.sv{color:#c8c2b8;font-weight:500;text-align:right}
+.sp{font-family:'Cormorant Garamond',serif;font-size:1.5rem;color:#c9a84c;font-weight:600}
+.fg{margin-bottom:12px}
+.fl{font-size:.56rem;letter-spacing:.2em;text-transform:uppercase;color:#c9a84c;margin-bottom:6px;display:block}
+.fi{width:100%;background:#141410;border:1px solid rgba(255,255,255,.1);color:#c8c2b8;font-family:'Montserrat',sans-serif;font-size:.85rem;padding:12px 14px;outline:none}
+.fi:focus{border-color:#c9a84c}
+.cbtn{display:block;width:100%;background:#4a4a2e;color:#c8c2b8;font-family:'Montserrat',sans-serif;font-size:.68rem;font-weight:600;letter-spacing:.25em;text-transform:uppercase;text-align:center;padding:16px;border:none;cursor:pointer}
+.cbtn:hover{background:#6b6b42}
+.sblock{text-align:center;padding:40px 20px;display:none}
+.sblock.show{display:block;animation:fu .5s ease both}
+.si2{font-size:3rem;margin-bottom:16px}
+.st{font-family:'Cormorant Garamond',serif;font-size:1.6rem;color:#c9a84c;margin-bottom:8px}
+.ss{font-size:.78rem;color:#777770;line-height:1.6;margin-bottom:24px}
+.hbtn{background:transparent;border:1px solid rgba(201,168,76,.3);color:#c9a84c;font-family:'Montserrat',sans-serif;font-size:.65rem;letter-spacing:.2em;text-transform:uppercase;padding:12px 24px;cursor:pointer}
+.loading-slots{color:#8a8a55;font-size:.78rem;padding:10px 0;text-align:center}
+
+.cd{display:flex;justify-content:center;align-items:center;height:36px!important;padding:0!important;}
+.cd-inner{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:.72rem;cursor:pointer;}
+.cd.avail .cd-inner{background:rgba(90,180,90,.15);border:1px solid #5ab45a;color:#5ab45a;}
+.cd.busy .cd-inner{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);color:#555550;}
+.cd.sel .cd-inner{background:#c9a84c!important;color:#1c1c18!important;font-weight:700!important;border:none!important;border-radius:50%!important;}
+.cd.tod .cd-inner{border:1px solid rgba(201,168,76,.4);color:#c9a84c;font-weight:600;}
+.cd.dis .cd-inner{color:#2a2a24;cursor:default;background:none;border:none;}
+btn{position:relative;overflow:hidden;border-left:3px solid rgba(201,168,76,.3)!important;padding:15px 16px 15px 20px!important;display:block!important;text-align:left!important;}
+.svbtn:hover,.svbtn.active{border-left-color:#c9a84c!important;background:rgba(201,168,76,.04)!important;}
+.svbtn.active{border-color:rgba(201,168,76,.35)!important;}
+.svbtn-row{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:7px;padding:15px 16px 0 20px;}
+.svbtn-name{font-size:.95rem;color:#e8e0d0;font-weight:500;letter-spacing:.02em;}
+.svbtn.active .svbtn-name{color:#c9a84c;}
+.svbtn-price{font-family:"Cormorant Garamond",serif;font-size:1.2rem;color:#c9a84c;font-weight:600;flex-shrink:0;}
+.svbtn-desc{font-size:.78rem;color:#666660;line-height:1.6;letter-spacing:.01em;display:block;padding:0 16px 0 20px;}
+.svbtn.active .svbtn-desc{color:#8a8a55;}
+.svbtn-tag{font-size:.68rem;color:#c9a84c;letter-spacing:.04em;font-style:italic;display:block;margin-top:4px;padding:0 16px 14px 20px;}
+.svbtn.active .svbtn-tag{color:#c9a84c;}
+@media(max-width:400px){.svbtn-tag{font-size:.63rem;}}
+@media(max-width:400px){.svbtn-name{font-size:.88rem;}.svbtn-price{font-size:1.05rem;}.svbtn-desc{font-size:.73rem;}}
+@keyframes fu{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+
+.lang-bar{position:fixed;top:12px;right:14px;z-index:999;display:flex;gap:6px}
+.lang-btn{background:rgba(28,28,24,.85);border:1px solid rgba(201,168,76,.25);color:#8a8a55;font-family:'Montserrat',sans-serif;font-size:.58rem;letter-spacing:.15em;text-transform:uppercase;padding:5px 10px;cursor:pointer;transition:all .2s}
+.lang-btn:hover{border-color:rgba(201,168,76,.6);color:#c9a84c}
+.lang-btn.active{border-color:#c9a84c;color:#c9a84c;background:rgba(201,168,76,.08)}
+</style>
+</head>
+<body>
+<div class="lang-bar">
+  <button class="lang-btn active" onclick="setLang('ru')">RU</button>
+  <button class="lang-btn" onclick="setLang('en')">EN</button>
+  <button class="lang-btn" onclick="setLang('et')">ET</button>
+</div>
+
+<!-- HOME -->
+<div class="screen active" id="homeScreen">
+<div class="con">
+  <div class="logo-row">
+    <div class="home-rj">R&amp;J</div>
+    <div class="logo-tag" data-i18n="logo_tag">Премиальный груминг-<br>салон в Таллине</div>
+  </div>
+  <div class="home-gsub">Grooming</div>
+  <div class="home-h1">Book the way <em>you like</em></div>
+  <div class="home-sub" data-i18n="choose_how">Choose how to connect</div>
+
+  <button class="opt" id="bookBtn">
+    <div class="opt-icon"><svg width="36" height="36" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><rect width="24" height="24" rx="6" fill="#c9a84c"/><rect x="5" y="7" width="14" height="13" rx="1.5" fill="none" stroke="white" stroke-width="1.5"/><path d="M8 5v4M16 5v4M5 11h14" stroke="white" stroke-width="1.5" stroke-linecap="round"/><circle cx="8.5" cy="15" r="1" fill="white"/><circle cx="12" cy="15" r="1" fill="white"/><circle cx="15.5" cy="15" r="1" fill="white"/></svg></div>
+    <div class="opt-text"><div class="opt-title" data-i18n="book_online">Book Online</div><div class="opt-handle" data-i18n="book_flow">Порода → Услуга → Мастер → Время</div></div>
+    <span class="opt-arrow">→</span>
+  </button>
+  <div class="divider"><span data-i18n="or_contact">or contact us</span></div>
+  <a href="https://www.instagram.com/rj_grooming?igsh=MWxmdHNqcXFkanNvbQ==" target="_blank" class="opt">
+    <div class="opt-icon"><svg width="36" height="36" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="ig" x1="0%" y1="100%" x2="100%" y2="0%"><stop offset="0%" stop-color="#f09433"/><stop offset="50%" stop-color="#dc2743"/><stop offset="100%" stop-color="#bc1888"/></linearGradient></defs><rect width="24" height="24" rx="6" fill="url(#ig)"/><rect x="6" y="6" width="12" height="12" rx="3" fill="none" stroke="white" stroke-width="1.5"/><circle cx="12" cy="12" r="3" fill="none" stroke="white" stroke-width="1.5"/><circle cx="16.5" cy="7.5" r="1" fill="white"/></svg></div>
+    <div class="opt-text"><div class="opt-title">Instagram</div><div class="opt-handle">@rj_grooming</div></div>
+    <span class="opt-arrow">→</span>
+  </a>
+  <a href="https://wa.me/37258735456" target="_blank" class="opt">
+    <div class="opt-icon"><svg width="36" height="36" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="12" fill="#25D366"/><path fill="white" d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347"/></svg></div>
+    <div class="opt-text"><div class="opt-title">WhatsApp</div><div class="opt-handle">+372 587 35456</div></div>
+    <span class="opt-arrow">→</span>
+  </a>
+  <a href="https://www.facebook.com/share/1ELP6KC6rV/?mibextid=wwXIfr" target="_blank" class="opt">
+    <div class="opt-icon"><svg width="36" height="36" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="12" fill="#1877F2"/><path fill="white" d="M13 10.5h2l.5-2.5H13V6.5c0-.7.2-1.5 1.5-1.5H16V3s-1-.2-2-.2c-2.1 0-3.5 1.3-3.5 3.5V8H8v2.5h2.5V18H13v-7.5z"/></svg></div>
+    <div class="opt-text"><div class="opt-title">Facebook</div><div class="opt-handle">R&amp;J Grooming</div></div>
+    <span class="opt-arrow">→</span>
+  </a>
+  <button class="opt" onclick="window.location.href='tel:+37258735456'">
+    <div class="opt-icon"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#c9a84c" stroke-width="1.6"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 9.82a19.79 19.79 0 01-3.07-8.67A2 2 0 012 1h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L6.91 8.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z"/></svg></div>
+    <div class="opt-text"><div class="opt-title" data-i18n="call_us">Call Us</div><div class="opt-handle">+372 587 35456</div></div>
+    <span class="opt-arrow">→</span>
+  </button>
+  <div class="home-foot">
+    <span>Tallinn</span><div class="fdot"></div><span>Estonia</span><div class="fdot"></div><span>Allveelaeva 4</span>
+  </div>
+</div>
+</div>
+
+<!-- BOOKING -->
+<div class="screen" id="bookScreen">
+<div class="con">
+  <button class="back-btn" id="backBtn" data-i18n="back">← Назад</button>
+  <div class="logo-rj">R&amp;J</div>
+  <div class="logo-sub" data-i18n="logo_sub">Grooming · Таллин</div>
+  <div class="progress">
+    <div class="ps active" id="ps1"><div class="pdot"></div><span data-i18n="ps_service">Услуга</span></div>
+    <div class="pl" id="pl1"></div>
+    <div class="ps" id="ps2"><div class="pdot"></div><span data-i18n="ps_master">Мастер</span></div>
+    <div class="pl" id="pl2"></div>
+    <div class="ps" id="ps3"><div class="pdot"></div><span data-i18n="ps_pet">Питомец</span></div>
+    <div class="pl" id="pl3"></div>
+    <div class="ps" id="ps4"><div class="pdot"></div><span data-i18n="ps_date">Дата</span></div>
+    <div class="pl" id="pl4"></div>
+    <div class="ps" id="ps5"><div class="pdot"></div><span data-i18n="ps_details">Данные</span></div>
+  </div>
+
+  <!-- Step 1 -->
+  <div class="step show" id="bk1">
+    <div class="slbl" data-i18n="step1_lbl">01 · Порода собаки</div>
+    <div class="bwrap">
+      <div class="sbox">
+        <span class="si">🔍</span>
+        <input id="bInput" type="text" placeholder="Начните вводить породу..." data-i18n-ph="breed_ph" autocomplete="off">
+        <button class="clr" id="clrBtn">✕</button>
+      </div>
+      <div class="drop" id="bDrop"></div>
+    </div>
+    <div class="sbadge" id="sBadge"></div>
+    <div id="svcSec" style="display:none;margin-top:16px">
+      <div class="slbl" data-i18n="step2_lbl">02 · Услуга</div>
+      <div id="svcList"></div>
+    </div>
+  </div>
+
+  <!-- Step 2 -->
+  <div class="step" id="bk2">
+    <div class="slbl" data-i18n="step2_master">Выберите мастера</div>
+    <div class="masters">
+      <div class="mbtn" data-master="Татьяна"><div class="mname">Татьяна</div></div>
+      <div class="mbtn" data-master="Алиса"><div class="mname">Алиса</div></div>
+      <div class="mbtn" data-master="Кристина"><div class="mname">Кристина</div></div>
+      <div class="mbtn" data-master="Анна"><div class="mname">Анна</div></div>
+    </div>
+  </div>
+
+  <!-- Step 3 -->
+  <div class="step" id="bk3">
+    <div class="slbl" data-i18n="step3_lbl">Как давно вы посещали груминг?</div>
+    <button class="gbtn" data-val="Первый раз" data-i18n="g1">Первый раз</button>
+    <button class="gbtn" data-val="От 1 до 3 месяцев" data-i18n="g2">От 1 до 3 месяцев</button>
+    <button class="gbtn" data-val="От 3 до 6 месяцев" data-i18n="g3">От 3 до 6 месяцев</button>
+    <button class="gbtn" data-val="Более 6 месяцев" data-i18n="g4">Более 6 месяцев</button>
+  </div>
+
+  <!-- Step 4 -->
+  <div class="step" id="bk4">
+    <div class="slbl" data-i18n="step4_lbl">Выберите дату</div>
+    <div class="cal-h">
+      <button class="cal-n" id="prevM">&#8249;</button>
+      <div class="cal-m" id="calM"></div>
+      <button class="cal-n" id="nextM">&#8250;</button>
+    </div>
+    <div class="cg" id="calG"></div>
+    <div style="display:flex;gap:20px;align-items:center;margin-top:12px;padding-top:12px;border-top:1px solid rgba(255,255,255,.1);flex-wrap:wrap;"><div style="display:flex;align-items:center;gap:8px;"><div style="width:16px;height:16px;border-radius:50%;background:rgba(90,180,90,.15);border:1px solid #5ab45a;flex-shrink:0;"></div><span style="font-size:.7rem;color:#9a9590;letter-spacing:.03em;" data-i18n="cal_avail">Есть свободное время</span></div><div style="display:flex;align-items:center;gap:8px;"><div style="width:16px;height:16px;border-radius:50%;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);flex-shrink:0;"></div><span style="font-size:.7rem;color:#9a9590;letter-spacing:.03em;" data-i18n="cal_none">Свободного времени нет</span></div></div>
+    <div id="timeSec" style="display:none;margin-top:16px">
+      <div class="slbl" data-i18n="step4_time">Выберите время</div>
+      <div class="tg" id="timeG"></div>
+    </div>
+  </div>
+
+  <!-- Step 5 -->
+  <div class="step" id="bk5">
+    <div class="slbl" data-i18n="step5_lbl">Ваши данные</div>
+    <div class="fg"><label class="fl" data-i18n="lbl_name">Имя</label><input class="fi" id="cName" type="text" placeholder="Ваше имя" data-i18n-ph="ph_name"></div>
+    <div class="fg"><label class="fl" data-i18n="lbl_phone">Телефон</label><input class="fi" id="cPhone" type="tel" placeholder="+372 ..."></div>
+    <div class="fg"><label class="fl" data-i18n="lbl_email">Email</label><input class="fi" id="cEmail" type="email" placeholder="email@example.com"></div>
+    <div class="fg"><label class="fl" data-i18n="lbl_pet">Кличка питомца</label><input class="fi" id="cPet" type="text" placeholder="Необязательно" data-i18n-ph="ph_optional"></div>
+    <div class="sum" id="sumBlock"></div>
+    <button class="cbtn" id="confirmBtn" data-i18n="confirm_btn">Подтвердить запись</button>
+  </div>
+
+  <!-- Success -->
+  <div class="sblock" id="sucBlock">
+    <div class="si2">🐾</div>
+    <div class="st" data-i18n="success_title">Запись принята!</div>
+    <div class="ss" data-i18n="success_sub">Мы свяжемся с вами для подтверждения.<br>Спасибо, что выбрали R&J Grooming!</div>
+    <button class="hbtn" id="homeBtn" data-i18n="to_home">← На главную</button>
+  </div>
+</div>
+</div>
+
+<script>
+var DATA = [{"breed":"Австралийская овчарка 15–25 кг","services":{"Базовый уход":45,"Гигиенический уход":60,"Комплексный уход":80,"Экспресс-линька":85},"breed_en":"Australian Shepherd 15–25 kg","breed_et":"Austraalia lambakoer 15–25 kg"},{"breed":"Австралийская овчарка 25–35 кг","services":{"Базовый уход":55,"Гигиенический уход":70,"Комплексный уход":95,"Экспресс-линька":100},"breed_en":"Australian Shepherd 25–35 kg","breed_et":"Austraalia lambakoer 25–35 kg"},{"breed":"Акита-ину 20–40 кг","services":{"Базовый уход":60,"Гигиенический уход":75,"Экспресс-линька":90},"breed_en":"Akita Inu 20–40 kg","breed_et":"Akita Inu 20–40 kg"},{"breed":"Акита-ину более 40 кг","services":{"Базовый уход":85,"Гигиенический уход":95,"Экспресс-линька":115},"breed_en":"Akita Inu over 40 kg","breed_et":"Akita Inu üle 40 kg"},{"breed":"Акита-ину флаффи 20–40 кг","services":{"Базовый уход":60,"Гигиенический уход":75,"Экспресс-линька":90},"breed_en":"Akita Inu fluffy 20–40 kg","breed_et":"Akita Inu pehmekarvaline 20–40 kg"},{"breed":"Акита-ину флаффи более 40 кг","services":{"Базовый уход":85,"Гигиенический уход":95,"Экспресс-линька":115},"breed_en":"Akita Inu fluffy over 40 kg","breed_et":"Akita Inu pehmekarvaline üle 40 kg"},{"breed":"Алабай 40–60 кг","services":{"Базовый уход":85,"Гигиенический уход":95,"Экспресс-линька":115},"breed_en":"Central Asian Shepherd 40–60 kg","breed_et":"Kesk-Aasia lambakoer 40–60 kg"},{"breed":"Алабай более 60 кг","services":{"Базовый уход":100,"Гигиенический уход":115,"Экспресс-линька":130},"breed_en":"Central Asian Shepherd over 60 kg","breed_et":"Kesk-Aasia lambakoer üle 60 kg"},{"breed":"Аляскинский маламут 20–40 кг","services":{"Базовый уход":60,"Гигиенический уход":75,"Экспресс-линька":90},"breed_en":"Alaskan Malamute 20–40 kg","breed_et":"Alaska malamuut 20–40 kg"},{"breed":"Аляскинский маламут более 40 кг","services":{"Базовый уход":85,"Гигиенический уход":95,"Экспресс-линька":115},"breed_en":"Alaskan Malamute over 40 kg","breed_et":"Alaska malamuut üle 40 kg"},{"breed":"Аляскинский маламут флаффи 20–40 кг","services":{"Базовый уход":60,"Гигиенический уход":75,"Экспресс-линька":90},"breed_en":"Alaskan Malamute fluffy 20–40 kg","breed_et":"Alaska malamuut pehmekarvaline 20–40 kg"},{"breed":"Аляскинский маламут флаффи более 40 кг","services":{"Базовый уход":85,"Гигиенический уход":95,"Экспресс-линька":115},"breed_en":"Alaskan Malamute fluffy over 40 kg","breed_et":"Alaska malamuut pehmekarvaline üle 40 kg"},{"breed":"Американская акита 20–40 кг","services":{"Базовый уход":60,"Гигиенический уход":75,"Экспресс-линька":90},"breed_en":"American Akita 20–40 kg","breed_et":"Ameerika Akita 20–40 kg"},{"breed":"Американская акита более 40 кг","services":{"Базовый уход":85,"Гигиенический уход":95,"Экспресс-линька":115},"breed_en":"American Akita over 40 kg","breed_et":"Ameerika Akita üle 40 kg"},{"breed":"Американская акита флаффи 20–40 кг","services":{"Базовый уход":60,"Гигиенический уход":75,"Экспресс-линька":90},"breed_en":"American Akita fluffy 20–40 kg","breed_et":"Ameerika Akita pehmekarvaline 20–40 kg"},{"breed":"Американская акита флаффи более 40 кг","services":{"Базовый уход":85,"Гигиенический уход":95,"Экспресс-линька":115},"breed_en":"American Akita fluffy over 40 kg","breed_et":"Ameerika Akita pehmekarvaline üle 40 kg"},{"breed":"Американский кокер-спаниель 10–15 кг","services":{"Базовый уход":40,"Гигиенический уход":55,"Комплексный уход":70},"breed_en":"American Cocker Spaniel 10–15 kg","breed_et":"Ameerika kokerspanjel 10–15 kg"},{"breed":"Американский кокер-спаниель 15–20 кг","services":{"Базовый уход":45,"Гигиенический уход":65,"Комплексный уход":80},"breed_en":"American Cocker Spaniel 15–20 kg","breed_et":"Ameerika kokerspanjel 15–20 kg"},{"breed":"Американский стаффордширский терьер 20–30 кг","services":{"Базовый уход":45,"Гигиенический уход":55},"breed_en":"American Staffordshire Terrier 20–30 kg","breed_et":"Ameerika Staffordshire terjer 20–30 kg"},{"breed":"Американский стаффордширский терьер 30–40 кг","services":{"Базовый уход":55,"Гигиенический уход":65},"breed_en":"American Staffordshire Terrier 30–40 kg","breed_et":"Ameerika Staffordshire terjer 30–40 kg"},{"breed":"Английский бульдог","services":{"Базовый уход":45,"Гигиенический уход":55,"Экспресс-линька":70},"breed_en":"English Bulldog","breed_et":"Inglise buldog"},{"breed":"Английский кокер-спаниель 10–15 кг","services":{"Базовый уход":40,"Гигиенический уход":55,"Комплексный уход":70},"breed_en":"English Cocker Spaniel 10–15 kg","breed_et":"Inglise kokerspanjel 10–15 kg"},{"breed":"Английский кокер-спаниель 15–20 кг","services":{"Базовый уход":45,"Гигиенический уход":65,"Комплексный уход":80},"breed_en":"English Cocker Spaniel 15–20 kg","breed_et":"Inglise kokerspanjel 15–20 kg"},{"breed":"Афган 20–30 кг","services":{"Базовый уход":50,"Гигиенический уход":70,"Комплексный уход":90},"breed_en":"Afghan Hound 20–30 kg","breed_et":"Afganistani koer 20–30 kg"},{"breed":"Афган 30–40 кг","services":{"Базовый уход":60,"Гигиенический уход":80,"Комплексный уход":100},"breed_en":"Afghan Hound 30–40 kg","breed_et":"Afganistani koer 30–40 kg"},{"breed":"Бассет-хаунд 20–30 кг","services":{"Базовый уход":45,"Гигиенический уход":55},"breed_en":"Basset Hound 20–30 kg","breed_et":"Bassethound 20–30 kg"},{"breed":"Бассет-хаунд 30–35 кг","services":{"Базовый уход":55,"Гигиенический уход":65},"breed_en":"Basset Hound 30–35 kg","breed_et":"Bassethound 30–35 kg"},{"breed":"Бернский зенненхунд 30–40 кг","services":{"Базовый уход":70,"Гигиенический уход":85,"Комплексный уход":110,"Экспресс-линька":100},"breed_en":"Bernese Mountain Dog 30–40 kg","breed_et":"Berni mägikoer 30–40 kg"},{"breed":"Бернский зенненхунд более 40 кг","services":{"Базовый уход":85,"Гигиенический уход":95,"Комплексный уход":130,"Экспресс-линька":115},"breed_en":"Bernese Mountain Dog over 40 kg","breed_et":"Berni mägikoer üle 40 kg"},{"breed":"Бивер-йорк более 3,5 кг","services":{"Базовый уход":35,"Гигиенический уход":45,"Комплексный уход":60},"breed_en":"Biewer Yorkshire Terrier over 3,5 kg","breed_et":"Biewer Yorkshire Terrier üle 3,5 kg"},{"breed":"Бивер-йорк до 3,5 кг","services":{"Базовый уход":30,"Гигиенический уход":40,"Комплексный уход":55},"breed_en":"Biewer Yorkshire Terrier up to 3,5 kg","breed_et":"Biewer Yorkshire Terrier kuni 3,5 kg"},{"breed":"Бигль 10–15 кг","services":{"Базовый уход":35,"Гигиенический уход":45,"Экспресс-линька":60},"breed_en":"Beagle 10–15 kg","breed_et":"Biigel 10–15 kg"},{"breed":"Бигль 15–20 кг","services":{"Базовый уход":40,"Гигиенический уход":50,"Экспресс-линька":65},"breed_en":"Beagle 15–20 kg","breed_et":"Biigel 15–20 kg"},{"breed":"Бишон-фризе 5–10 кг","services":{"Базовый уход":35,"Гигиенический уход":45,"Комплексный уход":60},"breed_en":"Bichon Frisé 5–10 kg","breed_et":"Bišon Frisé 5–10 kg"},{"breed":"Бишон-фризе до 5 кг","services":{"Базовый уход":30,"Гигиенический уход":40,"Комплексный уход":55},"breed_en":"Bichon Frisé up to 5 kg","breed_et":"Bišon Frisé kuni 5 kg"},{"breed":"Боксер 20–30 кг","services":{"Базовый уход":40,"Гигиенический уход":50},"breed_en":"Boxer 20–30 kg","breed_et":"Bokser 20–30 kg"},{"breed":"Боксер 30–40 кг","services":{"Базовый уход":50,"Гигиенический уход":60},"breed_en":"Boxer 30–40 kg","breed_et":"Bokser 30–40 kg"},{"breed":"Бордер-колли 15–20 кг","services":{"Базовый уход":50,"Гигиенический уход":70,"Комплексный уход":90,"Экспресс-линька":80},"breed_en":"Border Collie 15–20 kg","breed_et":"Borderkoll 15–20 kg"},{"breed":"Бордер-колли 20–25 кг","services":{"Базовый уход":60,"Гигиенический уход":75,"Комплексный уход":100,"Экспресс-линька":90},"breed_en":"Border Collie 20–25 kg","breed_et":"Borderkoll 20–25 kg"},{"breed":"Бостон-терьер 10–15 кг","services":{"Базовый уход":35,"Гигиенический уход":45},"breed_en":"Boston Terrier 10–15 kg","breed_et":"Bostoni terjer 10–15 kg"},{"breed":"Бостон-терьер 5–10 кг","services":{"Базовый уход":30,"Гигиенический уход":40},"breed_en":"Boston Terrier 5–10 kg","breed_et":"Bostoni terjer 5–10 kg"},{"breed":"Брабансон","services":{"Базовый уход":30,"Гигиенический уход":40,"Экспресс-линька":50},"breed_en":"Griffon Bruxellois","breed_et":"Brüsseli grifon"},{"breed":"Бультерьер 20–30 кг","services":{"Базовый уход":40,"Гигиенический уход":50},"breed_en":"Bull Terrier 20–30 kg","breed_et":"Bullterjer 20–30 kg"},{"breed":"Вельш-корги 10–15 кг","services":{"Базовый уход":45,"Гигиенический уход":60,"Экспресс-линька":70},"breed_en":"Welsh Corgi 10–15 kg","breed_et":"Walesi korgi 10–15 kg"},{"breed":"Вельш-корги 15–20 кг","services":{"Базовый уход":50,"Гигиенический уход":70,"Экспресс-линька":80},"breed_en":"Welsh Corgi 15–20 kg","breed_et":"Walesi korgi 15–20 kg"},{"breed":"Вест-хайленд-вайт-терьер","services":{"Базовый уход":35,"Гигиенический уход":45,"Комплексный уход":60,"Тримминг":65},"breed_en":"West Highland White Terrier","breed_et":"Lääne-Šotimaa valge terjer"},{"breed":"Восточносибирская лайка 18–25 кг","services":{"Базовый уход":45,"Гигиенический уход":60,"Экспресс-линька":85},"breed_en":"East Siberian Laika 18–25 kg","breed_et":"Ida-Siberi laika 18–25 kg"},{"breed":"Восточносибирская лайка более 25 кг","services":{"Базовый уход":55,"Гигиенический уход":70,"Экспресс-линька":100},"breed_en":"East Siberian Laika over 25 kg","breed_et":"Ida-Siberi laika üle 25 kg"},{"breed":"Голден-ретривер 20–30 кг","services":{"Базовый уход":60,"Гигиенический уход":75,"Комплексный уход":100,"Экспресс-линька":90},"breed_en":"Golden Retriever 20–30 kg","breed_et":"Kuldne retriiver 20–30 kg"},{"breed":"Голден-ретривер 30–40 кг","services":{"Базовый уход":70,"Гигиенический уход":85,"Комплексный уход":110,"Экспресс-линька":100},"breed_en":"Golden Retriever 30–40 kg","breed_et":"Kuldne retriiver 30–40 kg"},{"breed":"Гриффон","services":{"Базовый уход":35,"Гигиенический уход":45,"Комплексный уход":60,"Тримминг":65},"breed_en":"Griffon","breed_et":"Grifon"},{"breed":"Далматин","services":{"Базовый уход":45,"Гигиенический уход":55,"Экспресс-линька":70},"breed_en":"Dalmatian","breed_et":"Dalmaatsia koer"},{"breed":"Джек-рассел-терьер гладкошерстный","services":{"Базовый уход":30,"Гигиенический уход":40,"Экспресс-линька":50},"breed_en":"Jack Russell Terrier smooth","breed_et":"Jack Russelli terjer lühikarvaline"},{"breed":"Джек-рассел-терьер жесткошерстный","services":{"Базовый уход":35,"Гигиенический уход":45,"Комплексный уход":60,"Тримминг":65},"breed_en":"Jack Russell Terrier wire-haired","breed_et":"Jack Russelli terjer karukarvaline"},{"breed":"Доберман 30–40 кг","services":{"Базовый уход":55,"Гигиенический уход":65,"Экспресс-линька":80},"breed_en":"Dobermann 30–40 kg","breed_et":"Dobermann 30–40 kg"},{"breed":"Доберман более 40 кг","services":{"Базовый уход":70,"Гигиенический уход":80,"Экспресс-линька":95},"breed_en":"Dobermann over 40 kg","breed_et":"Dobermann üle 40 kg"},{"breed":"Западносибирская лайка 18–25 кг","services":{"Базовый уход":45,"Гигиенический уход":60,"Экспресс-линька":85},"breed_en":"West Siberian Laika 18–25 kg","breed_et":"Lääne-Siberi laika 18–25 kg"},{"breed":"Золотистый ретривер 20–30 кг","services":{"Базовый уход":50,"Гигиенический уход":65,"Комплексный уход":90,"Экспресс-линька":90},"breed_en":"Golden Retriever 20–30 kg","breed_et":"Kuldne retriiver 20–30 kg"},{"breed":"Золотистый ретривер 30–40 кг","services":{"Базовый уход":65,"Гигиенический уход":80,"Комплексный уход":110,"Экспресс-линька":110},"breed_en":"Golden Retriever 30–40 kg","breed_et":"Kuldne retriiver 30–40 kg"},{"breed":"Ирландский мягкошерстный пшеничный терьер","services":{"Базовый уход":45,"Гигиенический уход":65,"Комплексный уход":80},"breed_en":"Irish Soft Coated Wheaten Terrier","breed_et":"Iiri pehmekarvane nisuvärvi terjer"},{"breed":"Ирландский терьер","services":{"Базовый уход":40,"Гигиенический уход":55,"Комплексный уход":70,"Тримминг":75},"breed_en":"Irish Terrier","breed_et":"Iiri terjer"},{"breed":"Испанский гальго 20–30 кг","services":{"Базовый уход":45,"Гигиенический уход":55,"Экспресс-линька":70},"breed_en":"Spanish Galgo 20–30 kg","breed_et":"Hispaania galgo 20–30 kg"},{"breed":"Испанский гальго 30–40 кг","services":{"Базовый уход":55,"Гигиенический уход":65,"Экспресс-линька":80},"breed_en":"Spanish Galgo 30–40 kg","breed_et":"Hispaania galgo 30–40 kg"},{"breed":"Йоркширский терьер более 3,5 кг","services":{"Базовый уход":35,"Гигиенический уход":45,"Комплексный уход":60},"breed_en":"Yorkshire Terrier over 3,5 kg","breed_et":"Yorkshire terjer üle 3,5 kg"},{"breed":"Йоркширский терьер до 3,5 кг","services":{"Базовый уход":30,"Гигиенический уход":40,"Комплексный уход":55},"breed_en":"Yorkshire Terrier up to 3,5 kg","breed_et":"Yorkshire terjer kuni 3,5 kg"},{"breed":"Кавалер-кинг-чарльз-спаниель 10–15 кг","services":{"Базовый уход":40,"Гигиенический уход":55,"Комплексный уход":70},"breed_en":"Cavalier King Charles Spaniel 10–15 kg","breed_et":"Cavalier King Charles Spaniel 10–15 kg"},{"breed":"Кавалер-кинг-чарльз-спаниель 5–10 кг","services":{"Базовый уход":35,"Гигиенический уход":45,"Комплексный уход":60},"breed_en":"Cavalier King Charles Spaniel 5–10 kg","breed_et":"Cavalier King Charles Spaniel 5–10 kg"},{"breed":"Кане-корсо 40–60 кг","services":{"Базовый уход":70,"Гигиенический уход":85},"breed_en":"Cane Corso 40–60 kg","breed_et":"Cane Corso 40–60 kg"},{"breed":"Кане-корсо более 60 кг","services":{"Базовый уход":90,"Гигиенический уход":105},"breed_en":"Cane Corso over 60 kg","breed_et":"Cane Corso üle 60 kg"},{"breed":"Карело-финская лайка до 13 кг","services":{"Базовый уход":35,"Гигиенический уход":45,"Экспресс-линька":65},"breed_en":"Karelian-Finnish Laika up to 13 kg","breed_et":"Karjala-Soome laika kuni 13 kg"},{"breed":"Китайская хохлатая голая 5–10 кг","services":{"Базовый уход":32,"Гигиенический уход":42,"Комплексный уход":60},"breed_en":"Chinese Crested hairless 5–10 kg","breed_et":"Hiina harjakoer karvatu 5–10 kg"},{"breed":"Китайская хохлатая голая до 5 кг","services":{"Базовый уход":28,"Гигиенический уход":35,"Комплексный уход":55},"breed_en":"Chinese Crested hairless up to 5 kg","breed_et":"Hiina harjakoer karvatu kuni 5 kg"},{"breed":"Китайская хохлатая пуховая 5–10 кг","services":{"Базовый уход":35,"Гигиенический уход":45,"Комплексный уход":60},"breed_en":"Chinese Crested powderpuff 5–10 kg","breed_et":"Hiina harjakoer Powderpuff 5–10 kg"},{"breed":"Китайская хохлатая пуховая до 5 кг","services":{"Базовый уход":30,"Гигиенический уход":40,"Комплексный уход":55},"breed_en":"Chinese Crested powderpuff up to 5 kg","breed_et":"Hiina harjakoer Powderpuff kuni 5 kg"},{"breed":"Кокапу 5–10 кг","services":{"Базовый уход":40,"Гигиенический уход":55,"Комплексный уход":75},"breed_en":"Cockapoo 5–10 kg","breed_et":"Cockapoo 5–10 kg"},{"breed":"Кокапу до 5 кг","services":{"Базовый уход":35,"Гигиенический уход":45,"Комплексный уход":65},"breed_en":"Cockapoo up to 5 kg","breed_et":"Cockapoo kuni 5 kg"},{"breed":"Колли 20–30 кг","services":{"Базовый уход":60,"Гигиенический уход":75,"Комплексный уход":100,"Экспресс-линька":90},"breed_en":"Collie 20–30 kg","breed_et":"Koll 20–30 kg"},{"breed":"Колли 30–40 кг","services":{"Базовый уход":70,"Гигиенический уход":85,"Комплексный уход":110,"Экспресс-линька":100},"breed_en":"Collie 30–40 kg","breed_et":"Koll 30–40 kg"},{"breed":"Комондор 30–40 кг","services":{"Базовый уход":70,"Гигиенический уход":85,"Комплексный уход":110},"breed_en":"Komondor 30–40 kg","breed_et":"Komondor 30–40 kg"},{"breed":"Комондор более 40 кг","services":{"Базовый уход":85,"Гигиенический уход":95,"Комплексный уход":130},"breed_en":"Komondor over 40 kg","breed_et":"Komondor üle 40 kg"},{"breed":"Лабрадор гладкошерстный 20–30 кг","services":{"Базовый уход":45,"Гигиенический уход":55,"Экспресс-линька":70},"breed_en":"Labrador Retriever smooth 20–30 kg","breed_et":"Labradori retriiver lühikarvaline 20–30 kg"},{"breed":"Лабрадор гладкошерстный 30–40 кг","services":{"Базовый уход":55,"Гигиенический уход":65,"Экспресс-линька":80},"breed_en":"Labrador Retriever smooth 30–40 kg","breed_et":"Labradori retriiver lühikarvaline 30–40 kg"},{"breed":"Лабрадор гладкошерстный более 40 кг","services":{"Базовый уход":70,"Гигиенический уход":80,"Экспресс-линька":95},"breed_en":"Labrador Retriever smooth over 40 kg","breed_et":"Labradori retriiver lühikarvaline üle 40 kg"},{"breed":"Лабрадор длинношерстный 20–30 кг","services":{"Базовый уход":60,"Гигиенический уход":75,"Комплексный уход":100,"Экспресс-линька":90},"breed_en":"Labrador Retriever long-coated 20–30 kg","breed_et":"Labradori retriiver pikkarvaline 20–30 kg"},{"breed":"Лабрадор длинношерстный 30–40 кг","services":{"Базовый уход":70,"Гигиенический уход":85,"Комплексный уход":110,"Экспресс-линька":100},"breed_en":"Labrador Retriever long-coated 30–40 kg","breed_et":"Labradori retriiver pikkarvaline 30–40 kg"},{"breed":"Лабрадор длинношерстный более 40 кг","services":{"Базовый уход":85,"Гигиенический уход":95,"Комплексный уход":130,"Экспресс-линька":115},"breed_en":"Labrador Retriever long-coated over 40 kg","breed_et":"Labradori retriiver pikkarvaline üle 40 kg"},{"breed":"Лабрадудель 10–20 кг","services":{"Базовый уход":40,"Гигиенический уход":55,"Комплексный уход":70},"breed_en":"Labradoodle 10–20 kg","breed_et":"Labradoodle 10–20 kg"},{"breed":"Лабрадудель 20–30 кг","services":{"Базовый уход":50,"Гигиенический уход":70,"Комплексный уход":90},"breed_en":"Labradoodle 20–30 kg","breed_et":"Labradoodle 20–30 kg"},{"breed":"Лабрадудель 30–40 кг","services":{"Базовый уход":60,"Гигиенический уход":80,"Комплексный уход":100},"breed_en":"Labradoodle 30–40 kg","breed_et":"Labradoodle 30–40 kg"},{"breed":"Левретка 5–10 кг","services":{"Базовый уход":30,"Гигиенический уход":40},"breed_en":"Italian Greyhound 5–10 kg","breed_et":"Itaalia vindkoer 5–10 kg"},{"breed":"Левретка до 5 кг","services":{"Базовый уход":25,"Гигиенический уход":35},"breed_en":"Italian Greyhound up to 5 kg","breed_et":"Itaalia vindkoer kuni 5 kg"},{"breed":"Лхасский апсо 5–10 кг","services":{"Базовый уход":40,"Гигиенический уход":55,"Комплексный уход":75},"breed_en":"Lhasa Apso 5–10 kg","breed_et":"Lhasa Apso 5–10 kg"},{"breed":"Лхасский апсо до 5 кг","services":{"Базовый уход":35,"Гигиенический уход":45,"Комплексный уход":65},"breed_en":"Lhasa Apso up to 5 kg","breed_et":"Lhasa Apso kuni 5 kg"},{"breed":"Мальтезе","services":{"Базовый уход":30,"Гигиенический уход":40,"Комплексный уход":55},"breed_en":"Maltese","breed_et":"Malta bolonees"},{"breed":"Мальтийская болонка 5–8 кг","services":{"Базовый уход":35,"Гигиенический уход":45,"Комплексный уход":65},"breed_en":"Maltese Bolognese 5–8 kg","breed_et":"Malta bolonees 5–8 kg"},{"breed":"Мальтийская болонка до 5 кг","services":{"Базовый уход":30,"Гигиенический уход":40,"Комплексный уход":60},"breed_en":"Maltese Bolognese up to 5 kg","breed_et":"Malta bolonees kuni 5 kg"},{"breed":"Мальтипу 10–15 кг","services":{"Базовый уход":40,"Гигиенический уход":55,"Комплексный уход":70},"breed_en":"Maltipoo 10–15 kg","breed_et":"Maltipuu 10–15 kg"},{"breed":"Мальтипу 5–10 кг","services":{"Базовый уход":35,"Гигиенический уход":45,"Комплексный уход":60},"breed_en":"Maltipoo 5–10 kg","breed_et":"Maltipuu 5–10 kg"},{"breed":"Мальтипу до 5 кг","services":{"Базовый уход":30,"Гигиенический уход":40,"Комплексный уход":55},"breed_en":"Maltipoo up to 5 kg","breed_et":"Maltipuu kuni 5 kg"},{"breed":"Метис крупный 30–40 кг","services":{"Базовый уход":60,"Гигиенический уход":75,"Комплексный уход":100,"Экспресс-линька":100},"breed_en":"Mixed breed large 30–40 kg","breed_et":"Segaverd suur 30–40 kg"},{"breed":"Метис крупный более 40 кг","services":{"Базовый уход":75,"Гигиенический уход":90,"Комплексный уход":120,"Экспресс-линька":120},"breed_en":"Mixed breed large over 40 kg","breed_et":"Segaverd suur üle 40 kg"},{"breed":"Метис мелкий 5–10 кг","services":{"Базовый уход":30,"Гигиенический уход":40,"Комплексный уход":55},"breed_en":"Mixed breed small 5–10 kg","breed_et":"Segaverd väike 5–10 kg"},{"breed":"Метис мелкий до 5 кг","services":{"Базовый уход":25,"Гигиенический уход":35,"Комплексный уход":50},"breed_en":"Mixed breed small up to 5 kg","breed_et":"Segaverd väike kuni 5 kg"},{"breed":"Метис средний 10–20 кг","services":{"Базовый уход":40,"Гигиенический уход":50,"Комплексный уход":70,"Экспресс-линька":70},"breed_en":"Mixed breed medium 10–20 kg","breed_et":"Segaverd keskmine 10–20 kg"},{"breed":"Метис средний 20–30 кг","services":{"Базовый уход":50,"Гигиенический уход":60,"Комплексный уход":85,"Экспресс-линька":85},"breed_en":"Mixed breed medium 20–30 kg","breed_et":"Segaverd keskmine 20–30 kg"},{"breed":"Миттельшнауцер 10–15 кг","services":{"Базовый уход":40,"Гигиенический уход":55,"Комплексный уход":70,"Тримминг":75},"breed_en":"Standard Schnauzer 10–15 kg","breed_et":"Standardšnautser 10–15 kg"},{"breed":"Миттельшнауцер 15–20 кг","services":{"Базовый уход":45,"Гигиенический уход":65,"Комплексный уход":80,"Тримминг":85},"breed_en":"Standard Schnauzer 15–20 kg","breed_et":"Standardšnautser 15–20 kg"},{"breed":"Мопс","services":{"Базовый уход":30,"Гигиенический уход":40,"Экспресс-линька":50},"breed_en":"Pug","breed_et":"Mops"},{"breed":"Невская орхидея","services":{"Базовый уход":30,"Гигиенический уход":40,"Комплексный уход":55},"breed_en":"Neva Orchid","breed_et":"Neeva orhidee"},{"breed":"Немецкая овчарка 20–30 кг","services":{"Базовый уход":60,"Гигиенический уход":75,"Экспресс-линька":90},"breed_en":"German Shepherd 20–30 kg","breed_et":"Saksa lambakoer 20–30 kg"},{"breed":"Немецкая овчарка 30–40 кг","services":{"Базовый уход":70,"Гигиенический уход":85,"Экспресс-линька":100},"breed_en":"German Shepherd 30–40 kg","breed_et":"Saksa lambakoer 30–40 kg"},{"breed":"Немецкая овчарка более 40 кг","services":{"Базовый уход":85,"Гигиенический уход":95,"Экспресс-линька":115},"breed_en":"German Shepherd over 40 kg","breed_et":"Saksa lambakoer üle 40 kg"},{"breed":"Норвич-терьер","services":{"Базовый уход":35,"Гигиенический уход":45,"Комплексный уход":60,"Тримминг":65},"breed_en":"Norwich Terrier","breed_et":"Norwitši terjer"},{"breed":"Норфолк-терьер","services":{"Базовый уход":35,"Гигиенический уход":45,"Комплексный уход":60,"Тримминг":65},"breed_en":"Norfolk Terrier","breed_et":"Norfolki terjer"},{"breed":"Ньюфаундленд 40–60 кг","services":{"Базовый уход":85,"Гигиенический уход":95,"Комплексный уход":130,"Экспресс-линька":115},"breed_en":"Newfoundland 40–60 kg","breed_et":"Newfoundlandi koer 40–60 kg"},{"breed":"Ньюфаундленд более 60 кг","services":{"Базовый уход":100,"Гигиенический уход":115,"Комплексный уход":150,"Экспресс-линька":130},"breed_en":"Newfoundland over 60 kg","breed_et":"Newfoundlandi koer üle 60 kg"},{"breed":"Папийон","services":{"Базовый уход":30,"Гигиенический уход":40,"Комплексный уход":55},"breed_en":"Papillon","breed_et":"Papillon"},{"breed":"Пекинес 5–10 кг","services":{"Базовый уход":35,"Гигиенический уход":45,"Комплексный уход":60},"breed_en":"Pekingese 5–10 kg","breed_et":"Pekinesi koer 5–10 kg"},{"breed":"Пекинес до 5 кг","services":{"Базовый уход":30,"Гигиенический уход":40,"Комплексный уход":55},"breed_en":"Pekingese up to 5 kg","breed_et":"Pekinesi koer kuni 5 kg"},{"breed":"Пудель большой 20–30 кг","services":{"Базовый уход":50,"Гигиенический уход":70,"Комплексный уход":90},"breed_en":"Standard Poodle 20–30 kg","breed_et":"Standardpuudel 20–30 kg"},{"breed":"Пудель большой 30–40 кг","services":{"Базовый уход":60,"Гигиенический уход":80,"Комплексный уход":100},"breed_en":"Standard Poodle 30–40 kg","breed_et":"Standardpuudel 30–40 kg"},{"breed":"Пудель карликовый 5–10 кг","services":{"Базовый уход":35,"Гигиенический уход":45,"Комплексный уход":60},"breed_en":"Miniature Poodle 5–10 kg","breed_et":"Kääbuspuudel 5–10 kg"},{"breed":"Пудель малый 10–15 кг","services":{"Базовый уход":40,"Гигиенический уход":55,"Комплексный уход":70},"breed_en":"Small Poodle 10–15 kg","breed_et":"Väike puudel 10–15 kg"},{"breed":"Пудель малый 15–20 кг","services":{"Базовый уход":45,"Гигиенический уход":65,"Комплексный уход":80},"breed_en":"Small Poodle 15–20 kg","breed_et":"Väike puudel 15–20 kg"},{"breed":"Пудель той до 5 кг","services":{"Базовый уход":30,"Гигиенический уход":40,"Комплексный уход":55},"breed_en":"Toy Poodle up to 5 kg","breed_et":"Mänguasja puudel kuni 5 kg"},{"breed":"Ризеншнауцер 30–40 кг","services":{"Базовый уход":60,"Гигиенический уход":80,"Комплексный уход":100,"Тримминг":110},"breed_en":"Giant Schnauzer 30–40 kg","breed_et":"Suuršnautser 30–40 kg"},{"breed":"Ризеншнауцер более 40 кг","services":{"Базовый уход":75,"Гигиенический уход":95,"Комплексный уход":120,"Тримминг":125},"breed_en":"Giant Schnauzer over 40 kg","breed_et":"Suuršnautser üle 40 kg"},{"breed":"Русская цветная болонка","services":{"Базовый уход":35,"Гигиенический уход":45,"Комплексный уход":60},"breed_en":"Russian Colored Lapdog","breed_et":"Vene värviline sülekoer"},{"breed":"Русский охотничий спаниель 10–15 кг","services":{"Базовый уход":40,"Гигиенический уход":55,"Комплексный уход":70},"breed_en":"Russian Spaniel 10–15 kg","breed_et":"Vene jahispanjel 10–15 kg"},{"breed":"Русский охотничий спаниель 15–20 кг","services":{"Базовый уход":45,"Гигиенический уход":65,"Комплексный уход":80},"breed_en":"Russian Spaniel 15–20 kg","breed_et":"Vene jahispanjel 15–20 kg"},{"breed":"Русский той гладкошерстный","services":{"Базовый уход":25,"Гигиенический уход":35},"breed_en":"Russian Toy smooth","breed_et":"Vene Toy lühikarvaline"},{"breed":"Русский той длинношерстный","services":{"Базовый уход":30,"Гигиенический уход":40,"Комплексный уход":55},"breed_en":"Russian Toy long-coated","breed_et":"Vene Toy pikkarvaline"},{"breed":"Русский черный терьер 30–40 кг","services":{"Базовый уход":60,"Гигиенический уход":80,"Комплексный уход":100},"breed_en":"Black Russian Terrier 30–40 kg","breed_et":"Must Vene terjer 30–40 kg"},{"breed":"Русский черный терьер более 40 кг","services":{"Базовый уход":75,"Гигиенический уход":95,"Комплексный уход":120},"breed_en":"Black Russian Terrier over 40 kg","breed_et":"Must Vene terjer üle 40 kg"},{"breed":"Русско-европейская лайка 20–28 кг","services":{"Базовый уход":50,"Гигиенический уход":65,"Экспресс-линька":90},"breed_en":"Russian-European Laika 20–28 kg","breed_et":"Vene-Euroopa laika 20–28 kg"},{"breed":"Самоед 20–30 кг","services":{"Базовый уход":60,"Гигиенический уход":75,"Экспресс-линька":90},"breed_en":"Samoyed 20–30 kg","breed_et":"Samojeed 20–30 kg"},{"breed":"Самоед 30–40 кг","services":{"Базовый уход":70,"Гигиенический уход":85,"Экспресс-линька":100},"breed_en":"Samoyed 30–40 kg","breed_et":"Samojeed 30–40 kg"},{"breed":"Сеттер английский 20–30 кг","services":{"Базовый уход":50,"Гигиенический уход":70,"Комплексный уход":90},"breed_en":"English Setter 20–30 kg","breed_et":"Inglise setter 20–30 kg"},{"breed":"Сеттер гордон 30–40 кг","services":{"Базовый уход":60,"Гигиенический уход":80,"Комплексный уход":100},"breed_en":"Gordon Setter 30–40 kg","breed_et":"Gordoni setter 30–40 kg"},{"breed":"Сеттер ирландский 20–30 кг","services":{"Базовый уход":50,"Гигиенический уход":70,"Комплексный уход":90},"breed_en":"Irish Setter 20–30 kg","breed_et":"Iiri setter 20–30 kg"},{"breed":"Сиба-ину","services":{"Базовый уход":45,"Гигиенический уход":60,"Экспресс-линька":70},"breed_en":"Shiba Inu","breed_et":"Shiba Inu"},{"breed":"Силихем-терьер","services":{"Базовый уход":35,"Гигиенический уход":45,"Комплексный уход":60,"Тримминг":65},"breed_en":"Sealyham Terrier","breed_et":"Sealyhami terjer"},{"breed":"Скотч-терьер","services":{"Базовый уход":35,"Гигиенический уход":45,"Комплексный уход":60,"Тримминг":65},"breed_en":"Scottish Terrier","breed_et":"Šoti terjer"},{"breed":"Такса гладкошерстная карликовая 5–10 кг","services":{"Базовый уход":30,"Гигиенический уход":40,"Экспресс-линька":50},"breed_en":"Dachshund smooth miniature 5–10 kg","breed_et":"Taksikoer lühikarvaline kääbus 5–10 kg"},{"breed":"Такса гладкошерстная кроличья до 5 кг","services":{"Базовый уход":25,"Гигиенический уход":35,"Экспресс-линька":45},"breed_en":"Dachshund smooth rabbit up to 5 kg","breed_et":"Taksikoer lühikarvaline küülik kuni 5 kg"},{"breed":"Такса гладкошерстная стандартная 10–15 кг","services":{"Базовый уход":35,"Гигиенический уход":45,"Экспресс-линька":60},"breed_en":"Dachshund smooth standard 10–15 kg","breed_et":"Taksikoer lühikarvaline standard 10–15 kg"},{"breed":"Такса длинношерстная карликовая 5–10 кг","services":{"Базовый уход":35,"Гигиенический уход":45,"Комплексный уход":60},"breed_en":"Dachshund long-coated miniature 5–10 kg","breed_et":"Taksikoer pikkarvaline kääbus 5–10 kg"},{"breed":"Такса длинношерстная кроличья до 5 кг","services":{"Базовый уход":30,"Гигиенический уход":40,"Комплексный уход":55},"breed_en":"Dachshund long-coated rabbit up to 5 kg","breed_et":"Taksikoer pikkarvaline küülik kuni 5 kg"},{"breed":"Такса длинношерстная стандартная 10–15 кг","services":{"Базовый уход":40,"Гигиенический уход":55,"Комплексный уход":70},"breed_en":"Dachshund long-coated standard 10–15 kg","breed_et":"Taksikoer pikkarvaline standard 10–15 kg"},{"breed":"Такса жесткошерстная карликовая 5–10 кг","services":{"Базовый уход":35,"Гигиенический уход":45,"Комплексный уход":60,"Тримминг":65},"breed_en":"Dachshund wire-haired miniature 5–10 kg","breed_et":"Taksikoer karukarvaline kääbus 5–10 kg"},{"breed":"Такса жесткошерстная кроличья до 5 кг","services":{"Базовый уход":30,"Гигиенический уход":40,"Комплексный уход":55,"Тримминг":55},"breed_en":"Dachshund wire-haired rabbit up to 5 kg","breed_et":"Taksikoer karukarvaline küülik kuni 5 kg"},{"breed":"Такса жесткошерстная стандартная 10–15 кг","services":{"Базовый уход":40,"Гигиенический уход":55,"Комплексный уход":70,"Тримминг":75},"breed_en":"Dachshund wire-haired standard 10–15 kg","breed_et":"Taksikoer karukarvaline standard 10–15 kg"},{"breed":"Уиппет 10–15 кг","services":{"Базовый уход":35,"Гигиенический уход":45},"breed_en":"Whippet 10–15 kg","breed_et":"Whippet 10–15 kg"},{"breed":"Уиппет 15–20 кг","services":{"Базовый уход":40,"Гигиенический уход":50},"breed_en":"Whippet 15–20 kg","breed_et":"Whippet 15–20 kg"},{"breed":"Фокстерьер жесткошерстный 10–15 кг","services":{"Базовый уход":40,"Гигиенический уход":55,"Комплексный уход":70,"Тримминг":75},"breed_en":"Wire Fox Terrier 10–15 kg","breed_et":"Karukarvaline foxterjer 10–15 kg"},{"breed":"Фокстерьер жесткошерстный 5–10 кг","services":{"Базовый уход":35,"Гигиенический уход":45,"Комплексный уход":60,"Тримминг":65},"breed_en":"Wire Fox Terrier 5–10 kg","breed_et":"Karukarvaline foxterjer 5–10 kg"},{"breed":"Французский бульдог","services":{"Базовый уход":35,"Гигиенический уход":45,"Экспресс-линька":60},"breed_en":"French Bulldog","breed_et":"Prantsuse buldog"},{"breed":"Хаски 20–30 кг","services":{"Базовый уход":60,"Гигиенический уход":75,"Экспресс-линька":90},"breed_en":"Siberian Husky 20–30 kg","breed_et":"Siberi husky 20–30 kg"},{"breed":"Хаски 30–40 кг","services":{"Базовый уход":70,"Гигиенический уход":85,"Экспресс-линька":100},"breed_en":"Siberian Husky 30–40 kg","breed_et":"Siberi husky 30–40 kg"},{"breed":"Цвергшнауцер 10–15 кг","services":{"Базовый уход":40,"Гигиенический уход":55,"Комплексный уход":70,"Тримминг":75},"breed_en":"Miniature Schnauzer 10–15 kg","breed_et":"Kääbusšnautser 10–15 kg"},{"breed":"Цвергшнауцер 5–10 кг","services":{"Базовый уход":35,"Гигиенический уход":45,"Комплексный уход":60,"Тримминг":65},"breed_en":"Miniature Schnauzer 5–10 kg","breed_et":"Kääbusšnautser 5–10 kg"},{"breed":"Чау-чау 20–30 кг","services":{"Базовый уход":60,"Гигиенический уход":75,"Комплексный уход":100,"Экспресс-линька":90},"breed_en":"Chow Chow 20–30 kg","breed_et":"Chow Chow 20–30 kg"},{"breed":"Чау-чау 30–40 кг","services":{"Базовый уход":70,"Гигиенический уход":85,"Комплексный уход":110,"Экспресс-линька":100},"breed_en":"Chow Chow 30–40 kg","breed_et":"Chow Chow 30–40 kg"},{"breed":"Чихуахуа гладкошерстный","services":{"Базовый уход":25,"Гигиенический уход":35},"breed_en":"Chihuahua smooth","breed_et":"Tšihuahua lühikarvaline"},{"breed":"Чихуахуа длинношерстный","services":{"Базовый уход":30,"Гигиенический уход":40,"Комплексный уход":55},"breed_en":"Chihuahua long-coated","breed_et":"Tšihuahua pikkarvaline"},{"breed":"Шарпей 15–20 кг","services":{"Базовый уход":40,"Гигиенический уход":50,"Экспресс-линька":65},"breed_en":"Shar Pei 15–20 kg","breed_et":"Šar-Pei 15–20 kg"},{"breed":"Шарпей 20–30 кг","services":{"Базовый уход":45,"Гигиенический уход":55,"Экспресс-линька":70},"breed_en":"Shar Pei 20–30 kg","breed_et":"Šar-Pei 20–30 kg"},{"breed":"Шелти","services":{"Базовый уход":40,"Гигиенический уход":50,"Комплексный уход":65,"Экспресс-линька":60},"breed_en":"Shetland Sheepdog","breed_et":"Šetlandi lambakoer"},{"breed":"Ши-тцу 5–10 кг","services":{"Базовый уход":35,"Гигиенический уход":45,"Комплексный уход":60},"breed_en":"Shih Tzu 5–10 kg","breed_et":"Shih Tzu 5–10 kg"},{"breed":"Ши-тцу до 5 кг","services":{"Базовый уход":30,"Гигиенический уход":40,"Комплексный уход":55},"breed_en":"Shih Tzu up to 5 kg","breed_et":"Shih Tzu kuni 5 kg"},{"breed":"Шнауцер миниатюрный до 5 кг","services":{"Базовый уход":35,"Гигиенический уход":45,"Тримминг":65},"breed_en":"Miniature Schnauzer up to 5 kg","breed_et":"Kääbusšnautser kuni 5 kg"},{"breed":"Шпиц немецкий / померанский более 3,5 кг","services":{"Базовый уход":40,"Гигиенический уход":50,"Комплексный уход":65,"Экспресс-линька":60},"breed_en":"German Spitz / Pomeranian over 3,5 kg","breed_et":"Saksa spits / Pomeranian üle 3,5 kg"},{"breed":"Шпиц немецкий / померанский до 3,5 кг","services":{"Базовый уход":35,"Гигиенический уход":45,"Комплексный уход":60,"Экспресс-линька":55},"breed_en":"German Spitz / Pomeranian up to 3,5 kg","breed_et":"Saksa spits / Pomeranian kuni 3,5 kg"},{"breed":"Шпиц японский","services":{"Базовый уход":40,"Гигиенический уход":50,"Комплексный уход":65,"Экспресс-линька":60},"breed_en":"Japanese Spitz","breed_et":"Jaapani spits"},{"breed":"Эстонская гончая 15–25 кг","services":{"Базовый уход":40,"Гигиенический уход":50},"breed_en":"Estonian Hound 15–25 kg","breed_et":"Eesti hagijas 15–25 kg"},{"breed":"Японский хин","services":{"Базовый уход":30,"Гигиенический уход":40,"Комплексный уход":55},"breed_en":"Japanese Chin","breed_et":"Jaapani Chin"},{"breed":"Кошка короткошерстная","services":{"Вычес":45},"breed_en":"Cat short-haired","breed_et":"Kass lühikarvaline"},{"breed":"Кошка длинношерстная","services":{"Вычес":55},"breed_en":"Cat long-haired","breed_et":"Kass pikkarvaline"},{"breed":"Мейн-кун","services":{"Вычес":60},"breed_en":"Maine Coon","breed_et":"Maine Cooni kass"}];
+var RAILWAY = "https://rjgrooming.up.railway.app/book";
+var GOOGLE_SCRIPT = "https://script.google.com/macros/s/AKfycbzgCI8S7jfDatI06KNtFhTNyIPcRGW3IABQWLd7nlUws6jnxKSw4YEVEV9NiIZo4Yxb8A/exec";
+var FALLBACK_TIMES = ['10:00','10:30','11:00','11:30','12:00','12:30','13:00','13:30','14:00','14:30','15:00','15:30','16:00','16:30','17:00','17:30','18:00'];
+var booking = {breed:'',breedDisplay:'',service:'',price:0,master:'',groomHistory:'',date:'',time:'',lang:'ru'};
+var selBreed = null;
+var cY = new Date().getFullYear();
+var cM = new Date().getMonth();
+var step = 1;
+var MONTHS = ['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
+
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(function(s){s.classList.remove('active');});
+  document.getElementById(id).classList.add('active');
+  window.scrollTo(0,0);
+}
+
+function goStep(n) {
+  ['bk1','bk2','bk3','bk4','bk5'].forEach(function(id,i){
+    document.getElementById(id).className = 'step' + (i+1===n?' show':'');
+  });
+  for(var i=1;i<=5;i++){
+    var ps=document.getElementById('ps'+i);
+    var pl=document.getElementById('pl'+i);
+    if(i<n){ps.className='ps done';if(pl)pl.className='pl done';}
+    else if(i===n){ps.className='ps active';if(pl)pl.className='pl';}
+    else{ps.className='ps';if(pl)pl.className='pl';}
+  }
+  step=n; window.scrollTo(0,0);
+}
+
+document.getElementById('bookBtn').onclick = function(){
+  showScreen('bookScreen'); goStep(1); buildCal();
+};
+document.getElementById('backBtn').onclick = function(){
+  if(step>1){goStep(step-1);}else{showScreen('homeScreen');}
+};
+document.getElementById('homeBtn').onclick = function(){
+  showScreen('homeScreen'); resetAll();
+};
+
+// Breed search
+var inp = document.getElementById('bInput');
+var drop = document.getElementById('bDrop');
+var clr = document.getElementById('clrBtn');
+var badge = document.getElementById('sBadge');
+
+inp.addEventListener('input', function(){
+  var q = inp.value.trim();
+  clr.classList.toggle('show', q.length>0);
+  if(!q){drop.classList.remove('open');drop.innerHTML='';return;}
+  var sf=LANG==='en'?'breed_en':LANG==='et'?'breed_et':'breed';
+  var res=DATA.filter(function(b){return(b[sf]||b.breed).toLowerCase().indexOf(q.toLowerCase())!==-1;}).slice(0,35);
+  drop.innerHTML='';
+  var _nr=LANG==='en'?'Breed not found':LANG==='et'?'Tõugu ei leitud':'Порода не найдена';
+  var _nt=LANG==='en'?"Can't find your breed?":LANG==='et'?'Ei leia oma tõugu?':'Не нашли свою породу?';
+  var _ns=LANG==='en'?'Contact us — we will help you choose a service':LANG==='et'?'Võtke meiega ühendust — aitame teenuse valida':'Свяжитесь с нами любым удобным способом — мы поможем подобрать услугу';
+  if(!res.length){drop.innerHTML='<div class="nores">'+_nr+'</div><div class="no-breed-banner" onclick="showScreen(\'homeScreen\')"><div class="no-breed-banner-icon">🐾</div><div class="no-breed-banner-text"><div class="no-breed-banner-title">'+_nt+'</div><div class="no-breed-banner-sub">'+_ns+'</div></div><div class="no-breed-banner-arrow">→</div></div>';}
+  else{
+    res.forEach(function(b){
+      var d=document.createElement('div'); d.className='ditem';
+      var bname=b[sf]||b.breed;
+      var idx=bname.toLowerCase().indexOf(q.toLowerCase());
+      d.innerHTML=bname.substring(0,idx)+'<mark>'+bname.substring(idx,idx+q.length)+'</mark>'+bname.substring(idx+q.length);
+      d.onclick=function(){selectBreed(b);};
+      drop.appendChild(d);
+    });
+  }
+  drop.classList.add('open');
+});
+
+document.addEventListener('click',function(e){
+  if(!e.target.closest('.bwrap'))drop.classList.remove('open');
+});
+clr.onclick = resetBreed;
+
+function selectBreed(b){
+  selBreed=b; booking.breed=b.breed;
+  inp.value=''; clr.classList.remove('show');
+  drop.classList.remove('open'); drop.innerHTML='';
+  badge.innerHTML='';
+  var bField=LANG==='en'?'breed_en':LANG==='et'?'breed_et':'breed';
+  var dispBreed=b[bField]||b.breed;
+  booking.breedDisplay=dispBreed;
+  var bn=document.createElement('span');bn.className='bname';bn.textContent=dispBreed;
+  var chgTxt=LANG==='en'?'Change':LANG==='et'?'Muuda':'Изменить';
+  var bc=document.createElement('span');bc.className='bchg';bc.textContent=chgTxt;
+  bc.onclick=resetBreed;
+  badge.appendChild(bn);badge.appendChild(bc);
+  badge.classList.add('show');
+  renderSvcs(b);
+  document.getElementById('svcSec').style.display='block';
+    // Add important note if not exists
+    if(!document.getElementById('svcNote')){
+      var note=document.createElement('div');
+      note.id='svcNote';
+      note.style.cssText='border:1px solid rgba(201,168,76,.15);padding:14px 16px;background:rgba(201,168,76,.04);margin-top:12px;';
+      var noteTitle=LANG==='en'?'Please note':LANG==='et'?'Pange tähele':'Важно знать';
+      var noteBody=LANG==='en'?'Final price depends on coat condition and pet behaviour.<br>Dematting from 5 €.<br>Aggressive behaviour surcharge may apply: +50%.':LANG==='et'?'Lõplik hind sõltub karvastiku seisundist ja lemmiklooma käitumisest.<br>Koltsunite lahtiharutamine alates 5 €.<br>Agressiivse käitumise korral võib lisanduda 50% juurdehindlus.':'Окончательная стоимость зависит от состояния шерсти и поведения питомца.<br>Разбор колтунов — от 5 €.<br>При агрессивном поведении может применяться доплата 50%.';
+      note.innerHTML='<div style="font-size:.58rem;letter-spacing:.15em;text-transform:uppercase;color:#8a8a55;margin-bottom:8px;font-weight:600;">'+noteTitle+'</div><div style="font-size:.71rem;color:#777770;line-height:1.8;">'+noteBody+'</div>';
+      document.getElementById('svcSec').appendChild(note);
+    }
+}
+
+function resetBreed(){
+  selBreed=null;booking.breed='';booking.service='';booking.price=0;
+  inp.value='';clr.classList.remove('show');
+  badge.classList.remove('show');badge.innerHTML='';
+  document.getElementById('svcSec').style.display='none';
+  document.getElementById('svcList').innerHTML='';
+}
+
+
+var SVC_TRANSLATIONS = {
+  'Базовый уход':      {en:'Basic groom',      et:'Põhihooldus'},
+  'Гигиенический уход':{en:'Hygiene groom',    et:'Hügieenihooldus'},
+  'Комплексный уход':  {en:'Full groom',        et:'Täielik hooldus'},
+  'Тримминг':          {en:'Trimming',          et:'Trimmerimine'},
+  'Экспресс-линька':   {en:'Express shed',      et:'Kiirkarvavahetus'},
+  'Вычес':             {en:'Brush-out',         et:'Harjamine'}
+};
+var SVC_TAGLINE_I18N={
+  ru:{'Вычес':'Стоимость зависит от состояния шерсти и объёма работ','Базовый уход':'Подходит для поддержания чистоты между процедурами','Гигиенический уход':'Для комфорта и аккуратности питомца','Комплексный уход':'Полный уход со стрижкой','Экспресс-линька':'Помогает уменьшить количество линяющей шерсти','Тримминг':'Для жесткошерстных пород'},
+  en:{'Вычес':'Price depends on coat condition and volume of work','Базовый уход':'Ideal for maintaining cleanliness between full grooms','Гигиенический уход':'For your pet\'s comfort and neatness','Комплексный уход':'Full grooming with haircut','Экспресс-линька':'Significantly reduces shedding','Тримминг':'For wire-haired breeds'},
+  et:{'Вычес':'Hind sõltub karvastiku seisundist ja töömahust','Базовый уход':'Sobib puhtuse hoidmiseks protseduuride vahel','Гигиенический уход':'Lemmiklooma mugavuseks ja korrashoiuks','Комплексный уход':'Täielik hooldus koos lõikusega','Экспресс-линька':'Vähendab oluliselt karvade langemist','Тримминг':'Traatkarvalistele tõugudele'}
+};
+var SVC_DESC_I18N={
+  ru:{'Вычес':'Чистка глаз, ушей, подстригание когтей, вычёс (для кошек)','Базовый уход':'Мытьё профессиональными средствами, деликатная сушка','Гигиенический уход':'Стрижка когтей, чистка ушей и глаз, купание, сушка, уход за лапками и чувствительными зонами','Комплексный уход':'Стрижка когтей, чистка ушей и глаз, купание, сушка, уход за лапками и чувствительными зонами, модельная стрижка','Экспресс-линька':'Мытьё, сушка, уход за шерстью, маска, подстригание когтей, чистка ушей и глаз, уход за лапами и зонами требующими особого внимания','Тримминг':'Выщипывание старого слоя шерсти, мытьё, сушка, стрижка когтей, чистка ушей и глаз, оформление шерсти'},
+  en:{'Вычес':'Eye and ear cleaning, nail trimming, brushing (for cats)','Базовый уход':'Washing with professional products, gentle drying','Гигиенический уход':'Nail trimming, ear and eye cleaning, bathing, drying, paw and sensitive area care','Комплексный уход':'Nail trimming, ear and eye cleaning, bathing, drying, paw and sensitive area care, styling haircut','Экспресс-линька':'Washing, drying, coat care, mask, nail trimming, ear and eye cleaning, paw and special area care','Тримминг':'Removing old coat layer, washing, drying, nail trimming, ear and eye cleaning, coat styling'},
+  et:{'Вычес':'Silmade ja kõrvade puhastamine, küünte lõikamine, harjamine (kassidele)','Базовый уход':'Pesemine professionaalsete vahenditega, õrn kuivatamine','Гигиенический уход':'Küünte lõikamine, kõrvade ja silmade puhastamine, pesemine, kuivatamine, käppade ja tundlike piirkondade hooldus','Комплексный уход':'Küünte lõikamine, kõrvade ja silmade puhastamine, pesemine, kuivatamine, käppade ja tundlike piirkondade hooldus, modellõikus','Экспресс-линька':'Pesemine, kuivatamine, karvastiku hooldus, mask, küünte lõikamine, kõrvade ja silmade puhastamine, käppade ja eriliste piirkondade hooldus','Тримминг':'Vana karvakihi eemaldamine, pesemine, kuivatamine, küünte lõikamine, kõrvade ja silmade puhastamine, karvastiku kujundamine'}
+};
+function getSvcTag(name){return(SVC_TAGLINE_I18N[LANG]&&SVC_TAGLINE_I18N[LANG][name])||SVC_TAGLINE_I18N.ru[name]||'';}
+function getSvcDesc(name){return(SVC_DESC_I18N[LANG]&&SVC_DESC_I18N[LANG][name])||SVC_DESC_I18N.ru[name]||'';}
+
+function renderSvcs(b){
+  var list=document.getElementById('svcList');list.innerHTML='';
+  Object.entries(b.services).forEach(function(kv){
+    var name=kv[0],price=kv[1];
+    var displayName=(LANG!=='ru'&&SVC_TRANSLATIONS[name])?SVC_TRANSLATIONS[name][LANG]:name;
+    var btn=document.createElement('button');btn.className='svbtn';
+    var row=document.createElement('div');row.className='svbtn-row';
+    var ns=document.createElement('span');ns.className='svbtn-name';ns.textContent=displayName;
+    var ps=document.createElement('span');ps.className='svbtn-price';ps.textContent=price+' €';
+    row.appendChild(ns);row.appendChild(ps);
+    btn.appendChild(row);
+    var desc=getSvcDesc(name);
+    if(desc){var ds=document.createElement('span');ds.className='svbtn-desc';ds.textContent=desc;btn.appendChild(ds);}
+    var tag=getSvcTag(name);
+    if(tag){var ts=document.createElement('span');ts.className='svbtn-tag';ts.textContent=tag;btn.appendChild(ts);}
+    btn.onclick=function(){
+      document.querySelectorAll('.svbtn').forEach(function(b){b.classList.remove('active');});
+      btn.classList.add('active');
+      booking.service=name;booking.price=price;
+      setTimeout(function(){goStep(2);},300);
+    };
+    list.appendChild(btn);
+  });
+}
+
+// Masters
+document.querySelectorAll('.mbtn').forEach(function(btn){
+  btn.onclick=function(){
+    document.querySelectorAll('.mbtn').forEach(function(b){b.classList.remove('active');});
+    btn.classList.add('active');
+    booking.master=btn.getAttribute('data-master');
+    setTimeout(function(){goStep(3);},300);
+  };
+});
+
+// Groom history
+document.querySelectorAll('.gbtn').forEach(function(btn){
+  btn.onclick=function(){
+    document.querySelectorAll('.gbtn').forEach(function(b){b.classList.remove('active');});
+    btn.classList.add('active');
+    booking.groomHistory=btn.getAttribute('data-val');
+    setTimeout(function(){goStep(4);buildCal();},300);
+  };
+});
+
+// Calendar
+document.getElementById('prevM').onclick=function(){cM--;if(cM<0){cM=11;cY--;}buildCal();};
+document.getElementById('nextM').onclick=function(){cM++;if(cM>11){cM=0;cY++;}buildCal();};
+
+var availableDays = [];
+
+function loadAvailableDays() {
+  var master = booking.master;
+  if (!master) return;
+  availableDays = [];
+  fetch(window.location.origin + '/api/available_days?month=' + (cM+1) + '&year=' + cY + '&master=' + encodeURIComponent(master))
+    .then(function(r){ return r.json(); })
+    .then(function(data){
+      availableDays = data.available || [];
+      markAvailableDays();
+    })
+    .catch(function(){ availableDays = []; });
+}
+
+function markAvailableDays() {
+  document.querySelectorAll('.cd').forEach(function(c){if(!c.classList.contains('dis'))c.classList.remove('sel');});
+  document.querySelectorAll('.cd:not(.dis):not(.cdn):not(.pad)').forEach(function(el) {
+    var day = el.textContent.trim();
+    if (!day || isNaN(parseInt(day))) return;
+    var dateStr = String(parseInt(day)).padStart(2,'0') + '.' + String(cM+1).padStart(2,'0') + '.' + cY;
+    if (availableDays.indexOf(dateStr) !== -1) {
+      el.classList.add('avail');
+      el.classList.remove('busy');
+    } else {
+      el.classList.add('busy');
+      el.classList.remove('avail');
+    }
+  });
+}
+
+function buildCal(){
+  loadAvailableDays();
+  document.getElementById('calM').textContent=MONTHS[cM]+' '+cY;
+  booking.date=''; document.querySelectorAll('.cd').forEach(function(c){c.classList.remove('sel');c.classList.remove('avail');c.classList.remove('busy');});
+  var g=document.getElementById('calG');g.innerHTML='';
+  ['Пн','Вт','Ср','Чт','Пт','Сб','Вс'].forEach(function(d){
+    var el=document.createElement('div');el.className='cdn';el.textContent=d;g.appendChild(el);
+  });
+  var first=new Date(cY,cM,1).getDay();
+  var days=new Date(cY,cM+1,0).getDate();
+  var start=first===0?6:first-1;
+  var today=new Date();
+  for(var i=0;i<start;i++){var el=document.createElement('div');el.className='cd pad';g.appendChild(el);}
+  for(var day=1;day<=days;day++){
+    var el=document.createElement('div');el.className='cd';
+    var date=new Date(cY,cM,day);
+    var isPast=date<new Date(today.getFullYear(),today.getMonth(),today.getDate());
+    var inner=document.createElement('div');inner.className='cd-inner';inner.textContent=day;el.appendChild(inner);
+    if(isPast){el.classList.add('dis');}
+    else{
+      if(date.toDateString()===today.toDateString())el.classList.add('tod');
+      (function(d, elRef){
+        elRef.onclick=function(){
+          document.querySelectorAll('.cd').forEach(function(c){c.classList.remove('sel');});
+          elRef.classList.add('sel');
+          booking.date=String(d).padStart(2,'0')+'.'+String(cM+1).padStart(2,'0')+'.'+cY;
+          showTimes();
+        };
+      })(day, el);
+    }
+    g.appendChild(el);
+  }
+  // fill trailing cells to complete last grid row
+  var total = start + days;
+  var trail = (7 - (total % 7)) % 7;
+  for(var t=0;t<trail;t++){var ep=document.createElement('div');ep.className='cd pad';g.appendChild(ep);}
+}
+
+function showTimes(){
+  var tg=document.getElementById('timeG');
+  tg.innerHTML='<div class="loading-slots">⏳ Загружаем расписание...</div>';
+  document.getElementById('timeSec').style.display='block';
+
+  var url = window.location.origin + "/api/slots" + '?action=slots&date=' + encodeURIComponent(booking.date) + '&master=' + encodeURIComponent(booking.master);
+
+  fetch(url)
+    .then(function(r){return r.json();})
+    .then(function(data){
+      var slots = (data.slots && data.slots.length > 0) ? data.slots : [];
+      renderTimeSlots(slots);
+    })
+    .catch(function(){
+      renderTimeSlots([]);
+    });
+}
+
+function renderTimeSlots(slots){
+  var tg=document.getElementById('timeG');tg.innerHTML='';
+  if(slots.length===0){
+    tg.innerHTML='<div class="loading-slots">Нет доступных слотов на эту дату</div><div class="no-breed-banner" onclick="showScreen(\'homeScreen\')" style="margin-top:8px;"><div class="no-breed-banner-icon">🐾</div><div class="no-breed-banner-text"><div class="no-breed-banner-title">Не нашли подходящее время?</div><div class="no-breed-banner-sub">Свяжитесь с нами любым удобным способом — мы подберём удобное время</div></div><div class="no-breed-banner-arrow">→</div></div>';
+    return;
+  }
+  slots.forEach(function(t){
+    var btn=document.createElement('button');btn.className='tbtn';btn.textContent=t;
+    btn.onclick=function(){
+      document.querySelectorAll('.tbtn').forEach(function(b){b.classList.remove('active');});
+      btn.classList.add('active');booking.time=t;
+      setTimeout(function(){goStep(5);buildSum();},300);
+    };
+    tg.appendChild(btn);
+  });
+  document.getElementById('timeSec').scrollIntoView({behavior:'smooth',block:'nearest'});
+}
+
+function buildSum(){
+  document.getElementById('sumBlock').innerHTML=
+    '<div class="sr"><span class="sl">'+T[LANG].sum_breed+'</span><span class="sv">'+(booking.breedDisplay||booking.breed)+'</span></div>'+
+    '<div class="sr"><span class="sl">'+T[LANG].sum_service+'</span><span class="sv">'+((LANG!=='ru'&&SVC_TRANSLATIONS[booking.service])?SVC_TRANSLATIONS[booking.service][LANG]:booking.service)+'</span></div>'+
+    '<div class="sr"><span class="sl">'+T[LANG].sum_master+'</span><span class="sv">'+booking.master+'</span></div>'+
+    '<div class="sr"><span class="sl">'+T[LANG].sum_groom+'</span><span class="sv">'+booking.groomHistory+'</span></div>'+
+    '<div class="sr"><span class="sl">'+T[LANG].sum_date+'</span><span class="sv">'+booking.date+'</span></div>'+
+    '<div class="sr"><span class="sl">'+T[LANG].sum_time+'</span><span class="sv">'+booking.time+'</span></div>'+
+    '<div class="sr"><span class="sl">'+T[LANG].sum_price+'</span><span class="sp">'+booking.price+' €</span></div>';
+}
+
+document.getElementById('confirmBtn').onclick = function(){
+  var name=document.getElementById('cName').value;
+  var phone=document.getElementById('cPhone').value;
+  if(!name||!phone){alert(T[LANG].alert_fill);return;}
+  if(!/^\+\d{10,}$/.test(phone.trim())){alert(T[LANG].alert_phone);return;}
+  booking.name=name; booking.phone=phone; booking.email=document.getElementById('cEmail').value; booking.pet=document.getElementById('cPet').value; booking.lang=LANG;
+  var btn=document.getElementById('confirmBtn');
+  btn.textContent=T[LANG].sending; btn.disabled=true;
+  fetch(RAILWAY, {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify(booking)
+  }).then(function(){showSuccess();}).catch(function(){showSuccess();});
+};
+
+function showSuccess(){
+  document.getElementById('bk5').className='step';
+  document.getElementById('sucBlock').classList.add('show');
+  document.getElementById('progress').style.display='none';
+}
+
+function resetAll(){
+  booking={breed:'',breedDisplay:'',service:'',price:0,master:'',groomHistory:'',date:'',time:'',lang:'ru'};
+  selBreed=null; inp.value=''; clr.classList.remove('show');
+  badge.classList.remove('show'); badge.innerHTML='';
+  document.getElementById('svcSec').style.display='none';
+  document.getElementById('timeSec').style.display='none';
+  document.getElementById('sucBlock').classList.remove('show');
+  document.getElementById('progress').style.display='flex';
+  document.getElementById('cName').value='';
+  document.getElementById('cPhone').value='';
+  document.getElementById('cEmail').value='';
+  document.getElementById('cPet').value='';
+  document.getElementById('confirmBtn').textContent=T[LANG].confirm_btn;
+  document.getElementById('confirmBtn').disabled=false;
+  goStep(1);
+}
+
+var LANG = localStorage.getItem('rjlang') || 'ru';
+var T = {
+  ru:{
+    logo_tag:'Премиальный груминг-<br>салон в Таллине',
+    choose_how:'Choose how to connect',
+    book_online:'Book Online',
+    book_flow:'Порода → Услуга → Мастер → Время',
+    or_contact:'or contact us',
+    call_us:'Call Us',
+    back:'← Назад',
+    logo_sub:'Grooming · Таллин',
+    ps_service:'Услуга',ps_master:'Мастер',ps_pet:'Питомец',ps_date:'Дата',ps_details:'Данные',
+    step1_lbl:'01 · Порода собаки',
+    breed_ph:'Начните вводить породу...',
+    step2_lbl:'02 · Услуга',
+    step2_master:'Выберите мастера',
+    step3_lbl:'Как давно вы посещали груминг?',
+    g1:'Первый раз',g2:'От 1 до 3 месяцев',g3:'От 3 до 6 месяцев',g4:'Более 6 месяцев',
+    step4_lbl:'Выберите дату',
+    cal_avail:'Есть свободное время',cal_none:'Свободного времени нет',
+    step4_time:'Выберите время',
+    step5_lbl:'Ваши данные',
+    lbl_name:'Имя',ph_name:'Ваше имя',
+    lbl_phone:'Телефон',lbl_email:'Email',
+    lbl_pet:'Кличка питомца',ph_optional:'Необязательно',
+    confirm_btn:'Подтвердить запись',
+    success_title:'Запись принята!',
+    success_sub:'Мы свяжемся с вами для подтверждения.<br>Спасибо, что выбрали R&amp;J Grooming!',
+    to_home:'← На главную',
+    alert_fill:'Введите имя и телефон',alert_phone:'Введите номер в формате +37212345678',
+    sending:'Отправляем...',
+    sum_breed:'Порода',sum_service:'Услуга',sum_master:'Мастер',sum_groom:'Последний грум',sum_date:'Дата',sum_time:'Время',sum_price:'Стоимость',
+    months:['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь']
+  },
+  en:{
+    logo_tag:'Premium grooming<br>salon in Tallinn',
+    choose_how:'Choose how to connect',
+    book_online:'Book Online',
+    book_flow:'Breed → Service → Master → Time',
+    or_contact:'or contact us',
+    call_us:'Call Us',
+    back:'← Back',
+    logo_sub:'Grooming · Tallinn',
+    ps_service:'Service',ps_master:'Master',ps_pet:'Pet',ps_date:'Date',ps_details:'Details',
+    step1_lbl:'01 · Dog breed',
+    breed_ph:'Start typing breed...',
+    step2_lbl:'02 · Service',
+    step2_master:'Choose master',
+    step3_lbl:'How long ago was your last grooming?',
+    g1:'First time',g2:'1–3 months ago',g3:'3–6 months ago',g4:'Over 6 months',
+    step4_lbl:'Choose date',
+    cal_avail:'Available',cal_none:'Not available',
+    step4_time:'Choose time',
+    step5_lbl:'Your details',
+    lbl_name:'Name',ph_name:'Your name',
+    lbl_phone:'Phone',lbl_email:'Email',
+    lbl_pet:"Pet's name",ph_optional:'Optional',
+    confirm_btn:'Confirm booking',
+    success_title:'Booking confirmed!',
+    success_sub:'We will contact you to confirm.<br>Thank you for choosing R&amp;J Grooming!',
+    to_home:'← Home',
+    alert_fill:'Please enter name and phone',alert_phone:'Enter phone number in format +37212345678',
+    sending:'Sending...',
+    sum_breed:'Breed',sum_service:'Service',sum_master:'Master',sum_groom:'Last grooming',sum_date:'Date',sum_time:'Time',sum_price:'Price',
+    months:['January','February','March','April','May','June','July','August','September','October','November','December']
+  },
+  et:{
+    logo_tag:'Esmaklassiline hooldusteenus<br>Tallinnas',
+    choose_how:'Vali ühendusviis',
+    book_online:'Broneeri veebis',
+    book_flow:'Tõug → Teenus → Meister → Aeg',
+    or_contact:'või võta ühendust',
+    call_us:'Helista meile',
+    back:'← Tagasi',
+    logo_sub:'Grooming · Tallinn',
+    ps_service:'Teenus',ps_master:'Meister',ps_pet:'Lemmikloom',ps_date:'Kuupäev',ps_details:'Andmed',
+    step1_lbl:'01 · Koera tõug',
+    breed_ph:'Alustage tõu sisestamist...',
+    step2_lbl:'02 · Teenus',
+    step2_master:'Vali meister',
+    step3_lbl:'Millal käisite viimati groomingus?',
+    g1:'Esimest korda',g2:'1–3 kuud tagasi',g3:'3–6 kuud tagasi',g4:'Üle 6 kuu',
+    step4_lbl:'Vali kuupäev',
+    cal_avail:'Vabu aegu on',cal_none:'Vabu aegu pole',
+    step4_time:'Vali kellaaeg',
+    step5_lbl:'Teie andmed',
+    lbl_name:'Nimi',ph_name:'Teie nimi',
+    lbl_phone:'Telefon',lbl_email:'Email',
+    lbl_pet:'Lemmiklooma nimi',ph_optional:'Valikuline',
+    confirm_btn:'Kinnita broneering',
+    success_title:'Broneering kinnitatud!',
+    success_sub:'Võtame teiega ühendust kinnitamiseks.<br>Täname, et valisite R&amp;J Grooming!',
+    to_home:'← Avalehele',
+    alert_fill:'Palun sisestage nimi ja telefon',alert_phone:'Sisestage telefoninumber vormingus +37212345678',
+    sending:'Saadan...',
+    sum_breed:'Tõug',sum_service:'Teenus',sum_master:'Meister',sum_groom:'Viimane grooming',sum_date:'Kuupäev',sum_time:'Kellaaeg',sum_price:'Hind',
+    months:['Jaanuar','Veebruar','Märts','Aprill','Mai','Juuni','Juuli','August','September','Oktoober','November','Detsember']
+  }
+};
+
+function setLang(l){
+  LANG=l;
+  localStorage.setItem('rjlang',l);
+  document.querySelectorAll('.lang-btn').forEach(function(b){
+    b.classList.toggle('active', b.textContent.toLowerCase()===l);
+  });
+  var tr=T[l];
+  document.querySelectorAll('[data-i18n]').forEach(function(el){
+    var k=el.getAttribute('data-i18n');
+    if(tr[k]!==undefined) el.innerHTML=tr[k];
+  });
+  document.querySelectorAll('[data-i18n-ph]').forEach(function(el){
+    var k=el.getAttribute('data-i18n-ph');
+    if(tr[k]!==undefined) el.placeholder=tr[k];
+  });
+  MONTHS=tr.months;
+  renderCal();
+  // Re-render badge and services if breed already selected
+  if(selBreed){
+    var bf=l==='en'?'breed_en':l==='et'?'breed_et':'breed';
+    var db=selBreed[bf]||selBreed.breed;
+    booking.breedDisplay=db;
+    var bnEl=document.querySelector('#sBadge .bname');
+    if(bnEl) bnEl.textContent=db;
+    var bcEl=document.querySelector('#sBadge .bchg');
+    if(bcEl) bcEl.textContent=l==='en'?'Change':l==='et'?'Muuda':'Изменить';
+    if(document.getElementById('svcSec').style.display!=='none') renderSvcs(selBreed);
+    var sn=document.getElementById('svcNote');
+    if(sn){
+      var nt=l==='en'?'Please note':l==='et'?'Pange tähele':'Важно знать';
+      var nb=l==='en'?'Final price depends on coat condition and pet behaviour.<br>Dematting from 5 €.<br>Aggressive behaviour surcharge may apply: +50%.':l==='et'?'Lõplik hind sõltub karvastiku seisundist ja lemmiklooma käitumisest.<br>Koltsunite lahtiharutamine alates 5 €.<br>Agressiivse käitumise korral võib lisanduda 50% juurdehindlus.':'Окончательная стоимость зависит от состояния шерсти и поведения питомца.<br>Разбор колтунов — от 5 €.<br>При агрессивном поведении может применяться доплата 50%.';
+      sn.innerHTML='<div style="font-size:.58rem;letter-spacing:.15em;text-transform:uppercase;color:#8a8a55;margin-bottom:8px;font-weight:600;">'+nt+'</div><div style="font-size:.71rem;color:#777770;line-height:1.8;">'+nb+'</div>';
+    }
+  }
+}
+
+// Apply saved language on load
+(function(){ setLang(LANG); })();
+
+</script>
+</body>
+</html>
