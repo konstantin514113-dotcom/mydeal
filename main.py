@@ -60,7 +60,10 @@ _FUNNEL_RULES = """
 Шаг 2 → Клиент написал запрос: ответь тепло, спроси ТОЛЬКО породу.
          Пример: «Замечательно! Подскажите, пожалуйста, какая у вас порода?»
          ❌ НЕ спрашивай вес на этом шаге.
-Шаг 3 → ВЫПОЛНЯЕТСЯ КОДОМ: порода известна, вес не известен →
+Шаг 2б → ВЫПОЛНЯЕТСЯ КОДОМ: если порода требует уточнения подвида (такса / пудель /
+          шпиц / чихуахуа / йорк) — код спрашивает подвид автоматически.
+          ❌ НЕ называй услуги и цену до уточнения подвида.
+Шаг 3 → ВЫПОЛНЯЕТСЯ КОДОМ: порода (с подвидом если нужен) известна, вес не известен →
          код автоматически делает комплимент породе и спрашивает вес.
          ❌ НЕ спрашивай сам — дождись кода. ❌ НЕ называй услуги.
 Шаг 4 → ВЫПОЛНЯЕТСЯ КОДОМ: порода + вес известны →
@@ -81,9 +84,10 @@ _FUNNEL_RULES = """
           «Всё верно?» → «да» → «Запись принята! Ждём вас 🐾»
 
 ЕСЛИ порода не известна → спроси породу (шаг 2).
-ЕСЛИ порода известна, а вес НЕ известен → жди кода (шаг 3). Сам не действуй.
+ЕСЛИ порода с разновидностями (такса/пудель/шпиц/чихуахуа/йорк) без подвида → жди кода (шаг 2б).
+ЕСЛИ порода (с подвидом) известна, вес НЕ известен → жди кода (шаг 3). Сам не действуй.
 ЕСЛИ порода и вес известны → жди кода (шаг 4). Сам не действуй.
-НЕЛЬЗЯ переходить к услугам пока не известен вес.
+НЕЛЬЗЯ переходить к услугам пока не известен вес и подвид (если порода требует).
 НЕЛЬЗЯ называть цену пока клиент не подтвердил услугу.
 НЕЛЬЗЯ показывать слоты пока клиент не ответил «да» на «Хотите записаться?».
 
@@ -250,6 +254,63 @@ def _get_all_services_for_breed(breed):
             result.append((canonical, int(m.group(1))))
     return result
 
+# Breeds that require subtype clarification before pricing/services.
+# 'coat'+'size' means BOTH must be present; 'any' means at least one must be present.
+_BREED_CLARIFICATION = [
+    {
+        'base': ['такса'],
+        'coat': ['гладкошерстн', 'длинношерстн', 'жёсткошерстн', 'жесткошерстн'],
+        'size': ['стандартн', 'миниатюрн', 'кролич', 'карликов'],
+        'question': (
+            "Уточните, пожалуйста, подвид таксы:\n"
+            "• Тип шерсти: гладкошерстная / длинношерстная / жёсткошерстная\n"
+            "• Размер: стандартная / миниатюрная / кроличья 🤍"
+        ),
+    },
+    {
+        'base': ['пудель'],
+        'any': ['той', 'миниатюрн', 'средн', 'большой', 'королевск', 'карликов'],
+        'question': "Уточните, пожалуйста, размер пуделя: той / миниатюрный / средний / большой (королевский)? 🤍",
+    },
+    {
+        'base': ['шпиц'],
+        'any': ['немецк', 'японск', 'той', 'миниатюрн', 'средн', 'большой'],
+        'question': (
+            "Уточните, пожалуйста, подвид шпица:\n"
+            "• Тип: немецкий / японский\n"
+            "• Размер: той / миниатюрный / средний / большой 🤍"
+        ),
+    },
+    {
+        'base': ['чихуахуа', 'чихуа'],
+        'any': ['гладкошерстн', 'длинношерстн'],
+        'question': "Уточните, пожалуйста: чихуахуа гладкошерстная или длинношерстная? 🤍",
+    },
+    {
+        'base': ['йоркширский', 'йорк'],
+        'any': ['стандартн', 'мини', 'той'],
+        'question': "Уточните, пожалуйста: йоркширский терьер стандартный или мини? 🤍",
+    },
+]
+
+def _check_breed_needs_clarification(breed):
+    """Return clarification question if breed requires subtype info, else None."""
+    if not breed:
+        return None
+    bl = breed.lower()
+    for entry in _BREED_CLARIFICATION:
+        if not any(b in bl for b in entry['base']):
+            continue
+        if 'coat' in entry and 'size' in entry:
+            has_coat = any(c in bl for c in entry['coat'])
+            has_size = any(s in bl for s in entry['size'])
+            if not (has_coat and has_size):
+                return entry['question']
+        elif 'any' in entry:
+            if not any(a in bl for a in entry['any']):
+                return entry['question']
+    return None
+
 def _extract_price_from_history(history):
     """Find last 'от N€' price mentioned by Anna in conversation."""
     price_re = re.compile(r'от\s+(\d+)\s*€', re.IGNORECASE)
@@ -267,7 +328,8 @@ def _extract_state(history, state):
     )
     prompt = (
         "Извлеки данные бронирования. Верни ТОЛЬКО JSON без пояснений.\n"
-        "Поля: breed (только название породы, без веса — например 'лабрадор'), "
+        "Поля: breed (название породы включая подвид если указан — например "
+        "'такса гладкошерстная стандартная', 'пудель той', 'шпиц немецкий миниатюрный'; без веса), "
         "weight (вес питомца — например '30 кг'; null если не назван), "
         "service, date, time, ownerName, petName, "
         "master (null если клиент не называл мастера), "
@@ -1508,6 +1570,21 @@ def _test_chat_send():
     _breed_known    = bool(new_state.get("breed"))
     _weight_known   = bool(new_state.get("weight"))
     _had_greeting   = any(m["role"] == "assistant" for m in history)
+
+    # ── Subtype clarification: breed with varieties → ask before weight/services ──
+    if (_breed_known and not _services_shown
+            and not new_state.get("service_confirmed")
+            and not booking_intent
+            and _had_greeting):
+        _clarify_q = _check_breed_needs_clarification(new_state.get("breed"))
+        if _clarify_q:
+            last_asst = next((m["content"] for m in reversed(history)
+                              if m["role"] == "assistant"), "")
+            if "уточните" not in last_asst.lower():
+                history.append({"role": "assistant", "content": _clarify_q})
+                sess["state"] = new_state
+                print(f"[test-chat] subtype-clarify: breed={new_state.get('breed')!r}", flush=True)
+                return jsonify({"reply": _clarify_q, "state": new_state, "booked": False})
 
     # ── Step 3 (strict): breed known, weight not yet → inject weight question ──
     # Ensures Claude never skips asking for weight before showing services.
