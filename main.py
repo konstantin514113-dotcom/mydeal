@@ -1155,6 +1155,105 @@ def api_reschedule_booking():
         return jsonify({"success": False, "error": "phone, newDate, newTime required"}), 400
     return jsonify(_gs_reschedule(phone, new_date, new_time))
 
+# ── ElevenLabs voice agent endpoints ─────────────────────────────────────────
+
+@app.route("/api/elevenlabs/book", methods=["POST"])
+def elevenlabs_book():
+    """Accept booking from ElevenLabs voice agent and forward to Google Script.
+    Required JSON fields: breed, service, date (DD.MM.YYYY), time (HH:MM), name, phone.
+    Optional: pet, master, price, lang (ru/en/et), breedDisplay.
+    """
+    data = request.get_json() or {}
+    missing = [f for f in ("breed", "service", "date", "time", "name", "phone")
+               if not data.get(f)]
+    if missing:
+        return jsonify({"success": False,
+                        "error": f"Missing required fields: {', '.join(missing)}"}), 400
+
+    payload = {
+        "breed":        data.get("breed", ""),
+        "breedDisplay": data.get("breedDisplay") or data.get("breed", ""),
+        "service":      data.get("service", ""),
+        "price":        data.get("price", 0),
+        "date":         data.get("date", ""),
+        "time":         data.get("time", ""),
+        "name":         data.get("name", ""),
+        "pet":          data.get("pet", ""),
+        "master":       data.get("master", ""),
+        "phone":        data.get("phone", ""),
+        "lang":         data.get("lang", "ru"),
+        "source":       "elevenlabs",
+    }
+    print(f"[elevenlabs/book] {payload}", flush=True)
+
+    if not GOOGLE_SCRIPT:
+        return jsonify({"success": False, "error": "GOOGLE_SCRIPT not configured"}), 500
+    try:
+        r = requests.get(GOOGLE_SCRIPT, params=payload, timeout=15)
+        print(f"[elevenlabs/book] GS → {r.status_code}: {r.text[:300]}", flush=True)
+        return jsonify({"success": True, "booking": payload})
+    except Exception as e:
+        print(f"[elevenlabs/book] error: {e}", flush=True)
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/api/elevenlabs/slots")
+def elevenlabs_slots():
+    """Return available time slots for a given date.
+    Query params: date=DD.MM.YYYY (required), master= (optional).
+    Returns: {success, date, slots: ["10:00", "11:00", ...]}
+    """
+    date   = request.args.get("date", "").strip()
+    master = request.args.get("master", "").strip()
+
+    if not date:
+        return jsonify({"success": False, "slots": [],
+                        "error": "date parameter required (DD.MM.YYYY)"}), 400
+    if not GOOGLE_SCRIPT:
+        return jsonify({"success": False, "slots": [],
+                        "error": "GOOGLE_SCRIPT not configured"}), 500
+    try:
+        r = requests.get(GOOGLE_SCRIPT,
+                         params={"action": "slots", "date": date, "master": master},
+                         timeout=25)
+        slots = [str(s) for s in r.json().get("slots", []) if str(s).endswith(":00")]
+        print(f"[elevenlabs/slots] {date} master={master!r} → {slots}", flush=True)
+        return jsonify({"success": True, "date": date, "slots": slots})
+    except Exception as e:
+        print(f"[elevenlabs/slots] error: {e}", flush=True)
+        return jsonify({"success": False, "slots": [], "error": str(e)}), 500
+
+
+@app.route("/api/elevenlabs/available_days")
+def elevenlabs_available_days():
+    """Return available days for the current (or specified) month.
+    Query params: month= (1-12), year= (YYYY), master= (optional).
+    Returns: {success, month, year, available_days: ["01.06.2026", ...]}
+    """
+    import datetime as _dt
+    _now   = _dt.date.today()
+    month  = request.args.get("month",  str(_now.month)).strip()
+    year   = request.args.get("year",   str(_now.year)).strip()
+    master = request.args.get("master", "").strip()
+
+    if not GOOGLE_SCRIPT:
+        return jsonify({"success": False, "available_days": [],
+                        "error": "GOOGLE_SCRIPT not configured"}), 500
+    try:
+        r = requests.get(GOOGLE_SCRIPT,
+                         params={"action": "available_days",
+                                 "month": month, "year": year, "master": master},
+                         timeout=25)
+        available = r.json().get("available", [])
+        print(f"[elevenlabs/available_days] {month}/{year} master={master!r} → {available}",
+              flush=True)
+        return jsonify({"success": True, "month": month, "year": year,
+                        "available_days": available})
+    except Exception as e:
+        print(f"[elevenlabs/available_days] error: {e}", flush=True)
+        return jsonify({"success": False, "available_days": [], "error": str(e)}), 500
+
+
 @app.route("/cron/reminders")
 def cron_reminders():
     """Send SMS reminders for tomorrow's bookings.
