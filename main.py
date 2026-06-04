@@ -745,28 +745,31 @@ def confirm():
             tl = f"{td};color:#666"
             if lang == "en":
                 heading  = f"Thank you for booking, {name}!"
-                subhead  = "Your appointment at R&amp;J Grooming is confirmed."
-                labels   = ["Date", "Time", "Service", "Groomer", "Breed", "Pet's name"]
+                _ms      = f" Your groomer: <b>{master}</b>." if master else ""
+                subhead  = f"Your appointment at R&amp;J Grooming is confirmed.{_ms}"
+                labels   = ["Date", "Time", "Groomer", "Service", "Breed", "Pet's name"]
                 footer_t = "We look forward to seeing you and your pet!"
                 address  = "Address: Allveelaeva 4, Tallinn<br>Phone: +372 587 35456"
             elif lang == "et":
                 heading  = f"Aitäh broneeringu eest, {name}!"
-                subhead  = "Teie broneering R&amp;J Groomingus on kinnitatud."
-                labels   = ["Kuupäev", "Kellaaeg", "Teenus", "Meister", "Tõug", "Lemmiklooma nimi"]
+                _ms      = f" Teie meister: <b>{master}</b>." if master else ""
+                subhead  = f"Teie broneering R&amp;J Groomingus on kinnitatud.{_ms}"
+                labels   = ["Kuupäev", "Kellaaeg", "Meister", "Teenus", "Tõug", "Lemmiklooma nimi"]
                 footer_t = "Ootame teid ja teie lemmikut!"
                 address  = "Aadress: Allveelaeva 4, Tallinn<br>Telefon: +372 587 35456"
             else:
                 heading  = f"Спасибо за запись, {name}!"
-                subhead  = "Ваша запись в R&amp;J Grooming подтверждена."
-                labels   = ["Дата", "Время", "Услуга", "Мастер", "Порода", "Кличка"]
+                _ms      = f" Ваш мастер: <b>{master}</b>." if master else ""
+                subhead  = f"Ваша запись в R&amp;J Grooming подтверждена.{_ms}"
+                labels   = ["Дата", "Время", "Мастер", "Услуга", "Порода", "Кличка"]
                 footer_t = "Ждём вас и вашего питомца!"
                 address  = "Адрес: Allveelaeva 4, Tallinn<br>Телефон: +372 587 35456"
 
-            values = [date, time, service, master, breed, pet]
+            values = [date, time, master, service, breed, pet]
             rows = "".join(
                 f'<tr><td style="{tl}">{l}</td>'
                 f'<td style="{td}"><b>{v}</b></td></tr>'
-                for l, v in zip(labels, values)
+                for l, v in zip(labels, values) if v  # skip rows with empty values
             )
             body_html = (
                 f'<!DOCTYPE html><html><body style="font-family:Arial,sans-serif;color:#222;'
@@ -818,11 +821,14 @@ def confirm():
                 p = "+" + p
             print(f"PHONE RAW: {phone!r} → DECODED: {p!r}", flush=True)
             if lang == "en":
-                sms_body = f"R&J Grooming: booking confirmed! {date} at {time}. Groomer: {master}. Address: Allveelaeva 4, Tallinn"
+                _m = f"Groomer: {master}. " if master else ""
+                sms_body = f"R&J Grooming: booking confirmed! {_m}{date} at {time}. Address: Allveelaeva 4, Tallinn"
             elif lang == "et":
-                sms_body = f"R&J Grooming: broneering kinnitatud! {date} kell {time}. Groomer: {master}. Aadress: Allveelaeva 4, Tallinn"
+                _m = f"Meister: {master}. " if master else ""
+                sms_body = f"R&J Grooming: broneering kinnitatud! {_m}{date} kell {time}. Aadress: Allveelaeva 4, Tallinn"
             else:
-                sms_body = f"R&J Grooming: запись подтверждена! {date} в {time}. Мастер: {master}. Адрес: Allveelaeva 4, Tallinn"
+                _m = f"Мастер: {master}. " if master else ""
+                sms_body = f"R&J Grooming: запись подтверждена! {_m}Дата: {date} в {time}. Адрес: Allveelaeva 4, Tallinn"
             sms_url = f"https://api.twilio.com/2010-04-01/Accounts/{twilio_sid}/Messages.json"
             sms_resp = req_lib.post(
                 sms_url,
