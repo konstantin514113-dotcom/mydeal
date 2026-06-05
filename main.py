@@ -1272,6 +1272,49 @@ def elevenlabs_available_days():
         return jsonify({"success": False, "available_days": [], "error": str(e)}), 500
 
 
+@app.route("/api/elevenlabs/notify", methods=["POST"])
+def elevenlabs_notify():
+    """Send SMS to admin when voice agent captures a new lead.
+    Required JSON fields: breed, service, phone.
+    """
+    data = request.get_json() or {}
+    breed   = data.get("breed", "").strip()
+    service = data.get("service", "").strip()
+    phone   = data.get("phone", "").strip()
+
+    missing = [f for f in ("breed", "service", "phone") if not data.get(f)]
+    if missing:
+        return jsonify({"success": False,
+                        "error": f"Missing required fields: {', '.join(missing)}"}), 400
+
+    print(f"[elevenlabs/notify] breed={breed!r} service={service!r} phone={phone!r}", flush=True)
+
+    twilio_sid   = os.environ.get("TWILIO_ACCOUNT_SID")
+    twilio_token = os.environ.get("TWILIO_AUTH_TOKEN")
+    twilio_from  = os.environ.get("TWILIO_PHONE", "+37266922128")
+    admin_phone  = "+37266922128"
+
+    if not (twilio_sid and twilio_token):
+        return jsonify({"success": False, "error": "Twilio not configured"}), 500
+
+    sms_body = f"Новый клиент с голосового агента: {breed}, {service}, тел: {phone}"
+    sms_url  = f"https://api.twilio.com/2010-04-01/Accounts/{twilio_sid}/Messages.json"
+    try:
+        resp = requests.post(
+            sms_url,
+            auth=(twilio_sid, twilio_token),
+            data={"From": twilio_from, "To": admin_phone, "Body": sms_body},
+            timeout=10
+        )
+        print(f"[elevenlabs/notify] SMS → {resp.status_code}: {resp.text[:200]}", flush=True)
+        if resp.status_code == 201:
+            return jsonify({"success": True, "message": "Admin notified"})
+        return jsonify({"success": False, "error": f"SMS error {resp.status_code}"}), 500
+    except Exception as e:
+        print(f"[elevenlabs/notify] error: {e}", flush=True)
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
 @app.route("/cron/reminders")
 def cron_reminders():
     """Send SMS reminders for tomorrow's bookings.
