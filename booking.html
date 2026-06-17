@@ -315,6 +315,7 @@ function goStep(n) {
     else{ps.className='ps';if(pl)pl.className='pl';}
   }
   step=n; window.scrollTo(0,0);
+  if(n===2) filterMasters();
 }
 
 document.getElementById('bookBtn').onclick = function(){
@@ -446,6 +447,15 @@ function renderSvcs(b){
 }
 
 // Masters
+function filterMasters(){
+  var isCat = booking.breed && booking.breed.indexOf('Кошка') === 0;
+  document.querySelectorAll('.mbtn').forEach(function(btn){
+    if(btn.getAttribute('data-master')==='Алиса'){
+      btn.style.display = isCat ? '' : 'none';
+    }
+  });
+}
+
 document.querySelectorAll('.mbtn').forEach(function(btn){
   btn.onclick=function(){
     document.querySelectorAll('.mbtn').forEach(function(b){b.classList.remove('active');});
