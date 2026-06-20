@@ -781,7 +781,7 @@ function setLang(l){
     if(tr[k]!==undefined) el.placeholder=tr[k];
   });
   MONTHS=tr.months;
-  renderCal();
+  buildCal();
   // Re-render badge and services if breed already selected
   if(selBreed){
     var bf=l==='en'?'breed_en':l==='et'?'breed_et':'breed';
