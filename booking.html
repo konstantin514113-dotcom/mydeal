@@ -140,6 +140,8 @@ btn{position:relative;overflow:hidden;border-left:3px solid rgba(201,168,76,.3)!
 .lang-btn{background:rgba(28,28,24,.85);border:1px solid rgba(201,168,76,.25);color:#8a8a55;font-family:'Montserrat',sans-serif;font-size:.58rem;letter-spacing:.15em;text-transform:uppercase;padding:5px 10px;cursor:pointer;transition:all .2s}
 .lang-btn:hover{border-color:rgba(201,168,76,.6);color:#c9a84c}
 .lang-btn.active{border-color:#c9a84c;color:#c9a84c;background:rgba(201,168,76,.08)}
+.cbk-btn{background:none;border:1px solid rgba(201,168,76,.3);color:#c9a84c;font-family:'Montserrat',sans-serif;font-size:.68rem;letter-spacing:.15em;text-transform:uppercase;padding:12px 20px;cursor:pointer;transition:all .2s;width:100%}
+.cbk-btn:hover{border-color:#c9a84c;background:rgba(201,168,76,.06)}
 </style>
 </head>
 <body>
@@ -262,6 +264,9 @@ btn{position:relative;overflow:hidden;border-left:3px solid rgba(201,168,76,.3)!
       <div class="slbl" data-i18n="step4_time">Выберите время</div>
       <div class="tg" id="timeG"></div>
     </div>
+    <div style="margin-top:20px;padding-top:16px;border-top:1px solid rgba(201,168,76,.12);text-align:center">
+      <button id="callbackBtn" class="cbk-btn">Не нашли удобное время? →</button>
+    </div>
   </div>
 
   <!-- Step 5 -->
@@ -283,6 +288,27 @@ btn{position:relative;overflow:hidden;border-left:3px solid rgba(201,168,76,.3)!
     <button class="hbtn" id="homeBtn" data-i18n="to_home">← На главную</button>
   </div>
 </div>
+</div>
+
+<div id="cbkModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:300;align-items:center;justify-content:center;padding:20px">
+  <div style="background:#1c1c18;border:1px solid rgba(201,168,76,.3);border-top:2px solid #c9a84c;padding:28px 24px;width:100%;max-width:360px">
+    <div style="font-size:.58rem;letter-spacing:.2em;text-transform:uppercase;color:#c9a84c;margin-bottom:16px;font-weight:600">Обратный звонок</div>
+    <div class="fg"><label class="fl">Имя</label><input class="fi" id="cbkName" type="text" placeholder="Ваше имя"></div>
+    <div class="fg">
+      <label class="fl">Телефон</label>
+      <div style="display:flex;align-items:stretch;background:#141410;border:1px solid rgba(255,255,255,.1)">
+        <span style="padding:12px 10px;color:#8a8a55;font-size:.85rem;border-right:1px solid rgba(255,255,255,.08);display:flex;align-items:center">+372</span>
+        <input id="cbkPhone" type="tel" placeholder="XXXXXXXX" style="flex:1;background:transparent;border:none;outline:none;font-family:'Montserrat',sans-serif;font-size:.85rem;color:#c8c2b8;padding:12px 14px">
+      </div>
+    </div>
+    <div id="cbkSuccess" style="display:none;text-align:center;padding:20px 0">
+      <div style="font-size:2rem;margin-bottom:10px">✓</div>
+      <div style="font-family:'Cormorant Garamond',serif;font-size:1.3rem;color:#c9a84c;margin-bottom:6px">Заявка принята!</div>
+      <div style="font-size:.72rem;color:#777770;line-height:1.6">Мы перезвоним вам в ближайшее время</div>
+    </div>
+    <button id="cbkSubmit" class="cbtn" style="margin-top:14px">Отправить</button>
+    <button id="cbkClose" style="display:block;width:100%;margin-top:8px;background:none;border:none;color:#555550;font-size:.68rem;letter-spacing:.1em;cursor:pointer;padding:8px;font-family:'Montserrat',sans-serif">Отмена</button>
+  </div>
 </div>
 
 <script>
@@ -777,6 +803,41 @@ function setLang(l){
 
 // Apply saved language on load
 (function(){ setLang(LANG); })();
+
+// Callback form
+document.getElementById('callbackBtn').onclick = function(){
+  document.getElementById('cbkModal').style.display = 'flex';
+  document.getElementById('cbkName').value = '';
+  document.getElementById('cbkPhone').value = '';
+  document.getElementById('cbkSuccess').style.display = 'none';
+  document.getElementById('cbkSubmit').style.display = 'block';
+  document.getElementById('cbkClose').textContent = 'Отмена';
+  document.getElementById('cbkSubmit').textContent = 'Отправить';
+  document.getElementById('cbkSubmit').disabled = false;
+};
+document.getElementById('cbkClose').onclick = function(){
+  document.getElementById('cbkModal').style.display = 'none';
+};
+document.getElementById('cbkSubmit').onclick = function(){
+  var name = document.getElementById('cbkName').value.trim();
+  var phone = document.getElementById('cbkPhone').value.trim().replace(/\D/g,'');
+  if(!name || !phone){alert('Введите имя и телефон');return;}
+  var btn = document.getElementById('cbkSubmit');
+  btn.textContent = 'Отправляем...'; btn.disabled = true;
+  fetch('/api/callback',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({name:name, phone:'+372'+phone})
+  }).then(function(){
+    document.getElementById('cbkSuccess').style.display = 'block';
+    btn.style.display = 'none';
+    document.getElementById('cbkClose').textContent = '← Закрыть';
+    setTimeout(function(){document.getElementById('cbkModal').style.display='none';},3000);
+  }).catch(function(){
+    btn.textContent = 'Отправить'; btn.disabled = false;
+    alert('Ошибка. Попробуйте ещё раз.');
+  });
+};
 
 </script>
 </body>
