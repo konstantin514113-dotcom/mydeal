@@ -2051,20 +2051,25 @@ def api_callback():
     name = data.get("name", "").strip()
     phone = data.get("phone", "").strip()
     msg = f"📋 Новая заявка на обратный звонок:\nИмя: {name}\nТелефон: {phone}"
-    twilio_sid = os.environ.get("TWILIO_ACCOUNT_SID")
+    twilio_sid   = os.environ.get("TWILIO_ACCOUNT_SID")
     twilio_token = os.environ.get("TWILIO_AUTH_TOKEN")
-    twilio_wa_from = os.environ.get("TWILIO_WHATSAPP_FROM", "whatsapp:+14155238886")
+    twilio_phone = os.environ.get("TWILIO_PHONE", "+37266922128")
+    twilio_wa_from = "whatsapp:" + twilio_phone
+    print(f"[callback] name={name!r} phone={phone!r} sid_set={bool(twilio_sid)} from={twilio_wa_from}", flush=True)
     if twilio_sid and twilio_token:
         try:
             sms_url = f"https://api.twilio.com/2010-04-01/Accounts/{twilio_sid}/Messages.json"
-            requests.post(
+            resp = requests.post(
                 sms_url,
                 auth=(twilio_sid, twilio_token),
                 data={"From": twilio_wa_from, "To": "whatsapp:+37258735456", "Body": msg},
                 timeout=10
             )
+            print(f"[callback] Twilio response: {resp.status_code} {resp.text[:200]}", flush=True)
         except Exception as e:
             print(f"[callback] Twilio error: {e}", flush=True)
+    else:
+        print("[callback] Twilio creds not set — skipping", flush=True)
     return jsonify({"ok": True}), 200
 
 if __name__ == "__main__":
