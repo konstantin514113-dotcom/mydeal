@@ -634,6 +634,7 @@ document.getElementById('confirmBtn').onclick = function(){
   if(!name||!phone){alert(T[LANG].alert_fill);return;}
   if(!/^\+\d{10,}$/.test(phone.trim())){alert(T[LANG].alert_phone);return;}
   booking.name=name; booking.phone=phone; booking.email=document.getElementById('cEmail').value; booking.pet=document.getElementById('cPet').value; booking.lang=LANG;
+  booking.duration = booking.breed && booking.breed.indexOf('Кошка') === 0 ? 120 : 180;
   var btn=document.getElementById('confirmBtn');
   btn.textContent=T[LANG].sending; btn.disabled=true;
   fetch(RAILWAY, {
