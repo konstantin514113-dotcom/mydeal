@@ -476,7 +476,7 @@ function renderSvcs(b){
 function filterMasters(){
   var isCat = booking.breed && booking.breed.indexOf('Кошка') === 0;
   var breed = booking.breed || '';
-  var annaBreeds = ['Далматин','Бигль','Хаски','Бернский зенненхунд','Финский лапхунд','Кошка короткошерстная'];
+  var annaBreeds = ['Далматин','Бигль','Хаски','Бернский зенненхунд','Финский лапхунд','Кошка короткошерстная','Французский бульдог','Такса длинношерстная','Такса гладкошерстная','Джек-рассел-терьер гладкошерстный','Самоед','Шелти','Корги','Лабрадор','Чихуахуа'];
   var isAnnaBreed = annaBreeds.some(function(b){ return breed.indexOf(b) !== -1; });
   document.querySelectorAll('.mbtn').forEach(function(btn){
     var master = btn.getAttribute('data-master');
