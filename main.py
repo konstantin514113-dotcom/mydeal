@@ -2081,7 +2081,7 @@ def api_callback():
                 headers={"Authorization": f"Bearer {resend_key}", "Content-Type": "application/json"},
                 json={
                     "from": "booking@rjgrooming.salon",
-                    "to": ["konstantin514113@gmail.com"],
+                    "to": ["myrnj1@gmail.com"],
                     "subject": "Новая заявка на обратный звонок",
                     "html": f"<h2>Заявка с сайта</h2><p><b>Имя:</b> {name}</p><p><b>Телефон:</b> {phone}</p>"
                 },
