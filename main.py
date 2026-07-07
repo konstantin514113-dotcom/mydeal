@@ -2056,6 +2056,7 @@ def api_callback():
     twilio_from  = os.environ.get("TWILIO_ADMIN_PHONE", "+37266922128")
     admin_to     = "+37258243141"
     print(f"[callback] name={name!r} phone={phone!r} sid_set={bool(twilio_sid)} from={twilio_from}", flush=True)
+    # SMS через Twilio
     if twilio_sid and twilio_token:
         try:
             sms_url = f"https://api.twilio.com/2010-04-01/Accounts/{twilio_sid}/Messages.json"
@@ -2070,6 +2071,26 @@ def api_callback():
             print(f"[callback] Twilio error: {e}", flush=True)
     else:
         print("[callback] Twilio creds not set — skipping", flush=True)
+
+    # Email через Resend
+    resend_key = os.environ.get("RESEND_API_KEY")
+    if resend_key:
+        try:
+            email_resp = requests.post(
+                "https://api.resend.com/emails",
+                headers={"Authorization": f"Bearer {resend_key}", "Content-Type": "application/json"},
+                json={
+                    "from": "booking@rjgrooming.salon",
+                    "to": ["konstantin514113@gmail.com"],
+                    "subject": "Новая заявка на обратный звонок",
+                    "html": f"<h2>Заявка с сайта</h2><p><b>Имя:</b> {name}</p><p><b>Телефон:</b> {phone}</p>"
+                },
+                timeout=10
+            )
+            print(f"[callback] Resend response: {email_resp.status_code}", flush=True)
+        except Exception as e:
+            print(f"[callback] Resend error: {e}", flush=True)
+
     return jsonify({"ok": True}), 200
 
 if __name__ == "__main__":
