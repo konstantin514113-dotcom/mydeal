@@ -474,7 +474,7 @@ def _process_action_markers(reply):
         print(f"[action-marker] reschedule {phone!r} → {new_date} {new_time} → {res}", flush=True)
     return _ACTION_RE.sub('', reply).strip()
 
-_MASTERS = ["татьяна", "алиса", "кристина", "анна"]
+_MASTERS = ["татьяна", "алиса", "кристина", "анна", "александра"]
 
 def _fetch_slots_for_date(date_iso, master=""):
     """Fetch slots from GS for date_iso (YYYY-MM-DD) and a specific master (lowercase).
