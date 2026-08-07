@@ -953,6 +953,30 @@ def book():
                 )
             except Exception as e:
                 print(f"BOOK EMAIL ERROR: {e}", flush=True)
+
+        # Telegram уведомление о новой онлайн-записи
+        tg_token = os.environ.get("TELEGRAM_BOT_TOKEN")
+        tg_chat_id = os.environ.get("TELEGRAM_CHAT_ID")
+        if tg_token and tg_chat_id:
+            try:
+                tg_text = (
+                    "🐾 <b>Новая онлайн-запись</b>\n\n"
+                    f"<b>Клиент:</b> {data.get('name','')}\n"
+                    f"<b>Телефон:</b> {data.get('phone','')}\n"
+                    f"<b>Порода:</b> {data.get('breedDisplay') or data.get('breed','')}\n"
+                    f"<b>Услуга:</b> {data.get('service','')}\n"
+                    f"<b>Мастер:</b> {data.get('master','')}\n"
+                    f"<b>Дата:</b> {data.get('date','')} в {data.get('time','')}\n"
+                    f"<b>Стоимость:</b> {data.get('price','')} EUR\n"
+                    f"<b>Кличка питомца:</b> {data.get('pet','')}"
+                )
+                requests.post(
+                    f"https://api.telegram.org/bot{tg_token}/sendMessage",
+                    json={"chat_id": tg_chat_id, "text": tg_text, "parse_mode": "HTML"},
+                    timeout=10
+                )
+            except Exception as e:
+                print(f"BOOK TELEGRAM ERROR: {e}", flush=True)
     except Exception as e:
         print(f"BOOK ERROR: {e}", flush=True)
         resp = jsonify({"success": False, "error": str(e)})
