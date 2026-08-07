@@ -924,6 +924,35 @@ def book():
         r = requests.get(GOOGLE_SCRIPT, params=data, timeout=10)
         print(f"GOOGLE SCRIPT RESPONSE: {r.text[:500]}", flush=True)
         resp = jsonify({"success": True})
+
+        # Email уведомление о новой онлайн-записи
+        resend_key = os.environ.get("RESEND_API_KEY")
+        if resend_key:
+            try:
+                requests.post(
+                    "https://api.resend.com/emails",
+                    headers={"Authorization": f"Bearer {resend_key}", "Content-Type": "application/json"},
+                    json={
+                        "from": "booking@rjgrooming.salon",
+                        "to": ["myrnj1@gmail.com"],
+                        "subject": "Новая онлайн-запись — R&J Grooming",
+                        "html": (
+                            "<h2>Новая онлайн-запись</h2>"
+                            f"<p><b>Клиент:</b> {data.get('name','')}</p>"
+                            f"<p><b>Телефон:</b> {data.get('phone','')}</p>"
+                            f"<p><b>Email:</b> {data.get('email','')}</p>"
+                            f"<p><b>Порода:</b> {data.get('breedDisplay') or data.get('breed','')}</p>"
+                            f"<p><b>Услуга:</b> {data.get('service','')}</p>"
+                            f"<p><b>Мастер:</b> {data.get('master','')}</p>"
+                            f"<p><b>Дата:</b> {data.get('date','')} в {data.get('time','')}</p>"
+                            f"<p><b>Стоимость:</b> {data.get('price','')} EUR</p>"
+                            f"<p><b>Кличка питомца:</b> {data.get('pet','')}</p>"
+                        )
+                    },
+                    timeout=10
+                )
+            except Exception as e:
+                print(f"BOOK EMAIL ERROR: {e}", flush=True)
     except Exception as e:
         print(f"BOOK ERROR: {e}", flush=True)
         resp = jsonify({"success": False, "error": str(e)})
