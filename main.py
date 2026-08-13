@@ -939,7 +939,7 @@ def check_35day_reminders():
     будущая) — значит клиент уже перезаписался, и напоминания не шлём."""
     try:
         today = datetime.now(_REMINDER_TZ).date() if _REMINDER_TZ else datetime.utcnow().date()
-        from_date = (today - timedelta(days=400)).strftime("%d.%m.%Y")
+        from_date = (today - timedelta(days=40)).strftime("%d.%m.%Y")
         to_date = (today + timedelta(days=120)).strftime("%d.%m.%Y")
         r = requests.get(GOOGLE_SCRIPT, params={"action": "stats", "from": from_date, "to": to_date}, timeout=30)
         data = r.json()
@@ -2253,23 +2253,18 @@ def api_callback():
 
     return jsonify({"ok": True}), 200
 
-@app.route("/admin/export-clients")
-def admin_export_clients():
-    if request.args.get("pass") != "rjadmin2024":
-        return "Доступ запрещён. Добавь ?pass=rjadmin2024 в конец ссылки.", 403
+def _build_client_export_workbook():
+    """Собирает Excel-книгу (2 листа: Клиенты, Напоминания) и возвращает
+    (bytes, filename). Используется и веб-роутом, и еженедельной рассылкой."""
     import openpyxl
     from openpyxl.styles import Font, Alignment, PatternFill
     from io import BytesIO
-    from flask import send_file
 
-    try:
-        today = datetime.now(_REMINDER_TZ).date() if _REMINDER_TZ else datetime.utcnow().date()
-        params = {"action": "stats", "from": "01.01.2020", "to": (today + timedelta(days=180)).strftime("%d.%m.%Y")}
-        r = requests.get(GOOGLE_SCRIPT, params=params, timeout=30)
-        data = r.json()
-        bookings = data.get("bookings", []) if isinstance(data, dict) else []
-    except Exception as e:
-        return f"Ошибка получения данных: {e}", 500
+    today = datetime.now(_REMINDER_TZ).date() if _REMINDER_TZ else datetime.utcnow().date()
+    params = {"action": "stats", "from": "01.01.2020", "to": (today + timedelta(days=180)).strftime("%d.%m.%Y")}
+    r = requests.get(GOOGLE_SCRIPT, params=params, timeout=30)
+    data = r.json()
+    bookings = data.get("bookings", []) if isinstance(data, dict) else []
 
     def parse_date(s):
         try:
@@ -2367,12 +2362,76 @@ def admin_export_clients():
     wb.save(buf)
     buf.seek(0)
     filename = f"RJ_Grooming_clients_{datetime.now().strftime('%Y%m%d')}.xlsx"
+    return buf.getvalue(), filename
+
+@app.route("/admin/export-clients")
+def admin_export_clients():
+    if request.args.get("pass") != "rjadmin2024":
+        return "Доступ запрещён. Добавь ?pass=rjadmin2024 в конец ссылки.", 403
+    from io import BytesIO
+    from flask import send_file
+    try:
+        content, filename = _build_client_export_workbook()
+    except Exception as e:
+        return f"Ошибка получения данных: {e}", 500
     return send_file(
-        buf,
+        BytesIO(content),
         as_attachment=True,
         download_name=filename,
         mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
+
+def send_weekly_client_export_email():
+    resend_key = os.environ.get("RESEND_API_KEY")
+    if not resend_key:
+        print("WEEKLY EXPORT: RESEND_API_KEY не задан", flush=True)
+        return
+    try:
+        import base64 as _b64
+        content, filename = _build_client_export_workbook()
+        requests.post(
+            "https://api.resend.com/emails",
+            headers={"Authorization": f"Bearer {resend_key}", "Content-Type": "application/json"},
+            json={
+                "from": "booking@rjgrooming.salon",
+                "to": ["myrnj1@gmail.com"],
+                "subject": f"R&J Grooming — еженедельная выгрузка клиентов ({datetime.now().strftime('%d.%m.%Y')})",
+                "html": "<p>Во вложении — актуальная выгрузка всех клиентов и лист с напоминаниями (+35/+42 дня).</p>",
+                "attachments": [{
+                    "filename": filename,
+                    "content": _b64.b64encode(content).decode("ascii")
+                }]
+            },
+            timeout=30
+        )
+        print("WEEKLY EXPORT: письмо отправлено", flush=True)
+    except Exception as e:
+        print(f"WEEKLY EXPORT ERROR: {e}", flush=True)
+
+def _weekly_export_scheduler_loop():
+    while True:
+        try:
+            now = datetime.now(_REMINDER_TZ) if _REMINDER_TZ else datetime.utcnow()
+            next_run = now.replace(hour=9, minute=0, second=0, microsecond=0)
+            days_ahead = (0 - next_run.weekday()) % 7  # 0 = понедельник
+            if days_ahead == 0 and next_run <= now:
+                days_ahead = 7
+            next_run += timedelta(days=days_ahead)
+            sleep_seconds = (next_run - now).total_seconds()
+            _time.sleep(max(sleep_seconds, 60))
+            send_weekly_client_export_email()
+        except Exception as e:
+            print(f"WEEKLY EXPORT SCHEDULER ERROR: {e}", flush=True)
+            _time.sleep(3600)
+
+threading.Thread(target=_weekly_export_scheduler_loop, daemon=True).start()
+
+@app.route("/api/send-weekly-export")
+def api_send_weekly_export():
+    if request.args.get("pass") != "rjadmin2024":
+        return "Доступ запрещён.", 403
+    send_weekly_client_export_email()
+    return jsonify({"success": True})
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
