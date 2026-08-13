@@ -933,8 +933,9 @@ def _send_reminder_telegram(text):
         print(f"REMINDER TELEGRAM ERROR: {e}", flush=True)
 
 def check_35day_reminders():
-    """Находит клиентов, у которых сегодня ровно 35 дней с первого визита
-    (по всем мастерам), и шлёт сводку в Telegram администратору."""
+    """Находит клиентов, у которых сегодня кратно 35 дней с ПОСЛЕДНЕГО визита
+    (35, 70, 105... дней), и шлёт сводку в Telegram администратору.
+    Отсчёт обнуляется при новой записи клиента."""
     try:
         today = datetime.now(_REMINDER_TZ).date() if _REMINDER_TZ else datetime.utcnow().date()
         from_date = (today - timedelta(days=400)).strftime("%d.%m.%Y")
@@ -943,7 +944,7 @@ def check_35day_reminders():
         data = r.json()
         bookings = data.get("bookings", []) if isinstance(data, dict) else []
 
-        first_visit = {}
+        last_visit = {}
         for b in bookings:
             phone = (b.get("clientPhone") or "").strip()
             if not phone:
@@ -952,8 +953,10 @@ def check_35day_reminders():
                 d = datetime.strptime(b.get("date", ""), "%d.%m.%Y").date()
             except Exception:
                 continue
-            if phone not in first_visit or d < first_visit[phone]["date"]:
-                first_visit[phone] = {
+            if d > today:
+                continue  # будущие записи не считаем "визитом"
+            if phone not in last_visit or d > last_visit[phone]["date"]:
+                last_visit[phone] = {
                     "date": d,
                     "name": b.get("clientName", ""),
                     "pet": b.get("petName", ""),
@@ -961,15 +964,21 @@ def check_35day_reminders():
                     "breed": b.get("breed", "")
                 }
 
-        due = [(phone, info) for phone, info in first_visit.items() if (today - info["date"]).days == 35]
+        due = []
+        for phone, info in last_visit.items():
+            days_since = (today - info["date"]).days
+            if days_since > 0 and days_since % 35 == 0:
+                info["days_since"] = days_since
+                due.append((phone, info))
 
         if due:
-            lines = ["🔔 <b>Напоминание — 35 дней с первого визита</b>", ""]
+            lines = ["🔔 <b>Напоминание — 35 дней с последнего визита</b>", ""]
             for phone, info in due:
                 lines.append(
                     f"👤 {info['name']} ({phone})\n"
                     f"🐾 {info['pet']} — {info['breed']}\n"
-                    f"Первый визит: {info['date'].strftime('%d.%m.%Y')} у {info['master']}\n"
+                    f"Последний визит: {info['date'].strftime('%d.%m.%Y')} у {info['master']} "
+                    f"({info['days_since']} дн. назад)\n"
                 )
             _send_reminder_telegram("\n".join(lines))
 
