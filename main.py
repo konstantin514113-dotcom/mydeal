@@ -1065,7 +1065,8 @@ def _get_reminder_dashboard_rows():
                 "name": b.get("clientName", ""),
                 "pet": b.get("petName", ""),
                 "master": b.get("master", ""),
-                "breed": b.get("breed", "")
+                "breed": b.get("breed", ""),
+                "email": b.get("clientEmail", "")
             }
 
     rows = []
@@ -1079,7 +1080,7 @@ def _get_reminder_dashboard_rows():
             status = "pending"
         rows.append({
             "phone": phone, "name": info["name"], "pet": info["pet"],
-            "breed": info["breed"], "master": info["master"],
+            "breed": info["breed"], "master": info["master"], "email": info["email"],
             "date": info["date"], "days_since": days_since, "status": status
         })
     rows.sort(key=lambda x: -x["days_since"])
@@ -2422,7 +2423,7 @@ def _build_client_export_workbook():
     ws = wb.active
     ws.title = "Клиенты"
 
-    headers = ["Дата", "Время", "Клиент", "Телефон", "Питомец", "Порода", "Услуга", "Мастер", "Цена (EUR)"]
+    headers = ["Дата", "Время", "Клиент", "Телефон", "Email", "Питомец", "Порода", "Услуга", "Мастер", "Цена (EUR)"]
     ws.append(headers)
     header_font = Font(name="Arial", bold=True, color="FFFFFF")
     header_fill = PatternFill(start_color="333333", end_color="333333", fill_type="solid")
@@ -2438,6 +2439,7 @@ def _build_client_export_workbook():
             b.get("time", ""),
             b.get("clientName", ""),
             b.get("clientPhone", ""),
+            b.get("clientEmail", ""),
             b.get("petName", ""),
             b.get("breed", ""),
             b.get("service", ""),
@@ -2473,10 +2475,11 @@ def _build_client_export_workbook():
                 "pet": b.get("petName", ""),
                 "breed": b.get("breed", ""),
                 "master": b.get("master", ""),
+                "email": b.get("clientEmail", ""),
             }
 
     ws2 = wb.create_sheet("Напоминания")
-    headers2 = ["Клиент", "Телефон", "Питомец", "Порода", "Последний визит", "Мастер", "Напоминание #1 (+35 дн.)", "Напоминание #2 (+42 дн.)"]
+    headers2 = ["Клиент", "Телефон", "Email", "Питомец", "Порода", "Последний визит", "Мастер", "Напоминание #1 (+35 дн.)", "Напоминание #2 (+42 дн.)"]
     ws2.append(headers2)
     for col_idx in range(1, len(headers2) + 1):
         cell = ws2.cell(row=1, column=col_idx)
@@ -2489,7 +2492,7 @@ def _build_client_export_workbook():
         r1 = info["_d"] + timedelta(days=35)
         r2 = info["_d"] + timedelta(days=42)
         ws2.append([
-            info["name"], phone, info["pet"], info["breed"],
+            info["name"], phone, info["email"], info["pet"], info["breed"],
             info["date"], info["master"],
             r1.strftime("%d.%m.%Y"), r2.strftime("%d.%m.%Y")
         ])
@@ -2532,6 +2535,7 @@ def admin_reminders_dashboard():
     def row_html(r):
         pct = min(100, round(r["days_since"] / 42 * 100))
         meta = STATUS_META[r["status"]]
+        email_html = f'<a class="email" href="mailto:{r["email"]}">{r["email"]}</a>' if r.get("email") else '<span class="email-empty">email не указан</span>'
         return f"""
         <div class="row">
           <div class="row-top">
@@ -2551,6 +2555,7 @@ def admin_reminders_dashboard():
             <span class="days">{r['days_since']} дн.</span>
             <a class="phone" href="tel:{r['phone']}">{r['phone']}</a>
           </div>
+          <div class="row-contact">{email_html}</div>
         </div>"""
 
     rows_html = "".join(row_html(r) for r in rows) if rows else '<div class="empty">За последние 40 дней визитов не найдено</div>'
@@ -2587,6 +2592,9 @@ def admin_reminders_dashboard():
   .row-bottom{{display:flex;justify-content:space-between;align-items:center;font-size:0.74rem;color:rgba(242,237,226,.55)}}
   .row-bottom .days{{font-weight:600;color:#f2ede2}}
   .phone{{color:#c9a05a;text-decoration:none}}
+  .row-contact{{margin-top:6px;font-size:0.74rem}}
+  .row-contact .email{{color:rgba(242,237,226,.65);text-decoration:none}}
+  .row-contact .email-empty{{color:rgba(242,237,226,.3);font-style:italic}}
   .empty{{text-align:center;padding:40px 0;color:rgba(242,237,226,.4);font-size:0.85rem}}
   @media(max-width:480px){{
     .row-bottom{{flex-direction:column;align-items:flex-start;gap:4px}}
