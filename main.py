@@ -1012,6 +1012,70 @@ def _reminder_scheduler_loop():
 
 threading.Thread(target=_reminder_scheduler_loop, daemon=True).start()
 
+def send_full_40day_report():
+    """Полный список клиентов за последние 40 дней (по последнему визиту)
+    со статусом по каждому — сколько дней прошло и на какой они стадии."""
+    try:
+        today = datetime.now(_REMINDER_TZ).date() if _REMINDER_TZ else datetime.utcnow().date()
+        from_date = (today - timedelta(days=40)).strftime("%d.%m.%Y")
+        to_date = today.strftime("%d.%m.%Y")
+        r = requests.get(GOOGLE_SCRIPT, params={"action": "stats", "from": from_date, "to": to_date}, timeout=30)
+        data = r.json()
+        bookings = data.get("bookings", []) if isinstance(data, dict) else []
+
+        by_phone = {}
+        for b in bookings:
+            phone = (b.get("clientPhone") or "").strip()
+            if not phone:
+                continue
+            try:
+                d = datetime.strptime(b.get("date", ""), "%d.%m.%Y").date()
+            except Exception:
+                continue
+            if d > today:
+                continue
+            if phone not in by_phone or d > by_phone[phone]["date"]:
+                by_phone[phone] = {
+                    "date": d,
+                    "name": b.get("clientName", ""),
+                    "pet": b.get("petName", ""),
+                    "master": b.get("master", ""),
+                    "breed": b.get("breed", "")
+                }
+
+        rows = sorted(by_phone.items(), key=lambda kv: kv[1]["date"])
+        if not rows:
+            _send_reminder_telegram("🔔 <b>Отчёт за 40 дней</b>\n\nНет визитов за последние 40 дней.")
+            print("FULL REPORT: клиентов не найдено", flush=True)
+            return []
+
+        lines = [f"🔔 <b>Отчёт по клиентам за 40 дней</b> ({len(rows)} чел.)", ""]
+        for phone, info in rows:
+            days_since = (today - info["date"]).days
+            if days_since >= 42:
+                status = "✅ напоминание #2 отправлено"
+            elif days_since >= 35:
+                status = "1️⃣ напоминание #1 отправлено"
+            else:
+                status = f"⏳ ещё {35 - days_since} дн. до напоминания"
+            lines.append(
+                f"👤 {info['name']} ({phone}) — {days_since} дн.\n"
+                f"🐾 {info['pet']} — {info['breed']}\n"
+                f"Визит: {info['date'].strftime('%d.%m.%Y')} у {info['master']}\n"
+                f"{status}\n"
+            )
+        _send_reminder_telegram("\n".join(lines))
+        print(f"FULL REPORT: {len(rows)} клиентов отправлено", flush=True)
+        return rows
+    except Exception as e:
+        print(f"FULL REPORT ERROR: {e}", flush=True)
+        return []
+
+@app.route("/api/send-full-report")
+def api_send_full_report():
+    rows = send_full_40day_report()
+    return jsonify({"success": True, "count": len(rows)})
+
 @app.route("/api/check-reminders")
 def api_check_reminders():
     due = check_35day_reminders()
