@@ -923,14 +923,33 @@ def _send_reminder_telegram(text):
     if not (tg_token and tg_chat_id):
         print("REMINDER: TELEGRAM_BOT_TOKEN/TELEGRAM_CHAT_ID не заданы", flush=True)
         return
-    try:
-        requests.post(
-            f"https://api.telegram.org/bot{tg_token}/sendMessage",
-            json={"chat_id": tg_chat_id, "text": text, "parse_mode": "HTML"},
-            timeout=10
-        )
-    except Exception as e:
-        print(f"REMINDER TELEGRAM ERROR: {e}", flush=True)
+    # Telegram режет сообщения длиннее 4096 символов — бьём по границам "\n\n"
+    chunks = []
+    remaining = text
+    LIMIT = 3800
+    while len(remaining) > LIMIT:
+        cut = remaining.rfind("\n\n", 0, LIMIT)
+        if cut <= 0:
+            cut = LIMIT
+        chunks.append(remaining[:cut])
+        remaining = remaining[cut:].lstrip("\n")
+    if remaining:
+        chunks.append(remaining)
+
+    for i, chunk in enumerate(chunks):
+        try:
+            resp = requests.post(
+                f"https://api.telegram.org/bot{tg_token}/sendMessage",
+                json={"chat_id": tg_chat_id, "text": chunk, "parse_mode": "HTML"},
+                timeout=10
+            )
+            body = resp.json()
+            if not body.get("ok"):
+                print(f"REMINDER TELEGRAM API ERROR (chunk {i+1}/{len(chunks)}): {body}", flush=True)
+            if len(chunks) > 1:
+                _time.sleep(0.5)
+        except Exception as e:
+            print(f"REMINDER TELEGRAM ERROR (chunk {i+1}/{len(chunks)}): {e}", flush=True)
 
 def check_35day_reminders():
     """Два напоминания на клиента после его последнего визита:
