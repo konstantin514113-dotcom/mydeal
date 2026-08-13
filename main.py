@@ -921,8 +921,9 @@ def _send_reminder_telegram(text):
     tg_token = os.environ.get("TELEGRAM_BOT_TOKEN")
     tg_chat_id = os.environ.get("TELEGRAM_CHAT_ID")
     if not (tg_token and tg_chat_id):
-        print("REMINDER: TELEGRAM_BOT_TOKEN/TELEGRAM_CHAT_ID не заданы", flush=True)
-        return
+        msg = "TELEGRAM_BOT_TOKEN/TELEGRAM_CHAT_ID не заданы"
+        print(f"REMINDER: {msg}", flush=True)
+        return {"ok": False, "error": msg}
     # Telegram режет сообщения длиннее 4096 символов — бьём по границам "\n\n"
     chunks = []
     remaining = text
@@ -936,6 +937,7 @@ def _send_reminder_telegram(text):
     if remaining:
         chunks.append(remaining)
 
+    results = []
     for i, chunk in enumerate(chunks):
         try:
             resp = requests.post(
@@ -944,12 +946,15 @@ def _send_reminder_telegram(text):
                 timeout=10
             )
             body = resp.json()
+            results.append({"chunk": i + 1, "http_status": resp.status_code, "telegram_response": body})
             if not body.get("ok"):
                 print(f"REMINDER TELEGRAM API ERROR (chunk {i+1}/{len(chunks)}): {body}", flush=True)
             if len(chunks) > 1:
                 _time.sleep(0.5)
         except Exception as e:
+            results.append({"chunk": i + 1, "error": str(e)})
             print(f"REMINDER TELEGRAM ERROR (chunk {i+1}/{len(chunks)}): {e}", flush=True)
+    return {"ok": all(r.get("telegram_response", {}).get("ok") for r in results if "telegram_response" in r), "chunks": len(chunks), "results": results}
 
 def check_35day_reminders():
     """Два напоминания на клиента после его последнего визита:
@@ -1064,9 +1069,9 @@ def send_full_40day_report():
 
         rows = sorted(by_phone.items(), key=lambda kv: kv[1]["date"])
         if not rows:
-            _send_reminder_telegram("🔔 <b>Отчёт за 40 дней</b>\n\nНет визитов за последние 40 дней.")
+            tg_result = _send_reminder_telegram("🔔 <b>Отчёт за 40 дней</b>\n\nНет визитов за последние 40 дней.")
             print("FULL REPORT: клиентов не найдено", flush=True)
-            return []
+            return [], tg_result
 
         lines = [f"🔔 <b>Отчёт по клиентам за 40 дней</b> ({len(rows)} чел.)", ""]
         for phone, info in rows:
@@ -1083,17 +1088,17 @@ def send_full_40day_report():
                 f"Визит: {info['date'].strftime('%d.%m.%Y')} у {info['master']}\n"
                 f"{status}\n"
             )
-        _send_reminder_telegram("\n".join(lines))
+        tg_result = _send_reminder_telegram("\n".join(lines))
         print(f"FULL REPORT: {len(rows)} клиентов отправлено", flush=True)
-        return rows
+        return rows, tg_result
     except Exception as e:
         print(f"FULL REPORT ERROR: {e}", flush=True)
-        return []
+        return [], {"ok": False, "error": str(e)}
 
 @app.route("/api/send-full-report")
 def api_send_full_report():
-    rows = send_full_40day_report()
-    return jsonify({"success": True, "count": len(rows)})
+    rows, tg_result = send_full_40day_report()
+    return jsonify({"success": True, "count": len(rows), "telegram": tg_result})
 
 @app.route("/api/check-reminders")
 def api_check_reminders():
