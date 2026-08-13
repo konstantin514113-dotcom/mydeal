@@ -2316,6 +2316,53 @@ def admin_export_clients():
 
     ws.freeze_panes = "A2"
 
+    # ── Лист 2: Напоминания (последний визит на клиента, начиная с 20 мая) ──
+    cutoff = datetime(2026, 5, 20)
+    by_phone = {}
+    for b in bookings:
+        phone = (b.get("clientPhone") or "").strip()
+        if not phone:
+            continue
+        d = parse_date(b.get("date", ""))
+        if d == datetime.max or d < cutoff:
+            continue
+        if phone not in by_phone or d > by_phone[phone]["_d"]:
+            by_phone[phone] = {
+                "_d": d,
+                "date": b.get("date", ""),
+                "name": b.get("clientName", ""),
+                "pet": b.get("petName", ""),
+                "breed": b.get("breed", ""),
+                "master": b.get("master", ""),
+            }
+
+    ws2 = wb.create_sheet("Напоминания")
+    headers2 = ["Клиент", "Телефон", "Питомец", "Порода", "Последний визит", "Мастер", "Напоминание #1 (+35 дн.)", "Напоминание #2 (+42 дн.)"]
+    ws2.append(headers2)
+    for col_idx in range(1, len(headers2) + 1):
+        cell = ws2.cell(row=1, column=col_idx)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = Alignment(horizontal="center")
+
+    rows2 = sorted(by_phone.items(), key=lambda kv: kv[1]["_d"])
+    for phone, info in rows2:
+        r1 = info["_d"] + timedelta(days=35)
+        r2 = info["_d"] + timedelta(days=42)
+        ws2.append([
+            info["name"], phone, info["pet"], info["breed"],
+            info["date"], info["master"],
+            r1.strftime("%d.%m.%Y"), r2.strftime("%d.%m.%Y")
+        ])
+
+    for row in ws2.iter_rows(min_row=2):
+        for cell in row:
+            cell.font = Font(name="Arial")
+    for col in ws2.columns:
+        max_len = max((len(str(c.value)) for c in col if c.value is not None), default=10)
+        ws2.column_dimensions[col[0].column_letter].width = min(max_len + 3, 40)
+    ws2.freeze_panes = "A2"
+
     buf = BytesIO()
     wb.save(buf)
     buf.seek(0)
