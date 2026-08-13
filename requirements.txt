@@ -3,3 +3,4 @@ anthropic
 gunicorn
 requests
 twilio
+openpyxl

@@ -2253,6 +2253,80 @@ def api_callback():
 
     return jsonify({"ok": True}), 200
 
+@app.route("/admin/export-clients")
+def admin_export_clients():
+    if request.args.get("pass") != "rjadmin2024":
+        return "Доступ запрещён. Добавь ?pass=rjadmin2024 в конец ссылки.", 403
+    import openpyxl
+    from openpyxl.styles import Font, Alignment, PatternFill
+    from io import BytesIO
+    from flask import send_file
+
+    try:
+        today = datetime.now(_REMINDER_TZ).date() if _REMINDER_TZ else datetime.utcnow().date()
+        params = {"action": "stats", "from": "01.01.2020", "to": (today + timedelta(days=180)).strftime("%d.%m.%Y")}
+        r = requests.get(GOOGLE_SCRIPT, params=params, timeout=30)
+        data = r.json()
+        bookings = data.get("bookings", []) if isinstance(data, dict) else []
+    except Exception as e:
+        return f"Ошибка получения данных: {e}", 500
+
+    def parse_date(s):
+        try:
+            return datetime.strptime(s, "%d.%m.%Y")
+        except Exception:
+            return datetime.max
+
+    bookings_sorted = sorted(bookings, key=lambda b: parse_date(b.get("date", "")))
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Клиенты"
+
+    headers = ["Дата", "Время", "Клиент", "Телефон", "Питомец", "Порода", "Услуга", "Мастер", "Цена (EUR)"]
+    ws.append(headers)
+    header_font = Font(name="Arial", bold=True, color="FFFFFF")
+    header_fill = PatternFill(start_color="333333", end_color="333333", fill_type="solid")
+    for col_idx in range(1, len(headers) + 1):
+        cell = ws.cell(row=1, column=col_idx)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = Alignment(horizontal="center")
+
+    for b in bookings_sorted:
+        ws.append([
+            b.get("date", ""),
+            b.get("time", ""),
+            b.get("clientName", ""),
+            b.get("clientPhone", ""),
+            b.get("petName", ""),
+            b.get("breed", ""),
+            b.get("service", ""),
+            b.get("master", ""),
+            b.get("price", "")
+        ])
+
+    for row in ws.iter_rows(min_row=2):
+        for cell in row:
+            cell.font = Font(name="Arial")
+
+    for col in ws.columns:
+        max_len = max((len(str(c.value)) for c in col if c.value is not None), default=10)
+        ws.column_dimensions[col[0].column_letter].width = min(max_len + 3, 40)
+
+    ws.freeze_panes = "A2"
+
+    buf = BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    filename = f"RJ_Grooming_clients_{datetime.now().strftime('%Y%m%d')}.xlsx"
+    return send_file(
+        buf,
+        as_attachment=True,
+        download_name=filename,
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
