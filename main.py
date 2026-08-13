@@ -1038,6 +1038,53 @@ def _reminder_scheduler_loop():
 
 threading.Thread(target=_reminder_scheduler_loop, daemon=True).start()
 
+def _get_reminder_dashboard_rows():
+    """Общая функция: последний визит на клиента за последние 40 дней,
+    с расчётом стадии напоминания. Используется дашбордом и отчётами."""
+    today = datetime.now(_REMINDER_TZ).date() if _REMINDER_TZ else datetime.utcnow().date()
+    from_date = (today - timedelta(days=40)).strftime("%d.%m.%Y")
+    to_date = today.strftime("%d.%m.%Y")
+    r = requests.get(GOOGLE_SCRIPT, params={"action": "stats", "from": from_date, "to": to_date}, timeout=30)
+    data = r.json()
+    bookings = data.get("bookings", []) if isinstance(data, dict) else []
+
+    by_phone = {}
+    for b in bookings:
+        phone = (b.get("clientPhone") or "").strip()
+        if not phone:
+            continue
+        try:
+            d = datetime.strptime(b.get("date", ""), "%d.%m.%Y").date()
+        except Exception:
+            continue
+        if d > today:
+            continue
+        if phone not in by_phone or d > by_phone[phone]["date"]:
+            by_phone[phone] = {
+                "date": d,
+                "name": b.get("clientName", ""),
+                "pet": b.get("petName", ""),
+                "master": b.get("master", ""),
+                "breed": b.get("breed", "")
+            }
+
+    rows = []
+    for phone, info in by_phone.items():
+        days_since = (today - info["date"]).days
+        if days_since >= 42:
+            status = "done"
+        elif days_since >= 35:
+            status = "stage1"
+        else:
+            status = "pending"
+        rows.append({
+            "phone": phone, "name": info["name"], "pet": info["pet"],
+            "breed": info["breed"], "master": info["master"],
+            "date": info["date"], "days_since": days_since, "status": status
+        })
+    rows.sort(key=lambda x: -x["days_since"])
+    return rows, today
+
 def send_full_40day_report():
     """Полный список клиентов за последние 40 дней (по последнему визиту)
     со статусом по каждому — сколько дней прошло и на какой они стадии."""
@@ -2460,6 +2507,111 @@ def _build_client_export_workbook():
     buf.seek(0)
     filename = f"RJ_Grooming_clients_{datetime.now().strftime('%Y%m%d')}.xlsx"
     return buf.getvalue(), filename
+
+@app.route("/admin/reminders")
+def admin_reminders_dashboard():
+    if request.args.get("pass") != "rjadmin2024":
+        return "Доступ запрещён. Добавь ?pass=rjadmin2024 в конец ссылки.", 403
+
+    try:
+        rows, today = _get_reminder_dashboard_rows()
+        error = None
+    except Exception as e:
+        rows, today, error = [], datetime.now(_REMINDER_TZ).date() if _REMINDER_TZ else datetime.utcnow().date(), str(e)
+
+    stage1_count = sum(1 for r in rows if r["status"] == "stage1")
+    stage2_count = sum(1 for r in rows if r["status"] == "done")
+    pending_count = sum(1 for r in rows if r["status"] == "pending")
+
+    STATUS_META = {
+        "pending": {"color": "#8a8578", "label": "ожидание"},
+        "stage1":  {"color": "#c9a05a", "label": "напоминание #1"},
+        "done":    {"color": "#e0824a", "label": "напоминание #2"},
+    }
+
+    def row_html(r):
+        pct = min(100, round(r["days_since"] / 42 * 100))
+        meta = STATUS_META[r["status"]]
+        return f"""
+        <div class="row">
+          <div class="row-top">
+            <div class="who">
+              <span class="name">{r['name'] or '—'}</span>
+              <span class="pet">{r['pet'] or '—'} · {r['breed'] or '—'}</span>
+            </div>
+            <div class="badge" style="color:{meta['color']};border-color:{meta['color']}55;background:{meta['color']}14">{meta['label']}</div>
+          </div>
+          <div class="track">
+            <div class="fill" style="width:{pct}%;background:{meta['color']}"></div>
+            <div class="tick" style="left:{35/42*100:.2f}%"></div>
+            <div class="tick" style="left:100%"></div>
+          </div>
+          <div class="row-bottom">
+            <span>Визит {r['date'].strftime('%d.%m.%Y')} · {r['master'] or '—'}</span>
+            <span class="days">{r['days_since']} дн.</span>
+            <a class="phone" href="tel:{r['phone']}">{r['phone']}</a>
+          </div>
+        </div>"""
+
+    rows_html = "".join(row_html(r) for r in rows) if rows else '<div class="empty">За последние 40 дней визитов не найдено</div>'
+    error_html = f'<div class="empty" style="color:#e0824a">Ошибка загрузки данных: {error}</div>' if error else ""
+
+    html = f"""<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>R&J Grooming — Напоминания</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,500;0,600;0,700;1,500&family=Montserrat:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  *{{box-sizing:border-box;margin:0;padding:0}}
+  body{{background:#0a0a09;color:#f2ede2;font-family:'Montserrat',sans-serif;padding:36px 20px 80px}}
+  .wrap{{max-width:720px;margin:0 auto}}
+  .eyebrow{{font-size:0.68rem;letter-spacing:.3em;text-transform:uppercase;color:rgba(242,237,226,.4);margin-bottom:10px}}
+  h1{{font-family:'Playfair Display',serif;font-weight:600;font-size:2.1rem;margin-bottom:6px}}
+  .sub{{font-size:0.78rem;color:rgba(242,237,226,.5);margin-bottom:32px}}
+  .stats{{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:36px}}
+  .stat{{background:#151310;border:1px solid rgba(201,160,90,.18);border-radius:12px;padding:18px 14px}}
+  .stat .n{{font-family:'Playfair Display',serif;font-size:1.9rem;font-weight:600;color:#c9a05a}}
+  .stat .l{{font-size:0.66rem;letter-spacing:.08em;text-transform:uppercase;color:rgba(242,237,226,.5);margin-top:4px}}
+  .list-label{{font-size:0.68rem;letter-spacing:.2em;text-transform:uppercase;color:#c9a05a;margin-bottom:14px}}
+  .row{{background:#131210;border:1px solid rgba(255,255,255,.06);border-radius:12px;padding:16px 18px;margin-bottom:10px}}
+  .row-top{{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:12px}}
+  .who{{display:flex;flex-direction:column}}
+  .name{{font-family:'Playfair Display',serif;font-size:1.15rem;font-weight:600}}
+  .pet{{font-size:0.76rem;color:rgba(242,237,226,.5);margin-top:2px}}
+  .badge{{font-size:0.62rem;letter-spacing:.06em;text-transform:uppercase;padding:5px 10px;border-radius:20px;border:1px solid;white-space:nowrap;flex-shrink:0}}
+  .track{{position:relative;height:6px;background:rgba(255,255,255,.08);border-radius:4px;margin-bottom:10px}}
+  .fill{{position:absolute;top:0;left:0;height:100%;border-radius:4px;transition:width .3s}}
+  .tick{{position:absolute;top:-3px;width:2px;height:12px;background:rgba(242,237,226,.25)}}
+  .row-bottom{{display:flex;justify-content:space-between;align-items:center;font-size:0.74rem;color:rgba(242,237,226,.55)}}
+  .row-bottom .days{{font-weight:600;color:#f2ede2}}
+  .phone{{color:#c9a05a;text-decoration:none}}
+  .empty{{text-align:center;padding:40px 0;color:rgba(242,237,226,.4);font-size:0.85rem}}
+  @media(max-width:480px){{
+    .row-bottom{{flex-direction:column;align-items:flex-start;gap:4px}}
+  }}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="eyebrow">R&J Grooming · Напоминания</div>
+  <h1>Клиенты без визита</h1>
+  <div class="sub">Окно 40 дней от последнего визита · {today.strftime('%d.%m.%Y')}</div>
+
+  <div class="stats">
+    <div class="stat"><div class="n">{stage1_count}</div><div class="l">напоминание #1</div></div>
+    <div class="stat"><div class="n">{stage2_count}</div><div class="l">напоминание #2</div></div>
+    <div class="stat"><div class="n">{pending_count}</div><div class="l">ожидают</div></div>
+  </div>
+
+  <div class="list-label">Все клиенты ({len(rows)})</div>
+  {error_html}
+  {rows_html}
+</div>
+</body>
+</html>"""
+    return html, 200, {"Content-Type": "text/html; charset=utf-8"}
 
 @app.route("/admin/export-clients")
 def admin_export_clients():
