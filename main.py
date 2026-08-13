@@ -956,13 +956,15 @@ def _send_reminder_telegram(text):
             print(f"REMINDER TELEGRAM ERROR (chunk {i+1}/{len(chunks)}): {e}", flush=True)
     return {"ok": all(r.get("telegram_response", {}).get("ok") for r in results if "telegram_response" in r), "chunks": len(chunks), "results": results}
 
-def check_35day_reminders():
+def check_35day_reminders(target_date=None, send_telegram=True):
     """Два напоминания на клиента после его последнего визита:
     #1 — на 35-й день, #2 — на 42-й день (35+7), если он не записался повторно.
     Если между визитом и сегодня есть ЛЮБАЯ более поздняя запись (прошлая или
-    будущая) — значит клиент уже перезаписался, и напоминания не шлём."""
+    будущая) — значит клиент уже перезаписался, и напоминания не шлём.
+    target_date позволяет посчитать на любую дату (например, на завтра) без
+    реальной отправки — для этого передать send_telegram=False."""
     try:
-        today = datetime.now(_REMINDER_TZ).date() if _REMINDER_TZ else datetime.utcnow().date()
+        today = target_date or (datetime.now(_REMINDER_TZ).date() if _REMINDER_TZ else datetime.utcnow().date())
         from_date = (today - timedelta(days=40)).strftime("%d.%m.%Y")
         to_date = (today + timedelta(days=120)).strftime("%d.%m.%Y")
         r = requests.get(GOOGLE_SCRIPT, params={"action": "stats", "from": from_date, "to": to_date}, timeout=30)
@@ -1003,7 +1005,7 @@ def check_35day_reminders():
                 info["days_since"] = days_since
                 due.append((phone, info))
 
-        if due:
+        if due and send_telegram:
             lines = ["🔔 <b>Напоминания клиентам</b>", ""]
             for phone, info in due:
                 lines.append(
@@ -1104,6 +1106,13 @@ def api_send_full_report():
 def api_check_reminders():
     due = check_35day_reminders()
     return jsonify({"success": True, "due_count": len(due), "clients": [{"phone": p, **{k: (v.isoformat() if k == "date" else v) for k, v in i.items()}} for p, i in due]})
+
+@app.route("/api/check-reminders-tomorrow")
+def api_check_reminders_tomorrow():
+    today = datetime.now(_REMINDER_TZ).date() if _REMINDER_TZ else datetime.utcnow().date()
+    tomorrow = today + timedelta(days=1)
+    due = check_35day_reminders(target_date=tomorrow, send_telegram=False)
+    return jsonify({"success": True, "date": tomorrow.isoformat(), "due_count": len(due), "clients": [{"phone": p, **{k: (v.isoformat() if k == "date" else v) for k, v in i.items()}} for p, i in due]})
 
 @app.route("/book", methods=["POST", "OPTIONS"])
 def book():
