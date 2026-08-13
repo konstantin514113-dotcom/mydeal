@@ -910,6 +910,96 @@ def confirm():
 # ── BOOKING → GOOGLE CALENDAR ──────────────────────────────────────────────
 GOOGLE_SCRIPT = os.environ.get("GOOGLE_SCRIPT", "")
 
+# ── 35-ДНЕВНОЕ НАПОМИНАНИЕ (первый визит → напоминание админу в Telegram) ──
+try:
+    from zoneinfo import ZoneInfo
+    _REMINDER_TZ = ZoneInfo("Europe/Tallinn")
+except Exception:
+    _REMINDER_TZ = None
+
+def _send_reminder_telegram(text):
+    tg_token = os.environ.get("TELEGRAM_BOT_TOKEN")
+    tg_chat_id = os.environ.get("TELEGRAM_CHAT_ID")
+    if not (tg_token and tg_chat_id):
+        print("REMINDER: TELEGRAM_BOT_TOKEN/TELEGRAM_CHAT_ID не заданы", flush=True)
+        return
+    try:
+        requests.post(
+            f"https://api.telegram.org/bot{tg_token}/sendMessage",
+            json={"chat_id": tg_chat_id, "text": text, "parse_mode": "HTML"},
+            timeout=10
+        )
+    except Exception as e:
+        print(f"REMINDER TELEGRAM ERROR: {e}", flush=True)
+
+def check_35day_reminders():
+    """Находит клиентов, у которых сегодня ровно 35 дней с первого визита
+    (по всем мастерам), и шлёт сводку в Telegram администратору."""
+    try:
+        today = datetime.now(_REMINDER_TZ).date() if _REMINDER_TZ else datetime.utcnow().date()
+        from_date = (today - timedelta(days=400)).strftime("%d.%m.%Y")
+        to_date = today.strftime("%d.%m.%Y")
+        r = requests.get(GOOGLE_SCRIPT, params={"action": "stats", "from": from_date, "to": to_date}, timeout=30)
+        data = r.json()
+        bookings = data.get("bookings", []) if isinstance(data, dict) else []
+
+        first_visit = {}
+        for b in bookings:
+            phone = (b.get("clientPhone") or "").strip()
+            if not phone:
+                continue
+            try:
+                d = datetime.strptime(b.get("date", ""), "%d.%m.%Y").date()
+            except Exception:
+                continue
+            if phone not in first_visit or d < first_visit[phone]["date"]:
+                first_visit[phone] = {
+                    "date": d,
+                    "name": b.get("clientName", ""),
+                    "pet": b.get("petName", ""),
+                    "master": b.get("master", ""),
+                    "breed": b.get("breed", "")
+                }
+
+        due = [(phone, info) for phone, info in first_visit.items() if (today - info["date"]).days == 35]
+
+        if due:
+            lines = ["🔔 <b>Напоминание — 35 дней с первого визита</b>", ""]
+            for phone, info in due:
+                lines.append(
+                    f"👤 {info['name']} ({phone})\n"
+                    f"🐾 {info['pet']} — {info['breed']}\n"
+                    f"Первый визит: {info['date'].strftime('%d.%m.%Y')} у {info['master']}\n"
+                )
+            _send_reminder_telegram("\n".join(lines))
+
+        print(f"REMINDER CHECK ({today}): найдено {len(due)} клиентов", flush=True)
+        return due
+    except Exception as e:
+        print(f"REMINDER CHECK ERROR: {e}", flush=True)
+        return []
+
+def _reminder_scheduler_loop():
+    while True:
+        try:
+            now = datetime.now(_REMINDER_TZ) if _REMINDER_TZ else datetime.utcnow()
+            next_run = now.replace(hour=10, minute=0, second=0, microsecond=0)
+            if next_run <= now:
+                next_run += timedelta(days=1)
+            sleep_seconds = (next_run - now).total_seconds()
+            _time.sleep(max(sleep_seconds, 60))
+            check_35day_reminders()
+        except Exception as e:
+            print(f"REMINDER SCHEDULER ERROR: {e}", flush=True)
+            _time.sleep(3600)
+
+threading.Thread(target=_reminder_scheduler_loop, daemon=True).start()
+
+@app.route("/api/check-reminders")
+def api_check_reminders():
+    due = check_35day_reminders()
+    return jsonify({"success": True, "due_count": len(due), "clients": [{"phone": p, **{k: (v.isoformat() if k == "date" else v) for k, v in i.items()}} for p, i in due]})
+
 @app.route("/book", methods=["POST", "OPTIONS"])
 def book():
     if request.method == "OPTIONS":
