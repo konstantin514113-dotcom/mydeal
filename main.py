@@ -933,18 +933,19 @@ def _send_reminder_telegram(text):
         print(f"REMINDER TELEGRAM ERROR: {e}", flush=True)
 
 def check_35day_reminders():
-    """Находит клиентов, у которых сегодня кратно 35 дней с ПОСЛЕДНЕГО визита
-    (35, 70, 105... дней), и шлёт сводку в Telegram администратору.
-    Отсчёт обнуляется при новой записи клиента."""
+    """Два напоминания на клиента после его последнего визита:
+    #1 — на 35-й день, #2 — на 42-й день (35+7), если он не записался повторно.
+    Если между визитом и сегодня есть ЛЮБАЯ более поздняя запись (прошлая или
+    будущая) — значит клиент уже перезаписался, и напоминания не шлём."""
     try:
         today = datetime.now(_REMINDER_TZ).date() if _REMINDER_TZ else datetime.utcnow().date()
         from_date = (today - timedelta(days=400)).strftime("%d.%m.%Y")
-        to_date = today.strftime("%d.%m.%Y")
+        to_date = (today + timedelta(days=120)).strftime("%d.%m.%Y")
         r = requests.get(GOOGLE_SCRIPT, params={"action": "stats", "from": from_date, "to": to_date}, timeout=30)
         data = r.json()
         bookings = data.get("bookings", []) if isinstance(data, dict) else []
 
-        last_visit = {}
+        by_phone = {}
         for b in bookings:
             phone = (b.get("clientPhone") or "").strip()
             if not phone:
@@ -953,32 +954,39 @@ def check_35day_reminders():
                 d = datetime.strptime(b.get("date", ""), "%d.%m.%Y").date()
             except Exception:
                 continue
-            if d > today:
-                continue  # будущие записи не считаем "визитом"
-            if phone not in last_visit or d > last_visit[phone]["date"]:
-                last_visit[phone] = {
-                    "date": d,
-                    "name": b.get("clientName", ""),
-                    "pet": b.get("petName", ""),
-                    "master": b.get("master", ""),
-                    "breed": b.get("breed", "")
-                }
+            by_phone.setdefault(phone, []).append({
+                "date": d,
+                "name": b.get("clientName", ""),
+                "pet": b.get("petName", ""),
+                "master": b.get("master", ""),
+                "breed": b.get("breed", "")
+            })
 
         due = []
-        for phone, info in last_visit.items():
-            days_since = (today - info["date"]).days
-            if days_since > 0 and days_since % 35 == 0:
+        for phone, visits in by_phone.items():
+            past_visits = [v for v in visits if v["date"] <= today]
+            if not past_visits:
+                continue
+            last_visit = max(past_visits, key=lambda v: v["date"])
+            has_rebooked = any(v["date"] > last_visit["date"] for v in visits)
+            if has_rebooked:
+                continue
+            days_since = (today - last_visit["date"]).days
+            stage = {35: 1, 42: 2}.get(days_since)
+            if stage:
+                info = dict(last_visit)
+                info["stage"] = stage
                 info["days_since"] = days_since
                 due.append((phone, info))
 
         if due:
-            lines = ["🔔 <b>Напоминание — 35 дней с последнего визита</b>", ""]
+            lines = ["🔔 <b>Напоминания клиентам</b>", ""]
             for phone, info in due:
                 lines.append(
+                    f"{'1️⃣' if info['stage']==1 else '2️⃣'} <b>Напоминание #{info['stage']}</b> ({info['days_since']} дн. без визита)\n"
                     f"👤 {info['name']} ({phone})\n"
                     f"🐾 {info['pet']} — {info['breed']}\n"
-                    f"Последний визит: {info['date'].strftime('%d.%m.%Y')} у {info['master']} "
-                    f"({info['days_since']} дн. назад)\n"
+                    f"Последний визит: {info['date'].strftime('%d.%m.%Y')} у {info['master']}\n"
                 )
             _send_reminder_telegram("\n".join(lines))
 
