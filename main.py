@@ -1075,6 +1075,71 @@ def api_mark_reminder():
     _save_reminder_status(status)
     return jsonify({"success": True})
 
+# ── ФОТО АНКЕТ ПИТОМЦЕВ ──────────────────────────────────────────────────
+_PET_PHOTOS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "pet_photos")
+_PET_PHOTOS_INDEX = os.path.join(os.path.dirname(os.path.abspath(__file__)), "pet_photos_index.json")
+os.makedirs(_PET_PHOTOS_DIR, exist_ok=True)
+_pet_photos_lock = threading.Lock()
+
+def _pet_photo_key(phone, pet):
+    raw = f"{(phone or '').strip()}|{(pet or '').strip()}".lower()
+    import hashlib
+    return hashlib.sha1(raw.encode("utf-8")).hexdigest()
+
+def _load_pet_photos_index():
+    try:
+        with open(_PET_PHOTOS_INDEX, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+def _save_pet_photos_index(data):
+    with _pet_photos_lock:
+        try:
+            with open(_PET_PHOTOS_INDEX, "w", encoding="utf-8") as f:
+                json.dump(data, f, ensure_ascii=False)
+        except Exception as e:
+            print(f"PET PHOTO INDEX SAVE ERROR: {e}", flush=True)
+
+@app.route("/api/upload-pet-photo", methods=["POST"])
+def api_upload_pet_photo():
+    phone = (request.form.get("phone") or "").strip()
+    pet = (request.form.get("pet") or "").strip()
+    file = request.files.get("photo")
+    if not phone or not pet or not file:
+        return jsonify({"success": False, "error": "phone, pet и photo обязательны"}), 400
+
+    ext = os.path.splitext(file.filename or "")[1].lower()
+    if ext not in (".jpg", ".jpeg", ".png", ".heic", ".webp"):
+        ext = ".jpg"
+    key = _pet_photo_key(phone, pet)
+    filename = f"{key}{ext}"
+    filepath = os.path.join(_PET_PHOTOS_DIR, filename)
+
+    try:
+        # удаляем старое фото с другим расширением, если было
+        index = _load_pet_photos_index()
+        old = index.get(key)
+        if old and old != filename:
+            old_path = os.path.join(_PET_PHOTOS_DIR, old)
+            if os.path.exists(old_path):
+                os.remove(old_path)
+        file.save(filepath)
+        index[key] = filename
+        _save_pet_photos_index(index)
+        return jsonify({"success": True, "url": f"/pet-photo/{key}"})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+@app.route("/pet-photo/<key>")
+def get_pet_photo(key):
+    index = _load_pet_photos_index()
+    filename = index.get(key)
+    if not filename:
+        return "Фото не найдено", 404
+    from flask import send_from_directory
+    return send_from_directory(_PET_PHOTOS_DIR, filename)
+
 def _get_reminder_dashboard_rows():
     """Общая функция: последний визит на клиента за последние 40 дней,
     с расчётом стадии напоминания. Используется дашбордом и отчётами."""
@@ -2558,6 +2623,7 @@ def _build_client_export_workbook():
 def admin_client_detail():
     if request.args.get("pass") != "anza1985":
         return "Доступ запрещён. Добавь ?pass=anza1985 в конец ссылки.", 403
+    import urllib.parse as _urlp
 
     phone = (request.args.get("phone") or "").strip()
     if not phone:
@@ -2621,6 +2687,24 @@ def admin_client_detail():
     email_html = f'<a class="contact-val link" href="mailto:{email}">{email}</a>' if email else '<span class="contact-val empty">не указан</span>'
     ig_html = f'<a class="contact-val link" href="https://instagram.com/{instagram.lstrip("@")}" target="_blank" rel="noopener">@{instagram.lstrip("@")}</a>' if instagram else '<span class="contact-val empty">не указан</span>'
 
+    photos_index = _load_pet_photos_index()
+
+    def pet_photo_card(pet_name, breed):
+        key = _pet_photo_key(phone, pet_name)
+        has_photo = key in photos_index
+        img_html = f'<img src="/pet-photo/{key}?v={_time.time():.0f}" class="pet-photo-img" id="img-{key}">' if has_photo else f'<div class="pet-photo-placeholder" id="img-{key}">Нет фото анкеты</div>'
+        return f"""
+        <div class="pet-photo-card">
+          <div class="pet-photo-name">{pet_name}{f' · {breed}' if breed else ''}</div>
+          {img_html}
+          <label class="pet-photo-btn">
+            📷 {'Заменить фото' if has_photo else 'Добавить фото анкеты'}
+            <input type="file" accept="image/*" capture="environment" style="display:none" onchange="uploadPetPhoto(this, '{key}', '{_urlp.quote(phone)}', '{_urlp.quote(pet_name)}')">
+          </label>
+        </div>"""
+
+    pet_photos_html = "".join(pet_photo_card(p, b) for p, b in pets.items()) if pets else '<div class="empty">Питомцы не найдены</div>'
+
     def visit_row(v):
         return f"""
         <div class="vrow">
@@ -2678,6 +2762,15 @@ def admin_client_detail():
   .vrow-sub{{font-size:0.72rem;color:rgba(242,237,226,.5);margin-top:2px}}
   .vrow-price{{font-size:0.85rem;font-weight:600;color:#c9a05a}}
   .empty{{text-align:center;padding:30px 0;color:rgba(242,237,226,.4);font-size:0.85rem}}
+
+  .pet-photos-grid{{display:flex;flex-direction:column;gap:12px;margin-bottom:8px}}
+  .pet-photo-card{{background:#141310;border:1px solid rgba(255,255,255,.07);border-radius:14px;padding:16px}}
+  .pet-photo-name{{font-family:'Playfair Display',serif;font-size:1rem;font-weight:600;margin-bottom:10px}}
+  .pet-photo-img{{width:100%;max-height:340px;object-fit:contain;border-radius:10px;background:#0a0a09;display:block;margin-bottom:10px}}
+  .pet-photo-placeholder{{width:100%;height:80px;border:1px dashed rgba(242,237,226,.2);border-radius:10px;display:flex;align-items:center;justify-content:center;color:rgba(242,237,226,.35);font-size:0.78rem;margin-bottom:10px}}
+  .pet-photo-btn{{display:block;text-align:center;background:rgba(201,160,90,.1);border:1px solid rgba(201,160,90,.4);color:#c9a05a;border-radius:10px;padding:11px;font-size:0.82rem;font-weight:600;cursor:pointer}}
+  .upload-toast{{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);background:#151310;border:1px solid rgba(201,160,90,.4);color:#f2ede2;padding:10px 20px;border-radius:20px;font-size:0.8rem;opacity:0;pointer-events:none;transition:all .25s;z-index:999}}
+  .upload-toast.show{{opacity:1;transform:translateX(-50%) translateY(0)}}
 </style>
 </head>
 <body>
@@ -2706,10 +2799,49 @@ def admin_client_detail():
     <div class="contact-line"><span class="contact-label">Первый визит</span><span class="contact-val">{first_visit_str}</span></div>
   </div>
 
+  <div class="list-label">Анкеты питомцев</div>
+  <div class="pet-photos-grid">{pet_photos_html}</div>
+
   <div class="list-label">История визитов ({len(visits)})</div>
   {error_html}
   {visits_html}
 </div>
+<div id="uploadToast" class="upload-toast"></div>
+<script>
+function uploadPetPhoto(input, key, phone, pet){{
+  var file = input.files[0];
+  if(!file) return;
+  var toast = document.getElementById('uploadToast');
+  toast.textContent = 'Загружаю...';
+  toast.classList.add('show');
+  var fd = new FormData();
+  fd.append('phone', decodeURIComponent(phone));
+  fd.append('pet', decodeURIComponent(pet));
+  fd.append('photo', file);
+  fetch('/api/upload-pet-photo', {{method: 'POST', body: fd}})
+    .then(function(r){{ return r.json(); }})
+    .then(function(data){{
+      if(data.success){{
+        toast.textContent = 'Фото сохранено ✓';
+        var el = document.getElementById('img-' + key);
+        if(el){{
+          var img = document.createElement('img');
+          img.src = data.url + '?v=' + Date.now();
+          img.className = 'pet-photo-img';
+          img.id = 'img-' + key;
+          el.replaceWith(img);
+        }}
+      }} else {{
+        toast.textContent = 'Ошибка: ' + (data.error || 'не удалось загрузить');
+      }}
+      setTimeout(function(){{ toast.classList.remove('show'); }}, 2500);
+    }})
+    .catch(function(err){{
+      toast.textContent = 'Ошибка загрузки';
+      setTimeout(function(){{ toast.classList.remove('show'); }}, 2500);
+    }});
+}}
+</script>
 </body>
 </html>"""
     return html, 200, {"Content-Type": "text/html; charset=utf-8"}
