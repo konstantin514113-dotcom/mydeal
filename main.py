@@ -2669,8 +2669,6 @@ def _build_client_export_workbook():
 
 @app.route("/admin/client")
 def admin_client_detail():
-    if request.args.get("pass") != "anza1985":
-        return "Доступ запрещён. Добавь ?pass=anza1985 в конец ссылки.", 403
     import urllib.parse as _urlp
 
     phone = (request.args.get("phone") or "").strip()
@@ -2962,8 +2960,6 @@ function uploadPetPhoto(input, key, phone, pet){{
 
 @app.route("/admin/clients")
 def admin_clients_page():
-    if request.args.get("pass") != "anza1985":
-        return "Доступ запрещён. Добавь ?pass=anza1985 в конец ссылки.", 403
     import urllib.parse as _urlp
 
     error = None
@@ -3101,8 +3097,6 @@ def admin_clients_page():
 
 @app.route("/admin")
 def admin_hub():
-    if request.args.get("pass") != "anza1985":
-        return "Доступ запрещён. Добавь ?pass=anza1985 в конец ссылки.", 403
 
     due_badge = ""
     try:
@@ -3191,8 +3185,6 @@ def admin_hub():
 
 @app.route("/admin/search")
 def admin_client_search():
-    if request.args.get("pass") != "anza1985":
-        return "Доступ запрещён. Добавь ?pass=anza1985 в конец ссылки.", 403
 
     query = (request.args.get("q") or "").strip()
     results = []
@@ -3316,8 +3308,6 @@ def admin_client_search():
 
 @app.route("/admin/reminders")
 def admin_reminders_dashboard():
-    if request.args.get("pass") != "anza1985":
-        return "Доступ запрещён. Добавь ?pass=anza1985 в конец ссылки.", 403
 
     try:
         rows, today = _get_reminder_dashboard_rows()
@@ -3501,8 +3491,6 @@ document.addEventListener('change', function(e){{
 
 @app.route("/admin/export-clients")
 def admin_export_clients():
-    if request.args.get("pass") != "anza1985":
-        return "Доступ запрещён. Добавь ?pass=anza1985 в конец ссылки.", 403
     from io import BytesIO
     from flask import send_file
     try:
@@ -3563,8 +3551,6 @@ threading.Thread(target=_weekly_export_scheduler_loop, daemon=True).start()
 
 @app.route("/api/send-weekly-export")
 def api_send_weekly_export():
-    if request.args.get("pass") != "anza1985":
-        return "Доступ запрещён.", 403
     send_weekly_client_export_email()
     return jsonify({"success": True})
 
