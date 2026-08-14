@@ -2708,18 +2708,28 @@ def admin_reminders_dashboard():
 
         first_name = (r["name"] or "").split()[0] if r["name"] else ""
         pet = r["pet"] or "питомец"
-        breed = r["breed"] or ""
         greeting = f"Здравствуйте, {first_name}! 🐾" if first_name else "Здравствуйте! 🐾"
         booking_link = "https://rjgrooming.up.railway.app/app"
+
+        def _days_word(n):
+            n10, n100 = n % 10, n % 100
+            if 11 <= n100 <= 14:
+                return "дней"
+            if n10 == 1:
+                return "день"
+            if 2 <= n10 <= 4:
+                return "дня"
+            return "дней"
+
+        days_word = _days_word(r["days_since"])
         if r["days_since"] >= 42:
-            msg = (f"{greeting} {pet}"
-                   + (f" ({breed})" if breed else "")
-                   + f" давно не был{'а' if pet.endswith(('а','я')) else ''} у нас — прошло уже {r['days_since']} дней с последнего визита. "
-                   + f"Будем рады снова вас видеть в R&J Grooming! Записаться можно здесь: {booking_link}")
+            msg = (f"{greeting} {pet} давно не был{'а' if pet.endswith(('а','я')) else ''} у нас — "
+                   f"прошло уже {r['days_since']} {days_word} с последнего визита. "
+                   f"Будем рады снова вас видеть в R&J Grooming! Записаться можно здесь: {booking_link}")
         elif r["days_since"] >= 35:
-            msg = (f"{greeting} Прошло {r['days_since']} дней с последнего визита {pet}"
-                   + (f" ({breed})" if breed else "")
-                   + f" к нам — самое время подумать о следующем груминге. Будем рады видеть вас снова! Записаться можно здесь: {booking_link}")
+            msg = (f"{greeting} Прошло {r['days_since']} {days_word} с последнего визита {pet} к нам — "
+                   f"самое время подумать о следующем груминге. Будем рады видеть вас снова! "
+                   f"Записаться можно здесь: {booking_link}")
         else:
             msg = ""
         wa_href = f"https://wa.me/{wa_digits}?text={_urlp.quote(msg)}" if msg else f"https://wa.me/{wa_digits}"
