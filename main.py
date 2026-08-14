@@ -3051,7 +3051,8 @@ def admin_clients_page():
   .eyebrow{{font-size:0.68rem;letter-spacing:.3em;text-transform:uppercase;color:rgba(242,237,226,.4);margin-bottom:10px}}
   .back-link{{display:inline-block;font-size:0.74rem;color:rgba(201,160,90,.75);text-decoration:none;margin-bottom:16px}}
   h1{{font-family:'Playfair Display',serif;font-weight:600;font-size:2.1rem;margin-bottom:6px}}
-  .sub{{font-size:0.78rem;color:rgba(242,237,226,.5);margin-bottom:32px}}
+  .sub{{font-size:0.78rem;color:rgba(242,237,226,.5);margin-bottom:20px}}
+  .search-link{{display:block;text-align:center;background:rgba(201,160,90,.1);border:1px solid rgba(201,160,90,.4);color:#c9a05a;border-radius:10px;padding:12px;font-size:0.85rem;font-weight:600;text-decoration:none;margin-bottom:24px}}
   .stats{{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-bottom:32px}}
   .stat{{background:#151310;border:1px solid rgba(201,160,90,.18);border-radius:12px;padding:18px 14px}}
   .stat .n{{font-family:'Playfair Display',serif;font-size:1.9rem;font-weight:600;color:#c9a05a}}
@@ -3078,6 +3079,8 @@ def admin_clients_page():
   <div class="eyebrow">R&J Grooming · Клиенты</div>
   <h1>Все клиенты</h1>
   <div class="sub">Полная база — вся история бронирований</div>
+
+  <a href="/admin/search?pass=anza1985" class="search-link">🔍 Поиск клиента</a>
 
   <div class="stats">
     <div class="stat"><div class="n">{len(clients)}</div><div class="l">клиентов</div></div>
@@ -3180,9 +3183,7 @@ def admin_hub():
 
   <div class="section-label">Ещё</div>
   <div class="secondary">
-    <a class="schip" href="/admin/search{P}">🔍 Поиск клиента</a>
     <a class="schip" href="/admin/export-clients{P}">⬇️ Excel-выгрузка</a>
-    <a class="schip" href="/admin/whatsapp{P}">💬 WhatsApp-бот</a>
   </div>
 </div>
 </body>
