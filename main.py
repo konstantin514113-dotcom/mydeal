@@ -1038,6 +1038,43 @@ def _reminder_scheduler_loop():
 
 threading.Thread(target=_reminder_scheduler_loop, daemon=True).start()
 
+_REMINDER_STATUS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "reminder_status.json")
+_reminder_status_lock = threading.Lock()
+
+def _load_reminder_status():
+    try:
+        with open(_REMINDER_STATUS_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+def _save_reminder_status(data):
+    with _reminder_status_lock:
+        try:
+            with open(_REMINDER_STATUS_FILE, "w", encoding="utf-8") as f:
+                json.dump(data, f, ensure_ascii=False)
+        except Exception as e:
+            print(f"REMINDER STATUS SAVE ERROR: {e}", flush=True)
+
+@app.route("/api/mark-reminder", methods=["POST"])
+def api_mark_reminder():
+    body = request.get_json(force=True) or {}
+    phone = (body.get("phone") or "").strip()
+    date_str = body.get("date") or ""
+    stage = body.get("stage")
+    done = bool(body.get("done"))
+    if not phone or stage not in (1, 2):
+        return jsonify({"success": False, "error": "phone и stage (1 или 2) обязательны"}), 400
+
+    status = _load_reminder_status()
+    entry = status.get(phone, {})
+    if entry.get("last_date") != date_str:
+        entry = {"last_date": date_str}
+    entry[f"stage{stage}_done"] = done
+    status[phone] = entry
+    _save_reminder_status(status)
+    return jsonify({"success": True})
+
 def _get_reminder_dashboard_rows():
     """Общая функция: последний визит на клиента за последние 40 дней,
     с расчётом стадии напоминания. Используется дашбордом и отчётами."""
@@ -1069,19 +1106,25 @@ def _get_reminder_dashboard_rows():
                 "email": b.get("clientEmail", "")
             }
 
+    reminder_status = _load_reminder_status()
     rows = []
     for phone, info in by_phone.items():
         days_since = (today - info["date"]).days
         if days_since >= 42:
-            status = "done"
+            stage_status = "done"
         elif days_since >= 35:
-            status = "stage1"
+            stage_status = "stage1"
         else:
-            status = "pending"
+            stage_status = "pending"
+        date_str = info["date"].strftime("%d.%m.%Y")
+        saved = reminder_status.get(phone, {})
+        stage1_done = bool(saved.get("stage1_done")) if saved.get("last_date") == date_str else False
+        stage2_done = bool(saved.get("stage2_done")) if saved.get("last_date") == date_str else False
         rows.append({
             "phone": phone, "name": info["name"], "pet": info["pet"],
             "breed": info["breed"], "master": info["master"], "email": info["email"],
-            "date": info["date"], "days_since": days_since, "status": status
+            "date": info["date"], "days_since": days_since, "status": stage_status,
+            "stage1_done": stage1_done, "stage2_done": stage2_done
         })
     rows.sort(key=lambda x: -x["days_since"])
     return rows, today
@@ -2537,6 +2580,17 @@ def admin_reminders_dashboard():
         meta = STATUS_META[r["status"]]
         email_html = f'<a class="email" href="mailto:{r["email"]}">{r["email"]}</a>' if r.get("email") else '<span class="email-empty">email не указан</span>'
         wa_digits = re.sub(r"[^\d]", "", r["phone"] or "")
+        date_str = r["date"].strftime("%d.%m.%Y")
+
+        checks = ""
+        if r["days_since"] >= 35:
+            c1 = "checked" if r["stage1_done"] else ""
+            checks += f'<label class="chk"><input type="checkbox" data-phone="{r["phone"]}" data-date="{date_str}" data-stage="1" {c1}> Напоминание #1 отправлено</label>'
+        if r["days_since"] >= 42:
+            c2 = "checked" if r["stage2_done"] else ""
+            checks += f'<label class="chk"><input type="checkbox" data-phone="{r["phone"]}" data-date="{date_str}" data-stage="2" {c2}> Напоминание #2 отправлено</label>'
+        checks_html = f'<div class="row-checks">{checks}</div>' if checks else ""
+
         return f"""
         <div class="row">
           <div class="row-top">
@@ -2552,7 +2606,7 @@ def admin_reminders_dashboard():
             <div class="tick" style="left:100%"></div>
           </div>
           <div class="row-bottom">
-            <span>Визит {r['date'].strftime('%d.%m.%Y')} · {r['master'] or '—'}</span>
+            <span>Визит {date_str} · {r['master'] or '—'}</span>
             <span class="days">{r['days_since']} дн.</span>
             <span class="contacts">
               <a class="phone" href="tel:{r['phone']}">{r['phone']}</a>
@@ -2560,6 +2614,7 @@ def admin_reminders_dashboard():
             </span>
           </div>
           <div class="row-contact">{email_html}</div>
+          {checks_html}
         </div>"""
 
     rows_html = "".join(row_html(r) for r in rows) if rows else '<div class="empty">За последние 40 дней визитов не найдено</div>'
@@ -2601,6 +2656,9 @@ def admin_reminders_dashboard():
   .row-contact{{margin-top:6px;font-size:0.74rem}}
   .row-contact .email{{color:rgba(242,237,226,.65);text-decoration:none}}
   .row-contact .email-empty{{color:rgba(242,237,226,.3);font-style:italic}}
+  .row-checks{{margin-top:12px;padding-top:10px;border-top:1px solid rgba(255,255,255,.06);display:flex;flex-direction:column;gap:8px}}
+  .chk{{display:flex;align-items:center;gap:8px;font-size:0.78rem;color:rgba(242,237,226,.75);cursor:pointer;user-select:none}}
+  .chk input{{width:16px;height:16px;accent-color:#c9a05a;cursor:pointer}}
   .empty{{text-align:center;padding:40px 0;color:rgba(242,237,226,.4);font-size:0.85rem}}
   @media(max-width:480px){{
     .row-bottom{{flex-direction:column;align-items:flex-start;gap:4px}}
@@ -2623,6 +2681,23 @@ def admin_reminders_dashboard():
   {error_html}
   {rows_html}
 </div>
+<script>
+document.addEventListener('change', function(e){{
+  if(e.target && e.target.matches('.chk input[type="checkbox"]')){{
+    var el = e.target;
+    fetch('/api/mark-reminder', {{
+      method: 'POST',
+      headers: {{'Content-Type': 'application/json'}},
+      body: JSON.stringify({{
+        phone: el.getAttribute('data-phone'),
+        date: el.getAttribute('data-date'),
+        stage: parseInt(el.getAttribute('data-stage'), 10),
+        done: el.checked
+      }})
+    }}).catch(function(err){{ console.error('mark-reminder failed', err); }});
+  }}
+}});
+</script>
 </body>
 </html>"""
     return html, 200, {"Content-Type": "text/html; charset=utf-8"}
