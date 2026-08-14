@@ -1075,70 +1075,58 @@ def api_mark_reminder():
     _save_reminder_status(status)
     return jsonify({"success": True})
 
-# ── ФОТО АНКЕТ ПИТОМЦЕВ ──────────────────────────────────────────────────
-_PET_PHOTOS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "pet_photos")
-_PET_PHOTOS_INDEX = os.path.join(os.path.dirname(os.path.abspath(__file__)), "pet_photos_index.json")
-os.makedirs(_PET_PHOTOS_DIR, exist_ok=True)
-_pet_photos_lock = threading.Lock()
+# ── ФОТО АНКЕТ ПИТОМЦЕВ (Cloudinary, постоянное хранение) ───────────────
+CLOUDINARY_CLOUD_NAME = os.environ.get("CLOUDINARY_CLOUD_NAME", "u35xfusf")
+CLOUDINARY_API_KEY = os.environ.get("CLOUDINARY_API_KEY", "555146516498372")
+CLOUDINARY_API_SECRET = os.environ.get("CLOUDINARY_API_SECRET", "AQTPeJ2sfE0XhjtlCwz_PcM2ZrQ")
 
 def _pet_photo_key(phone, pet):
     raw = f"{(phone or '').strip()}|{(pet or '').strip()}".lower()
     import hashlib
     return hashlib.sha1(raw.encode("utf-8")).hexdigest()
 
-def _load_pet_photos_index():
-    try:
-        with open(_PET_PHOTOS_INDEX, "r", encoding="utf-8") as f:
-            return json.load(f)
-    except Exception:
-        return {}
+def _pet_photo_public_id(key):
+    return f"rjgrooming/pet_{key}"
 
-def _save_pet_photos_index(data):
-    with _pet_photos_lock:
-        try:
-            with open(_PET_PHOTOS_INDEX, "w", encoding="utf-8") as f:
-                json.dump(data, f, ensure_ascii=False)
-        except Exception as e:
-            print(f"PET PHOTO INDEX SAVE ERROR: {e}", flush=True)
+def _pet_photo_url(key):
+    return f"https://res.cloudinary.com/{CLOUDINARY_CLOUD_NAME}/image/upload/f_auto,q_auto/{_pet_photo_public_id(key)}"
 
 @app.route("/api/upload-pet-photo", methods=["POST"])
 def api_upload_pet_photo():
+    import hashlib as _hashlib
     phone = (request.form.get("phone") or "").strip()
     pet = (request.form.get("pet") or "").strip()
     file = request.files.get("photo")
     if not phone or not pet or not file:
         return jsonify({"success": False, "error": "phone, pet и photo обязательны"}), 400
 
-    ext = os.path.splitext(file.filename or "")[1].lower()
-    if ext not in (".jpg", ".jpeg", ".png", ".heic", ".webp"):
-        ext = ".jpg"
     key = _pet_photo_key(phone, pet)
-    filename = f"{key}{ext}"
-    filepath = os.path.join(_PET_PHOTOS_DIR, filename)
+    public_id = _pet_photo_public_id(key)
+    timestamp = int(_time.time())
+
+    params_to_sign = {"overwrite": "true", "public_id": public_id, "timestamp": timestamp}
+    to_sign = "&".join(f"{k}={v}" for k, v in sorted(params_to_sign.items()))
+    signature = _hashlib.sha1((to_sign + CLOUDINARY_API_SECRET).encode("utf-8")).hexdigest()
 
     try:
-        # удаляем старое фото с другим расширением, если было
-        index = _load_pet_photos_index()
-        old = index.get(key)
-        if old and old != filename:
-            old_path = os.path.join(_PET_PHOTOS_DIR, old)
-            if os.path.exists(old_path):
-                os.remove(old_path)
-        file.save(filepath)
-        index[key] = filename
-        _save_pet_photos_index(index)
-        return jsonify({"success": True, "url": f"/pet-photo/{key}"})
+        resp = requests.post(
+            f"https://api.cloudinary.com/v1_1/{CLOUDINARY_CLOUD_NAME}/image/upload",
+            data={
+                "api_key": CLOUDINARY_API_KEY,
+                "timestamp": timestamp,
+                "public_id": public_id,
+                "overwrite": "true",
+                "signature": signature,
+            },
+            files={"file": (file.filename or "photo.jpg", file.stream, file.mimetype)},
+            timeout=30
+        )
+        body = resp.json()
+        if resp.status_code != 200 or "secure_url" not in body:
+            return jsonify({"success": False, "error": body.get("error", {}).get("message", "Cloudinary upload failed")}), 500
+        return jsonify({"success": True, "url": _pet_photo_url(key)})
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
-
-@app.route("/pet-photo/<key>")
-def get_pet_photo(key):
-    index = _load_pet_photos_index()
-    filename = index.get(key)
-    if not filename:
-        return "Фото не найдено", 404
-    from flask import send_from_directory
-    return send_from_directory(_PET_PHOTOS_DIR, filename)
 
 def _get_reminder_dashboard_rows():
     """Общая функция: последний визит на клиента за последние 40 дней,
@@ -2687,18 +2675,16 @@ def admin_client_detail():
     email_html = f'<a class="contact-val link" href="mailto:{email}">{email}</a>' if email else '<span class="contact-val empty">не указан</span>'
     ig_html = f'<a class="contact-val link" href="https://instagram.com/{instagram.lstrip("@")}" target="_blank" rel="noopener">@{instagram.lstrip("@")}</a>' if instagram else '<span class="contact-val empty">не указан</span>'
 
-    photos_index = _load_pet_photos_index()
-
     def pet_photo_card(pet_name, breed):
         key = _pet_photo_key(phone, pet_name)
-        has_photo = key in photos_index
-        img_html = f'<img src="/pet-photo/{key}?v={_time.time():.0f}" class="pet-photo-img" id="img-{key}">' if has_photo else f'<div class="pet-photo-placeholder" id="img-{key}">Нет фото анкеты</div>'
+        photo_url = _pet_photo_url(key)
         return f"""
         <div class="pet-photo-card">
           <div class="pet-photo-name">{pet_name}{f' · {breed}' if breed else ''}</div>
-          {img_html}
+          <img src="{photo_url}" class="pet-photo-img" id="img-{key}"
+               onerror="this.outerHTML='<div class=&quot;pet-photo-placeholder&quot; id=&quot;img-{key}&quot;>Нет фото анкеты</div>'">
           <label class="pet-photo-btn">
-            📷 {'Заменить фото' if has_photo else 'Добавить фото анкеты'}
+            📷 Загрузить / обновить фото анкеты
             <input type="file" accept="image/*" capture="environment" style="display:none" onchange="uploadPetPhoto(this, '{key}', '{_urlp.quote(phone)}', '{_urlp.quote(pet_name)}')">
           </label>
         </div>"""
