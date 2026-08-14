@@ -2699,11 +2699,30 @@ def admin_reminders_dashboard():
     }
 
     def row_html(r):
+        import urllib.parse as _urlp
         pct = min(100, round(r["days_since"] / 42 * 100))
         meta = STATUS_META[r["status"]]
         email_html = f'<a class="email" href="mailto:{r["email"]}">{r["email"]}</a>' if r.get("email") else '<span class="email-empty">email не указан</span>'
         wa_digits = re.sub(r"[^\d]", "", r["phone"] or "")
         date_str = r["date"].strftime("%d.%m.%Y")
+
+        first_name = (r["name"] or "").split()[0] if r["name"] else ""
+        pet = r["pet"] or "питомец"
+        breed = r["breed"] or ""
+        greeting = f"Здравствуйте, {first_name}! 🐾" if first_name else "Здравствуйте! 🐾"
+        booking_link = "https://rjgrooming.up.railway.app/app"
+        if r["days_since"] >= 42:
+            msg = (f"{greeting} {pet}"
+                   + (f" ({breed})" if breed else "")
+                   + f" давно не был{'а' if pet.endswith(('а','я')) else ''} у нас — прошло уже {r['days_since']} дней с последнего визита. "
+                   + f"Будем рады снова вас видеть в R&J Grooming! Записаться можно здесь: {booking_link}")
+        elif r["days_since"] >= 35:
+            msg = (f"{greeting} Прошло {r['days_since']} дней с последнего визита {pet}"
+                   + (f" ({breed})" if breed else "")
+                   + f" к нам — самое время подумать о следующем груминге. Будем рады видеть вас снова! Записаться можно здесь: {booking_link}")
+        else:
+            msg = ""
+        wa_href = f"https://wa.me/{wa_digits}?text={_urlp.quote(msg)}" if msg else f"https://wa.me/{wa_digits}"
 
         checks = ""
         if r["days_since"] >= 35:
@@ -2733,7 +2752,7 @@ def admin_reminders_dashboard():
             <span class="days">{r['days_since']} дн.</span>
             <span class="contacts">
               <a class="phone" href="tel:{r['phone']}">{r['phone']}</a>
-              <a class="wa" href="https://wa.me/{wa_digits}" target="_blank" rel="noopener">WhatsApp</a>
+              <a class="wa" href="{wa_href}" target="_blank" rel="noopener">WhatsApp{' с текстом' if msg else ''}</a>
             </span>
           </div>
           <div class="row-contact">{email_html}</div>
