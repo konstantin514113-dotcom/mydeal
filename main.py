@@ -3325,10 +3325,19 @@ def admin_reminders_dashboard():
         "done":    {"color": "#e0824a", "label": "напоминание #2"},
     }
 
+    def bar_color(days_since):
+        if days_since < 35:
+            return "#8a8578"
+        elif days_since == 35:
+            return "#4ade80"
+        else:
+            return "#e0524a"
+
     def row_html(r):
         import urllib.parse as _urlp
         pct = min(100, round(r["days_since"] / 42 * 100))
         meta = STATUS_META[r["status"]]
+        bar = bar_color(r["days_since"])
         email_html = f'<a class="email" href="mailto:{r["email"]}">{r["email"]}</a>' if r.get("email") else '<span class="email-empty">email не указан</span>'
         wa_digits = re.sub(r"[^\d]", "", r["phone"] or "")
         date_str = r["date"].strftime("%d.%m.%Y")
@@ -3380,7 +3389,7 @@ def admin_reminders_dashboard():
             <div class="badge" style="color:{meta['color']};border-color:{meta['color']}55;background:{meta['color']}14">{meta['label']}</div>
           </div>
           <div class="track">
-            <div class="fill" style="width:{pct}%;background:{meta['color']}"></div>
+            <div class="fill" style="width:{pct}%;background:{bar}"></div>
             <div class="tick" style="left:{35/42*100:.2f}%"></div>
             <div class="tick" style="left:100%"></div>
           </div>
