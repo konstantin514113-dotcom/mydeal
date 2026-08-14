@@ -965,7 +965,7 @@ def check_35day_reminders(target_date=None, send_telegram=True):
     реальной отправки — для этого передать send_telegram=False."""
     try:
         today = target_date or (datetime.now(_REMINDER_TZ).date() if _REMINDER_TZ else datetime.utcnow().date())
-        from_date = (today - timedelta(days=40)).strftime("%d.%m.%Y")
+        from_date = "01.01.2020"
         to_date = (today + timedelta(days=120)).strftime("%d.%m.%Y")
         r = requests.get(GOOGLE_SCRIPT, params={"action": "stats", "from": from_date, "to": to_date}, timeout=30)
         data = r.json()
@@ -1189,10 +1189,10 @@ def api_save_client_data():
         return jsonify({"success": False, "error": str(e)}), 500
 
 def _get_reminder_dashboard_rows():
-    """Общая функция: последний визит на клиента за последние 40 дней,
+    """Общая функция: последний визит на клиента за всю историю,
     с расчётом стадии напоминания. Используется дашбордом и отчётами."""
     today = datetime.now(_REMINDER_TZ).date() if _REMINDER_TZ else datetime.utcnow().date()
-    from_date = (today - timedelta(days=40)).strftime("%d.%m.%Y")
+    from_date = "01.01.2020"
     to_date = today.strftime("%d.%m.%Y")
     r = requests.get(GOOGLE_SCRIPT, params={"action": "stats", "from": from_date, "to": to_date}, timeout=30)
     data = r.json()
@@ -1243,11 +1243,11 @@ def _get_reminder_dashboard_rows():
     return rows, today
 
 def send_full_40day_report():
-    """Полный список клиентов за последние 40 дней (по последнему визиту)
+    """Полный список клиентов за всю историю (по последнему визиту)
     со статусом по каждому — сколько дней прошло и на какой они стадии."""
     try:
         today = datetime.now(_REMINDER_TZ).date() if _REMINDER_TZ else datetime.utcnow().date()
-        from_date = (today - timedelta(days=40)).strftime("%d.%m.%Y")
+        from_date = "01.01.2020"
         to_date = today.strftime("%d.%m.%Y")
         r = requests.get(GOOGLE_SCRIPT, params={"action": "stats", "from": from_date, "to": to_date}, timeout=30)
         data = r.json()
