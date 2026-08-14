@@ -2554,6 +2554,129 @@ def _build_client_export_workbook():
     filename = f"RJ_Grooming_clients_{datetime.now().strftime('%Y%m%d')}.xlsx"
     return buf.getvalue(), filename
 
+@app.route("/admin/search")
+def admin_client_search():
+    if request.args.get("pass") != "rjadmin2024":
+        return "Доступ запрещён. Добавь ?pass=rjadmin2024 в конец ссылки.", 403
+
+    query = (request.args.get("q") or "").strip()
+    results = []
+    error = None
+
+    if query:
+        try:
+            today = datetime.now(_REMINDER_TZ).date() if _REMINDER_TZ else datetime.utcnow().date()
+            params = {"action": "stats", "from": "01.01.2020", "to": (today + timedelta(days=180)).strftime("%d.%m.%Y")}
+            r = requests.get(GOOGLE_SCRIPT, params=params, timeout=30)
+            data = r.json()
+            bookings = data.get("bookings", []) if isinstance(data, dict) else []
+
+            q_lower = query.lower()
+            q_digits = re.sub(r"[^\d]", "", query)
+
+            by_phone = {}
+            for b in bookings:
+                name = (b.get("clientName") or "")
+                phone = (b.get("clientPhone") or "")
+                pet = (b.get("petName") or "")
+                phone_digits = re.sub(r"[^\d]", "", phone)
+                match = (
+                    (q_lower and (q_lower in name.lower() or q_lower in pet.lower())) or
+                    (q_digits and q_digits in phone_digits)
+                )
+                if not match:
+                    continue
+                key = phone or name
+                try:
+                    d = datetime.strptime(b.get("date", ""), "%d.%m.%Y").date()
+                except Exception:
+                    d = None
+                if key not in by_phone or (d and (not by_phone[key]["_d"] or d > by_phone[key]["_d"])):
+                    by_phone[key] = {
+                        "_d": d, "name": name, "phone": phone, "pet": pet,
+                        "breed": b.get("breed", ""), "master": b.get("master", ""),
+                        "date": b.get("date", ""), "service": b.get("service", "")
+                    }
+            results = sorted(by_phone.values(), key=lambda x: x["_d"] or datetime.min.date(), reverse=True)
+        except Exception as e:
+            error = str(e)
+
+    def result_html(r):
+        wa_digits = re.sub(r"[^\d]", "", r["phone"] or "")
+        return f"""
+        <div class="row">
+          <div class="row-top">
+            <div class="who">
+              <span class="name">{r['name'] or '—'}</span>
+              <span class="pet">{r['pet'] or '—'} · {r['breed'] or '—'}</span>
+            </div>
+          </div>
+          <div class="row-bottom">
+            <span>Последний визит: {r['date'] or '—'} · {r['master'] or '—'}</span>
+          </div>
+          <div class="row-bottom" style="margin-top:6px">
+            <span class="contacts">
+              <a class="phone" href="tel:{r['phone']}">{r['phone'] or '—'}</a>
+              <a class="wa" href="https://wa.me/{wa_digits}" target="_blank" rel="noopener">WhatsApp</a>
+            </span>
+          </div>
+          <div class="row-hint">Скопируй имя выше и вставь в поиск Instagram Direct, чтобы найти переписку</div>
+        </div>"""
+
+    if query and not results and not error:
+        results_html = '<div class="empty">Ничего не найдено — проверь написание или попробуй телефон/кличку</div>'
+    elif error:
+        results_html = f'<div class="empty" style="color:#e0824a">Ошибка: {error}</div>'
+    elif not query:
+        results_html = '<div class="empty">Введи имя, телефон или кличку питомца</div>'
+    else:
+        results_html = "".join(result_html(r) for r in results)
+
+    html = f"""<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>R&J Grooming — Поиск клиента</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,500;0,600;0,700;1,500&family=Montserrat:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  *{{box-sizing:border-box;margin:0;padding:0}}
+  body{{background:#0a0a09;color:#f2ede2;font-family:'Montserrat',sans-serif;padding:36px 20px 80px}}
+  .wrap{{max-width:640px;margin:0 auto}}
+  .eyebrow{{font-size:0.68rem;letter-spacing:.3em;text-transform:uppercase;color:rgba(242,237,226,.4);margin-bottom:10px}}
+  h1{{font-family:'Playfair Display',serif;font-weight:600;font-size:2.1rem;margin-bottom:20px}}
+  form{{display:flex;gap:8px;margin-bottom:28px}}
+  input[type=text]{{flex:1;background:#151310;border:1px solid rgba(201,160,90,.3);border-radius:10px;padding:14px 16px;color:#f2ede2;font-family:'Montserrat',sans-serif;font-size:0.95rem}}
+  input[type=text]:focus{{outline:none;border-color:#c9a05a}}
+  button{{background:#c9a05a;color:#0a0a09;border:none;border-radius:10px;padding:0 22px;font-weight:600;font-size:0.9rem;cursor:pointer}}
+  .row{{background:#131210;border:1px solid rgba(255,255,255,.06);border-radius:12px;padding:16px 18px;margin-bottom:10px}}
+  .row-top{{margin-bottom:10px}}
+  .who{{display:flex;flex-direction:column}}
+  .name{{font-family:'Playfair Display',serif;font-size:1.2rem;font-weight:600}}
+  .pet{{font-size:0.76rem;color:rgba(242,237,226,.5);margin-top:2px}}
+  .row-bottom{{font-size:0.78rem;color:rgba(242,237,226,.55)}}
+  .contacts{{display:flex;align-items:center;gap:10px}}
+  .phone{{color:#c9a05a;text-decoration:none}}
+  .wa{{color:#4ade80;text-decoration:none;font-size:0.72rem;font-weight:600;border:1px solid rgba(74,222,128,.35);border-radius:20px;padding:3px 10px}}
+  .row-hint{{margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,.06);font-size:0.7rem;color:rgba(201,160,90,.7);font-style:italic}}
+  .empty{{text-align:center;padding:40px 0;color:rgba(242,237,226,.4);font-size:0.85rem}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="eyebrow">R&J Grooming · Поиск</div>
+  <h1>Найти клиента</h1>
+  <form method="get">
+    <input type="hidden" name="pass" value="rjadmin2024">
+    <input type="text" name="q" placeholder="Имя, телефон или кличка питомца" value="{query}" autofocus>
+    <button type="submit">Искать</button>
+  </form>
+  {results_html}
+</div>
+</body>
+</html>"""
+    return html, 200, {"Content-Type": "text/html; charset=utf-8"}
+
 @app.route("/admin/reminders")
 def admin_reminders_dashboard():
     if request.args.get("pass") != "rjadmin2024":
