@@ -2536,6 +2536,7 @@ def admin_reminders_dashboard():
         pct = min(100, round(r["days_since"] / 42 * 100))
         meta = STATUS_META[r["status"]]
         email_html = f'<a class="email" href="mailto:{r["email"]}">{r["email"]}</a>' if r.get("email") else '<span class="email-empty">email не указан</span>'
+        wa_digits = re.sub(r"[^\d]", "", r["phone"] or "")
         return f"""
         <div class="row">
           <div class="row-top">
@@ -2553,7 +2554,10 @@ def admin_reminders_dashboard():
           <div class="row-bottom">
             <span>Визит {r['date'].strftime('%d.%m.%Y')} · {r['master'] or '—'}</span>
             <span class="days">{r['days_since']} дн.</span>
-            <a class="phone" href="tel:{r['phone']}">{r['phone']}</a>
+            <span class="contacts">
+              <a class="phone" href="tel:{r['phone']}">{r['phone']}</a>
+              <a class="wa" href="https://wa.me/{wa_digits}" target="_blank" rel="noopener">WhatsApp</a>
+            </span>
           </div>
           <div class="row-contact">{email_html}</div>
         </div>"""
@@ -2592,6 +2596,8 @@ def admin_reminders_dashboard():
   .row-bottom{{display:flex;justify-content:space-between;align-items:center;font-size:0.74rem;color:rgba(242,237,226,.55)}}
   .row-bottom .days{{font-weight:600;color:#f2ede2}}
   .phone{{color:#c9a05a;text-decoration:none}}
+  .contacts{{display:flex;align-items:center;gap:10px}}
+  .wa{{color:#4ade80;text-decoration:none;font-size:0.72rem;font-weight:600;border:1px solid rgba(74,222,128,.35);border-radius:20px;padding:3px 10px}}
   .row-contact{{margin-top:6px;font-size:0.74rem}}
   .row-contact .email{{color:rgba(242,237,226,.65);text-decoration:none}}
   .row-contact .email-empty{{color:rgba(242,237,226,.3);font-style:italic}}
