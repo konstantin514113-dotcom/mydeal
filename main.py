@@ -2554,6 +2554,95 @@ def _build_client_export_workbook():
     filename = f"RJ_Grooming_clients_{datetime.now().strftime('%Y%m%d')}.xlsx"
     return buf.getvalue(), filename
 
+@app.route("/admin")
+def admin_hub():
+    if request.args.get("pass") != "rjadmin2024":
+        return "Доступ запрещён. Добавь ?pass=rjadmin2024 в конец ссылки.", 403
+
+    due_badge = ""
+    try:
+        rows, _ = _get_reminder_dashboard_rows()
+        due_now = sum(1 for r in rows if (r["status"] == "stage1" and not r["stage1_done"]) or (r["status"] == "done" and not r["stage2_done"]))
+        if due_now:
+            due_badge = f'<span class="card-badge">{due_now}</span>'
+    except Exception:
+        pass
+
+    P = "?pass=rjadmin2024"
+    html = f"""<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>R&J Grooming — Панель администратора</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,500;0,600;0,700;1,500&family=Montserrat:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  *{{box-sizing:border-box;margin:0;padding:0}}
+  body{{background:#0a0a09;color:#f2ede2;font-family:'Montserrat',sans-serif;padding:44px 20px 80px}}
+  .wrap{{max-width:680px;margin:0 auto}}
+  .eyebrow{{font-size:0.68rem;letter-spacing:.3em;text-transform:uppercase;color:rgba(242,237,226,.4);margin-bottom:10px}}
+  h1{{font-family:'Playfair Display',serif;font-weight:600;font-size:2.3rem;margin-bottom:4px}}
+  .sub{{font-size:0.8rem;color:rgba(242,237,226,.5);margin-bottom:40px}}
+  .section-label{{font-size:0.66rem;letter-spacing:.2em;text-transform:uppercase;color:#c9a05a;margin:28px 0 14px}}
+  .cards{{display:flex;flex-direction:column;gap:12px}}
+  .card{{position:relative;display:flex;align-items:center;gap:16px;background:#141310;border:1px solid rgba(201,160,90,.18);border-radius:14px;padding:20px 22px;text-decoration:none;color:#f2ede2;transition:border-color .15s}}
+  .card:active{{border-color:rgba(201,160,90,.5)}}
+  .card-icon{{font-size:1.6rem;width:48px;height:48px;border-radius:12px;background:rgba(201,160,90,.12);display:flex;align-items:center;justify-content:center;flex-shrink:0}}
+  .card-txt{{flex:1}}
+  .card-name{{font-family:'Playfair Display',serif;font-size:1.25rem;font-weight:600}}
+  .card-desc{{font-size:0.78rem;color:rgba(242,237,226,.5);margin-top:3px}}
+  .card-arrow{{color:rgba(201,160,90,.6);font-size:1.2rem}}
+  .card-badge{{position:absolute;top:-8px;right:-8px;background:#e0824a;color:#0a0a09;font-size:0.72rem;font-weight:700;min-width:22px;height:22px;border-radius:12px;display:flex;align-items:center;justify-content:center;padding:0 6px}}
+  .secondary{{display:flex;gap:10px;flex-wrap:wrap}}
+  .schip{{flex:1;min-width:140px;text-align:center;background:#141310;border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:12px 10px;text-decoration:none;color:rgba(242,237,226,.75);font-size:0.78rem}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="eyebrow">R&J Grooming</div>
+  <h1>Панель администратора</h1>
+  <div class="sub">Бронирование, статистика и напоминания — в одном месте</div>
+
+  <div class="section-label">Модули</div>
+  <div class="cards">
+    <a class="card" href="/app">
+      <div class="card-icon">📅</div>
+      <div class="card-txt">
+        <div class="card-name">Бронирование</div>
+        <div class="card-desc">Виджет онлайн-записи для клиентов</div>
+      </div>
+      <div class="card-arrow">→</div>
+    </a>
+    <a class="card" href="/stats{P}">
+      <div class="card-icon">📊</div>
+      <div class="card-txt">
+        <div class="card-name">Статистика</div>
+        <div class="card-desc">Выручка, записи, доли по мастерам</div>
+      </div>
+      <div class="card-arrow">→</div>
+    </a>
+    <a class="card" href="/admin/reminders{P}">
+      {due_badge}
+      <div class="card-icon">🔔</div>
+      <div class="card-txt">
+        <div class="card-name">Напоминания</div>
+        <div class="card-desc">Клиенты без визита 35+ дней</div>
+      </div>
+      <div class="card-arrow">→</div>
+    </a>
+  </div>
+
+  <div class="section-label">Ещё</div>
+  <div class="secondary">
+    <a class="schip" href="/admin/search{P}">🔍 Поиск клиента</a>
+    <a class="schip" href="/admin/export-clients{P}">⬇️ Excel-выгрузка</a>
+    <a class="schip" href="/admin/whatsapp{P}">💬 WhatsApp-бот</a>
+  </div>
+</div>
+</body>
+</html>"""
+    return html, 200, {"Content-Type": "text/html; charset=utf-8"}
+
 @app.route("/admin/search")
 def admin_client_search():
     if request.args.get("pass") != "rjadmin2024":
