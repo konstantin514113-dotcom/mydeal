@@ -1128,6 +1128,66 @@ def api_upload_pet_photo():
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 
+# ── РУЧНЫЕ ДАННЫЕ КЛИЕНТА (email, Instagram) — Cloudinary raw, постоянно ──
+def _client_data_key(phone):
+    import hashlib
+    return hashlib.sha1((phone or "").strip().lower().encode("utf-8")).hexdigest()
+
+def _client_data_public_id(key):
+    return f"rjgrooming/client_data/{key}.json"
+
+def _client_data_url(key):
+    return f"https://res.cloudinary.com/{CLOUDINARY_CLOUD_NAME}/raw/upload/{_client_data_public_id(key)}"
+
+def _load_client_data(phone):
+    key = _client_data_key(phone)
+    try:
+        r = requests.get(_client_data_url(key), timeout=8)
+        if r.status_code == 200:
+            return r.json()
+    except Exception:
+        pass
+    return {}
+
+@app.route("/api/save-client-data", methods=["POST"])
+def api_save_client_data():
+    import hashlib as _hashlib
+    body = request.get_json(force=True) or {}
+    phone = (body.get("phone") or "").strip()
+    if not phone:
+        return jsonify({"success": False, "error": "phone обязателен"}), 400
+
+    email = (body.get("email") or "").strip()
+    instagram = (body.get("instagram") or "").strip().lstrip("@")
+    payload = json.dumps({"email": email, "instagram": instagram}, ensure_ascii=False)
+
+    key = _client_data_key(phone)
+    public_id = _client_data_public_id(key)
+    timestamp = int(_time.time())
+    params_to_sign = {"overwrite": "true", "public_id": public_id, "timestamp": timestamp}
+    to_sign = "&".join(f"{k}={v}" for k, v in sorted(params_to_sign.items()))
+    signature = _hashlib.sha1((to_sign + CLOUDINARY_API_SECRET).encode("utf-8")).hexdigest()
+
+    try:
+        resp = requests.post(
+            f"https://api.cloudinary.com/v1_1/{CLOUDINARY_CLOUD_NAME}/raw/upload",
+            data={
+                "api_key": CLOUDINARY_API_KEY,
+                "timestamp": timestamp,
+                "public_id": public_id,
+                "overwrite": "true",
+                "signature": signature,
+            },
+            files={"file": ("data.json", payload, "application/json")},
+            timeout=20
+        )
+        rbody = resp.json()
+        if resp.status_code != 200 or "secure_url" not in rbody:
+            return jsonify({"success": False, "error": rbody.get("error", {}).get("message", "Cloudinary upload failed")}), 500
+        return jsonify({"success": True, "email": email, "instagram": instagram})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
 def _get_reminder_dashboard_rows():
     """Общая функция: последний визит на клиента за последние 40 дней,
     с расчётом стадии напоминания. Используется дашбордом и отчётами."""
@@ -2667,6 +2727,12 @@ def admin_client_detail():
     except Exception as e:
         error = str(e)
 
+    saved_data = _load_client_data(phone)
+    if saved_data.get("email"):
+        email = saved_data["email"]
+    if saved_data.get("instagram"):
+        instagram = saved_data["instagram"]
+
     wa_digits = re.sub(r"[^\d]", "", phone)
     pets_str = ", ".join(f"{p} ({b})" if b else p for p, b in pets.items()) or "—"
     last_visit_str = visits[0]["date_str"] if visits else "—"
@@ -2728,6 +2794,16 @@ def admin_client_detail():
 
   .card{{background:#141310;border:1px solid rgba(255,255,255,.07);border-radius:14px;padding:20px;margin-bottom:16px}}
   .card-title{{font-size:0.66rem;letter-spacing:.15em;text-transform:uppercase;color:#c9a05a;margin-bottom:14px}}
+  .card-title-row{{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}}
+  .card-title-row .card-title{{margin-bottom:0}}
+  .edit-btn{{background:none;border:1px solid rgba(201,160,90,.35);color:#c9a05a;font-size:0.68rem;padding:5px 12px;border-radius:20px;cursor:pointer;font-family:'Montserrat',sans-serif}}
+  .edit-field{{margin-bottom:14px}}
+  .edit-field label{{display:block;font-size:0.72rem;color:rgba(242,237,226,.5);margin-bottom:6px}}
+  .edit-field input{{width:100%;background:#0e0d0b;border:1px solid rgba(201,160,90,.3);border-radius:8px;padding:10px 12px;color:#f2ede2;font-family:'Montserrat',sans-serif;font-size:0.88rem}}
+  .edit-field input:focus{{outline:none;border-color:#c9a05a}}
+  .edit-actions{{display:flex;gap:8px;margin-top:4px}}
+  .edit-save{{flex:1;background:#c9a05a;color:#0a0a09;border:none;border-radius:8px;padding:11px;font-weight:600;font-size:0.85rem;cursor:pointer}}
+  .edit-cancel{{flex:1;background:none;border:1px solid rgba(255,255,255,.15);color:rgba(242,237,226,.6);border-radius:8px;padding:11px;font-size:0.85rem;cursor:pointer}}
   .contact-line{{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid rgba(255,255,255,.05)}}
   .contact-line:last-child{{border-bottom:none}}
   .contact-label{{font-size:0.78rem;color:rgba(242,237,226,.5)}}
@@ -2778,11 +2854,30 @@ def admin_client_detail():
   </div>
 
   <div class="card">
-    <div class="card-title">Контакты</div>
-    <div class="contact-line"><span class="contact-label">Телефон</span><a class="contact-val link" href="tel:{phone}">{phone}</a></div>
-    <div class="contact-line"><span class="contact-label">Email</span>{email_html}</div>
-    <div class="contact-line"><span class="contact-label">Instagram</span>{ig_html}</div>
-    <div class="contact-line"><span class="contact-label">Первый визит</span><span class="contact-val">{first_visit_str}</span></div>
+    <div class="card-title-row">
+      <div class="card-title">Контакты</div>
+      <button class="edit-btn" onclick="toggleEditContacts()" id="editBtnLabel">✏️ Изменить</button>
+    </div>
+    <div id="contactsView">
+      <div class="contact-line"><span class="contact-label">Телефон</span><a class="contact-val link" href="tel:{phone}">{phone}</a></div>
+      <div class="contact-line"><span class="contact-label">Email</span>{email_html}</div>
+      <div class="contact-line"><span class="contact-label">Instagram</span>{ig_html}</div>
+      <div class="contact-line"><span class="contact-label">Первый визит</span><span class="contact-val">{first_visit_str}</span></div>
+    </div>
+    <div id="contactsEdit" style="display:none">
+      <div class="edit-field">
+        <label>Email</label>
+        <input type="email" id="editEmail" value="{email}" placeholder="client@example.com">
+      </div>
+      <div class="edit-field">
+        <label>Instagram (без @)</label>
+        <input type="text" id="editInstagram" value="{instagram}" placeholder="username">
+      </div>
+      <div class="edit-actions">
+        <button class="edit-save" onclick="saveContacts('{_urlp.quote(phone)}')">Сохранить</button>
+        <button class="edit-cancel" onclick="toggleEditContacts()">Отмена</button>
+      </div>
+    </div>
   </div>
 
   <div class="list-label">Анкеты питомцев</div>
@@ -2794,6 +2889,39 @@ def admin_client_detail():
 </div>
 <div id="uploadToast" class="upload-toast"></div>
 <script>
+function toggleEditContacts(){{
+  var view = document.getElementById('contactsView');
+  var edit = document.getElementById('contactsEdit');
+  var isEditing = edit.style.display !== 'none';
+  view.style.display = isEditing ? '' : 'none';
+  edit.style.display = isEditing ? 'none' : '';
+}}
+function saveContacts(phoneEncoded){{
+  var email = document.getElementById('editEmail').value.trim();
+  var instagram = document.getElementById('editInstagram').value.trim();
+  var toast = document.getElementById('uploadToast');
+  toast.textContent = 'Сохраняю...';
+  toast.classList.add('show');
+  fetch('/api/save-client-data', {{
+    method: 'POST',
+    headers: {{'Content-Type': 'application/json'}},
+    body: JSON.stringify({{phone: decodeURIComponent(phoneEncoded), email: email, instagram: instagram}})
+  }})
+  .then(function(r){{ return r.json(); }})
+  .then(function(data){{
+    if(data.success){{
+      toast.textContent = 'Сохранено ✓';
+      setTimeout(function(){{ location.reload(); }}, 600);
+    }} else {{
+      toast.textContent = 'Ошибка: ' + (data.error || 'не удалось сохранить');
+      setTimeout(function(){{ toast.classList.remove('show'); }}, 2500);
+    }}
+  }})
+  .catch(function(){{
+    toast.textContent = 'Ошибка сохранения';
+    setTimeout(function(){{ toast.classList.remove('show'); }}, 2500);
+  }});
+}}
 function uploadPetPhoto(input, key, phone, pet){{
   var file = input.files[0];
   if(!file) return;
