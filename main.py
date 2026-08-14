@@ -2554,6 +2554,138 @@ def _build_client_export_workbook():
     filename = f"RJ_Grooming_clients_{datetime.now().strftime('%Y%m%d')}.xlsx"
     return buf.getvalue(), filename
 
+@app.route("/admin/clients")
+def admin_clients_page():
+    if request.args.get("pass") != "anza1985":
+        return "Доступ запрещён. Добавь ?pass=anza1985 в конец ссылки.", 403
+
+    error = None
+    clients = []
+    try:
+        today = datetime.now(_REMINDER_TZ).date() if _REMINDER_TZ else datetime.utcnow().date()
+        params = {"action": "stats", "from": "01.01.2020", "to": (today + timedelta(days=180)).strftime("%d.%m.%Y")}
+        r = requests.get(GOOGLE_SCRIPT, params=params, timeout=30)
+        data = r.json()
+        bookings = data.get("bookings", []) if isinstance(data, dict) else []
+
+        def parse_date(s):
+            try:
+                return datetime.strptime(s, "%d.%m.%Y").date()
+            except Exception:
+                return None
+
+        by_phone = {}
+        for b in bookings:
+            phone = (b.get("clientPhone") or "").strip()
+            if not phone:
+                continue
+            d = parse_date(b.get("date", ""))
+            entry = by_phone.setdefault(phone, {
+                "name": b.get("clientName", ""), "phone": phone, "pets": {},
+                "visits": 0, "total": 0.0, "last_date": None, "last_master": ""
+            })
+            if b.get("clientName"):
+                entry["name"] = b.get("clientName")
+            pet = b.get("petName", "")
+            breed = b.get("breed", "")
+            if pet:
+                entry["pets"][pet] = breed
+            entry["visits"] += 1
+            try:
+                entry["total"] += float(b.get("price") or 0)
+            except Exception:
+                pass
+            if d and (not entry["last_date"] or d > entry["last_date"]):
+                entry["last_date"] = d
+                entry["last_master"] = b.get("master", "")
+
+        clients = sorted(by_phone.values(), key=lambda c: c["last_date"] or datetime.min.date(), reverse=True)
+    except Exception as e:
+        error = str(e)
+
+    def client_html(c):
+        wa_digits = re.sub(r"[^\d]", "", c["phone"] or "")
+        pets_str = ", ".join(f"{p} ({b})" if b else p for p, b in c["pets"].items()) or "—"
+        last_str = c["last_date"].strftime("%d.%m.%Y") if c["last_date"] else "—"
+        return f"""
+        <div class="row">
+          <div class="row-top">
+            <div class="who">
+              <span class="name">{c['name'] or '—'}</span>
+              <span class="pet">{pets_str}</span>
+            </div>
+            <div class="visits-badge">{c['visits']} {'визит' if c['visits']==1 else 'визита' if 2<=c['visits']<=4 else 'визитов'}</div>
+          </div>
+          <div class="row-bottom">
+            <span>Последний визит: {last_str} · {c['last_master'] or '—'}</span>
+            <span class="days">{c['total']:.0f}€</span>
+          </div>
+          <div class="row-bottom" style="margin-top:6px">
+            <span class="contacts">
+              <a class="phone" href="tel:{c['phone']}">{c['phone']}</a>
+              <a class="wa" href="https://wa.me/{wa_digits}" target="_blank" rel="noopener">WhatsApp</a>
+            </span>
+          </div>
+        </div>"""
+
+    rows_html = "".join(client_html(c) for c in clients) if clients else '<div class="empty">Клиентов не найдено</div>'
+    error_html = f'<div class="empty" style="color:#e0824a">Ошибка загрузки данных: {error}</div>' if error else ""
+    total_revenue = sum(c["total"] for c in clients)
+
+    html = f"""<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>R&J Grooming — Клиенты</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,500;0,600;0,700;1,500&family=Montserrat:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  *{{box-sizing:border-box;margin:0;padding:0}}
+  body{{background:#0a0a09;color:#f2ede2;font-family:'Montserrat',sans-serif;padding:36px 20px 80px}}
+  .wrap{{max-width:720px;margin:0 auto}}
+  .eyebrow{{font-size:0.68rem;letter-spacing:.3em;text-transform:uppercase;color:rgba(242,237,226,.4);margin-bottom:10px}}
+  .back-link{{display:inline-block;font-size:0.74rem;color:rgba(201,160,90,.75);text-decoration:none;margin-bottom:16px}}
+  h1{{font-family:'Playfair Display',serif;font-weight:600;font-size:2.1rem;margin-bottom:6px}}
+  .sub{{font-size:0.78rem;color:rgba(242,237,226,.5);margin-bottom:32px}}
+  .stats{{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-bottom:32px}}
+  .stat{{background:#151310;border:1px solid rgba(201,160,90,.18);border-radius:12px;padding:18px 14px}}
+  .stat .n{{font-family:'Playfair Display',serif;font-size:1.9rem;font-weight:600;color:#c9a05a}}
+  .stat .l{{font-size:0.66rem;letter-spacing:.08em;text-transform:uppercase;color:rgba(242,237,226,.5);margin-top:4px}}
+  .list-label{{font-size:0.68rem;letter-spacing:.2em;text-transform:uppercase;color:#c9a05a;margin-bottom:14px}}
+  .row{{background:#131210;border:1px solid rgba(255,255,255,.06);border-radius:12px;padding:16px 18px;margin-bottom:10px}}
+  .row-top{{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:10px}}
+  .who{{display:flex;flex-direction:column}}
+  .name{{font-family:'Playfair Display',serif;font-size:1.15rem;font-weight:600}}
+  .pet{{font-size:0.76rem;color:rgba(242,237,226,.5);margin-top:2px}}
+  .visits-badge{{font-size:0.62rem;letter-spacing:.04em;color:#c9a05a;border:1px solid rgba(201,160,90,.35);background:rgba(201,160,90,.08);padding:5px 10px;border-radius:20px;white-space:nowrap;flex-shrink:0}}
+  .row-bottom{{display:flex;justify-content:space-between;align-items:center;font-size:0.74rem;color:rgba(242,237,226,.55)}}
+  .row-bottom .days{{font-weight:600;color:#f2ede2}}
+  .contacts{{display:flex;align-items:center;gap:10px}}
+  .phone{{color:#c9a05a;text-decoration:none}}
+  .wa{{color:#4ade80;text-decoration:none;font-size:0.72rem;font-weight:600;border:1px solid rgba(74,222,128,.35);border-radius:20px;padding:3px 10px}}
+  .empty{{text-align:center;padding:40px 0;color:rgba(242,237,226,.4);font-size:0.85rem}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a href="/admin?pass=anza1985" class="back-link">← Админ-панель</a>
+  <div class="eyebrow">R&J Grooming · Клиенты</div>
+  <h1>Все клиенты</h1>
+  <div class="sub">Полная база — вся история бронирований</div>
+
+  <div class="stats">
+    <div class="stat"><div class="n">{len(clients)}</div><div class="l">клиентов</div></div>
+    <div class="stat"><div class="n">{total_revenue:.0f}€</div><div class="l">выручка всего</div></div>
+  </div>
+
+  <div class="list-label">Список ({len(clients)})</div>
+  {error_html}
+  {rows_html}
+</div>
+</body>
+</html>"""
+    return html, 200, {"Content-Type": "text/html; charset=utf-8"}
+
 @app.route("/admin")
 def admin_hub():
     if request.args.get("pass") != "anza1985":
@@ -2627,6 +2759,14 @@ def admin_hub():
       <div class="card-txt">
         <div class="card-name">Напоминания</div>
         <div class="card-desc">Клиенты без визита 35+ дней</div>
+      </div>
+      <div class="card-arrow">→</div>
+    </a>
+    <a class="card" href="/admin/clients{P}">
+      <div class="card-icon">👥</div>
+      <div class="card-txt">
+        <div class="card-name">Клиенты</div>
+        <div class="card-desc">Вся база — история визитов и контакты</div>
       </div>
       <div class="card-arrow">→</div>
     </a>
