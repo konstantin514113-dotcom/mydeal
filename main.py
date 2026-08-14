@@ -3379,8 +3379,16 @@ def admin_reminders_dashboard():
             checks += f'<label class="chk"><input type="checkbox" data-phone="{r["phone"]}" data-date="{date_str}" data-stage="2" {c2}> Напоминание #2 отправлено</label>'
         checks_html = f'<div class="row-checks">{checks}</div>' if checks else ""
 
+        if r["days_since"] >= 42:
+            needs_action = not r["stage2_done"]
+        elif r["days_since"] >= 35:
+            needs_action = not r["stage1_done"]
+        else:
+            needs_action = False
+        pulse_class = " pulse" if needs_action else ""
+
         return f"""
-        <div class="row">
+        <div class="row{pulse_class}">
           <div class="row-top">
             <div class="who">
               <span class="name">{r['name'] or '—'}</span>
@@ -3429,6 +3437,11 @@ def admin_reminders_dashboard():
   .stat .l{{font-size:0.66rem;letter-spacing:.08em;text-transform:uppercase;color:rgba(242,237,226,.5);margin-top:4px}}
   .list-label{{font-size:0.68rem;letter-spacing:.2em;text-transform:uppercase;color:#c9a05a;margin-bottom:14px}}
   .row{{background:#131210;border:1px solid rgba(255,255,255,.06);border-radius:12px;padding:16px 18px;margin-bottom:10px}}
+  .row.pulse{{animation:rowPulse 1.8s ease-in-out infinite}}
+  @keyframes rowPulse{{
+    0%,100%{{border-color:rgba(224,82,74,.25);box-shadow:0 0 0 0 rgba(224,82,74,.15)}}
+    50%{{border-color:rgba(224,82,74,.75);box-shadow:0 0 0 4px rgba(224,82,74,.08)}}
+  }}
   .row-top{{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:12px}}
   .who{{display:flex;flex-direction:column}}
   .name{{font-family:'Playfair Display',serif;font-size:1.15rem;font-weight:600}}
