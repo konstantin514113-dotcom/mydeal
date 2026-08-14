@@ -2688,8 +2688,8 @@ def admin_reminders_dashboard():
     except Exception as e:
         rows, today, error = [], datetime.now(_REMINDER_TZ).date() if _REMINDER_TZ else datetime.utcnow().date(), str(e)
 
-    stage1_count = sum(1 for r in rows if r["status"] == "stage1")
-    stage2_count = sum(1 for r in rows if r["status"] == "done")
+    stage1_count = sum(1 for r in rows if r["status"] == "stage1" and not r["stage1_done"])
+    stage2_count = sum(1 for r in rows if r["status"] == "done" and not r["stage2_done"])
     pending_count = sum(1 for r in rows if r["status"] == "pending")
 
     STATUS_META = {
@@ -2824,8 +2824,8 @@ def admin_reminders_dashboard():
   <div class="sub">Окно 40 дней от последнего визита · {today.strftime('%d.%m.%Y')}</div>
 
   <div class="stats">
-    <div class="stat"><div class="n">{stage1_count}</div><div class="l">напоминание #1</div></div>
-    <div class="stat"><div class="n">{stage2_count}</div><div class="l">напоминание #2</div></div>
+    <div class="stat"><div class="n" id="statStage1">{stage1_count}</div><div class="l">напоминание #1</div></div>
+    <div class="stat"><div class="n" id="statStage2">{stage2_count}</div><div class="l">напоминание #2</div></div>
     <div class="stat"><div class="n">{pending_count}</div><div class="l">ожидают</div></div>
   </div>
 
@@ -2837,13 +2837,19 @@ def admin_reminders_dashboard():
 document.addEventListener('change', function(e){{
   if(e.target && e.target.matches('.chk input[type="checkbox"]')){{
     var el = e.target;
+    var stage = parseInt(el.getAttribute('data-stage'), 10);
+    var counterEl = document.getElementById(stage === 1 ? 'statStage1' : 'statStage2');
+    if(counterEl){{
+      var n = parseInt(counterEl.textContent, 10) || 0;
+      counterEl.textContent = el.checked ? Math.max(0, n - 1) : n + 1;
+    }}
     fetch('/api/mark-reminder', {{
       method: 'POST',
       headers: {{'Content-Type': 'application/json'}},
       body: JSON.stringify({{
         phone: el.getAttribute('data-phone'),
         date: el.getAttribute('data-date'),
-        stage: parseInt(el.getAttribute('data-stage'), 10),
+        stage: stage,
         done: el.checked
       }})
     }}).catch(function(err){{ console.error('mark-reminder failed', err); }});
