@@ -2685,6 +2685,64 @@ def _build_client_export_workbook():
         ws2.column_dimensions[col[0].column_letter].width = min(max_len + 3, 40)
     ws2.freeze_panes = "A2"
 
+    # ── Лист 3: Дубли (по формату номера и по совпадению имени) ──
+    by_raw_phone = {}
+    for b in bookings:
+        raw_phone = (b.get("clientPhone") or "").strip()
+        if not raw_phone:
+            continue
+        norm = _normalize_phone(raw_phone)
+        entry = by_raw_phone.setdefault(raw_phone, {"norm": norm, "names": set(), "pets": set(), "count": 0})
+        if b.get("clientName"):
+            entry["names"].add(b.get("clientName"))
+        if b.get("petName"):
+            entry["pets"].add(b.get("petName"))
+        entry["count"] += 1
+
+    by_norm = {}
+    for raw_phone, info in by_raw_phone.items():
+        by_norm.setdefault(info["norm"], []).append({"raw": raw_phone, **info})
+
+    by_name = {}
+    for raw_phone, info in by_raw_phone.items():
+        for nm in info["names"]:
+            nk = nm.strip().lower()
+            if nk:
+                by_name.setdefault(nk, set()).add(info["norm"])
+
+    ws3 = wb.create_sheet("Дубли")
+    ws3.append(["Тип дубля", "Телефон / Имя", "Детали"])
+    for col_idx in range(1, 4):
+        cell = ws3.cell(row=1, column=col_idx)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = Alignment(horizontal="center")
+
+    for norm, variants in by_norm.items():
+        if len(variants) > 1:
+            for v in variants:
+                ws3.append([
+                    "Один номер, разный формат",
+                    norm,
+                    f"как записано: {v['raw']} | имена: {', '.join(sorted(v['names']))} | питомцы: {', '.join(sorted(v['pets']))} | броней: {v['count']}"
+                ])
+
+    for name_key, phones in by_name.items():
+        if len(phones) > 1:
+            ws3.append([
+                "Одно имя, разные номера",
+                name_key,
+                f"телефоны: {', '.join(sorted(phones))}"
+            ])
+
+    for row in ws3.iter_rows(min_row=2):
+        for cell in row:
+            cell.font = Font(name="Arial")
+    for col in ws3.columns:
+        max_len = max((len(str(c.value)) for c in col if c.value is not None), default=10)
+        ws3.column_dimensions[col[0].column_letter].width = min(max_len + 3, 60)
+    ws3.freeze_panes = "A2"
+
     buf = BytesIO()
     wb.save(buf)
     buf.seek(0)
