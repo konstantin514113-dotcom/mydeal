@@ -3012,6 +3012,68 @@ function uploadPetPhoto(input, key, phone, pet){{
 </html>"""
     return html, 200, {"Content-Type": "text/html; charset=utf-8"}
 
+@app.route("/api/find-duplicates")
+def api_find_duplicates():
+    try:
+        today = datetime.now(_REMINDER_TZ).date() if _REMINDER_TZ else datetime.utcnow().date()
+        params = {"action": "stats", "from": "01.01.2020", "to": (today + timedelta(days=180)).strftime("%d.%m.%Y")}
+        r = requests.get(GOOGLE_SCRIPT, params=params, timeout=30)
+        data = r.json()
+        bookings = data.get("bookings", []) if isinstance(data, dict) else []
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+    by_raw_phone = {}
+    for b in bookings:
+        raw_phone = (b.get("clientPhone") or "").strip()
+        if not raw_phone:
+            continue
+        norm = _normalize_phone(raw_phone)
+        entry = by_raw_phone.setdefault(raw_phone, {"norm": norm, "names": set(), "pets": set(), "count": 0})
+        if b.get("clientName"):
+            entry["names"].add(b.get("clientName"))
+        if b.get("petName"):
+            entry["pets"].add(b.get("petName"))
+        entry["count"] += 1
+
+    # Группировка по нормализованному телефону — ловим разные форматы одного номера
+    by_norm = {}
+    for raw_phone, info in by_raw_phone.items():
+        by_norm.setdefault(info["norm"], []).append({"raw": raw_phone, **info})
+
+    phone_dupes = []
+    for norm, variants in by_norm.items():
+        if len(variants) > 1:
+            phone_dupes.append({
+                "normalized_phone": norm,
+                "variants": [
+                    {"raw_phone": v["raw"], "names": sorted(v["names"]), "pets": sorted(v["pets"]), "bookings_count": v["count"]}
+                    for v in variants
+                ]
+            })
+
+    # Совпадение имени при разных телефонах — возможный дубль под другим номером
+    by_name = {}
+    for raw_phone, info in by_raw_phone.items():
+        for name in info["names"]:
+            name_key = name.strip().lower()
+            if not name_key:
+                continue
+            by_name.setdefault(name_key, set()).add(info["norm"])
+
+    name_dupes = []
+    for name_key, phones in by_name.items():
+        if len(phones) > 1:
+            name_dupes.append({"name": name_key, "phones": sorted(phones)})
+
+    return jsonify({
+        "success": True,
+        "phone_format_duplicates": phone_dupes,
+        "same_name_different_phone": name_dupes,
+        "phone_dupes_count": len(phone_dupes),
+        "name_dupes_count": len(name_dupes)
+    })
+
 @app.route("/admin/clients")
 def admin_clients_page():
     import urllib.parse as _urlp
