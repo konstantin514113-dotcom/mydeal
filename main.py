@@ -1157,9 +1157,15 @@ def api_save_client_data():
     if not phone:
         return jsonify({"success": False, "error": "phone обязателен"}), 400
 
+    name = (body.get("name") or "").strip()
+    phone_override = (body.get("phone_override") or "").strip()
     email = (body.get("email") or "").strip()
     instagram = (body.get("instagram") or "").strip().lstrip("@")
-    payload = json.dumps({"email": email, "instagram": instagram}, ensure_ascii=False)
+    comment = (body.get("comment") or "").strip()
+    payload = json.dumps({
+        "name": name, "phone_override": phone_override,
+        "email": email, "instagram": instagram, "comment": comment
+    }, ensure_ascii=False)
 
     key = _client_data_key(phone)
     public_id = _client_data_public_id(key)
@@ -1184,7 +1190,7 @@ def api_save_client_data():
         rbody = resp.json()
         if resp.status_code != 200 or "secure_url" not in rbody:
             return jsonify({"success": False, "error": rbody.get("error", {}).get("message", "Cloudinary upload failed")}), 500
-        return jsonify({"success": True, "email": email, "instagram": instagram})
+        return jsonify({"success": True, "name": name, "phone_override": phone_override, "email": email, "instagram": instagram, "comment": comment})
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 
@@ -2730,8 +2736,12 @@ def admin_client_detail():
         email = saved_data["email"]
     if saved_data.get("instagram"):
         instagram = saved_data["instagram"]
+    if saved_data.get("name"):
+        name = saved_data["name"]
+    comment = saved_data.get("comment", "")
+    display_phone = saved_data.get("phone_override") or phone
 
-    wa_digits = re.sub(r"[^\d]", "", phone)
+    wa_digits = re.sub(r"[^\d]", "", display_phone)
     pets_str = ", ".join(f"{p} ({b})" if b else p for p, b in pets.items()) or "—"
     last_visit_str = visits[0]["date_str"] if visits else "—"
     first_visit_str = visits[-1]["date_str"] if visits else "—"
@@ -2799,6 +2809,8 @@ def admin_client_detail():
   .edit-field label{{display:block;font-size:0.72rem;color:rgba(242,237,226,.5);margin-bottom:6px}}
   .edit-field input{{width:100%;background:#0e0d0b;border:1px solid rgba(201,160,90,.3);border-radius:8px;padding:10px 12px;color:#f2ede2;font-family:'Montserrat',sans-serif;font-size:0.88rem}}
   .edit-field input:focus{{outline:none;border-color:#c9a05a}}
+  .edit-field textarea{{width:100%;background:#0e0d0b;border:1px solid rgba(201,160,90,.3);border-radius:8px;padding:10px 12px;color:#f2ede2;font-family:'Montserrat',sans-serif;font-size:0.88rem;min-height:80px;resize:vertical}}
+  .edit-field textarea:focus{{outline:none;border-color:#c9a05a}}
   .edit-actions{{display:flex;gap:8px;margin-top:4px}}
   .edit-save{{flex:1;background:#c9a05a;color:#0a0a09;border:none;border-radius:8px;padding:11px;font-weight:600;font-size:0.85rem;cursor:pointer}}
   .edit-cancel{{flex:1;background:none;border:1px solid rgba(255,255,255,.15);color:rgba(242,237,226,.6);border-radius:8px;padding:11px;font-size:0.85rem;cursor:pointer}}
@@ -2841,7 +2853,7 @@ def admin_client_detail():
   <div class="pets-sub">{pets_str}</div>
 
   <div class="actions">
-    <a class="abtn call" href="tel:{phone}">📞 Позвонить</a>
+    <a class="abtn call" href="tel:{display_phone}">📞 Позвонить</a>
     <a class="abtn wa" href="https://wa.me/{wa_digits}" target="_blank" rel="noopener">💬 WhatsApp</a>
   </div>
 
@@ -2857,12 +2869,25 @@ def admin_client_detail():
       <button class="edit-btn" onclick="toggleEditContacts()" id="editBtnLabel">✏️ Изменить</button>
     </div>
     <div id="contactsView">
-      <div class="contact-line"><span class="contact-label">Телефон</span><a class="contact-val link" href="tel:{phone}">{phone}</a></div>
+      <div class="contact-line"><span class="contact-label">Имя</span><span class="contact-val">{name or '—'}</span></div>
+      <div class="contact-line"><span class="contact-label">Телефон</span><a class="contact-val link" href="tel:{display_phone}">{display_phone}</a></div>
       <div class="contact-line"><span class="contact-label">Email</span>{email_html}</div>
       <div class="contact-line"><span class="contact-label">Instagram</span>{ig_html}</div>
       <div class="contact-line"><span class="contact-label">Первый визит</span><span class="contact-val">{first_visit_str}</span></div>
+      <div class="contact-line" style="border-bottom:none;flex-direction:column;align-items:flex-start;gap:4px">
+        <span class="contact-label">Комментарий</span>
+        <span class="contact-val" style="white-space:pre-wrap">{comment or 'нет комментария'}</span>
+      </div>
     </div>
     <div id="contactsEdit" style="display:none">
+      <div class="edit-field">
+        <label>Имя</label>
+        <input type="text" id="editName" value="{name}" placeholder="Имя клиента">
+      </div>
+      <div class="edit-field">
+        <label>Телефон</label>
+        <input type="text" id="editPhone" value="{display_phone}" placeholder="+372...">
+      </div>
       <div class="edit-field">
         <label>Email</label>
         <input type="email" id="editEmail" value="{email}" placeholder="client@example.com">
@@ -2870,6 +2895,10 @@ def admin_client_detail():
       <div class="edit-field">
         <label>Instagram (без @)</label>
         <input type="text" id="editInstagram" value="{instagram}" placeholder="username">
+      </div>
+      <div class="edit-field">
+        <label>Комментарий</label>
+        <textarea id="editComment" placeholder="Заметки о клиенте...">{comment}</textarea>
       </div>
       <div class="edit-actions">
         <button class="edit-save" onclick="saveContacts('{_urlp.quote(phone)}')">Сохранить</button>
@@ -2895,15 +2924,22 @@ function toggleEditContacts(){{
   edit.style.display = isEditing ? 'none' : '';
 }}
 function saveContacts(phoneEncoded){{
+  var name = document.getElementById('editName').value.trim();
+  var phoneOverride = document.getElementById('editPhone').value.trim();
   var email = document.getElementById('editEmail').value.trim();
   var instagram = document.getElementById('editInstagram').value.trim();
+  var comment = document.getElementById('editComment').value.trim();
   var toast = document.getElementById('uploadToast');
   toast.textContent = 'Сохраняю...';
   toast.classList.add('show');
   fetch('/api/save-client-data', {{
     method: 'POST',
     headers: {{'Content-Type': 'application/json'}},
-    body: JSON.stringify({{phone: decodeURIComponent(phoneEncoded), email: email, instagram: instagram}})
+    body: JSON.stringify({{
+      phone: decodeURIComponent(phoneEncoded),
+      name: name, phone_override: phoneOverride,
+      email: email, instagram: instagram, comment: comment
+    }})
   }})
   .then(function(r){{ return r.json(); }})
   .then(function(data){{
