@@ -1080,6 +1080,20 @@ CLOUDINARY_CLOUD_NAME = os.environ.get("CLOUDINARY_CLOUD_NAME", "u35xfusf")
 CLOUDINARY_API_KEY = os.environ.get("CLOUDINARY_API_KEY", "555146516498372")
 CLOUDINARY_API_SECRET = os.environ.get("CLOUDINARY_API_SECRET", "AQTPeJ2sfE0XhjtlCwz_PcM2ZrQ")
 
+def _normalize_phone(phone):
+    """Добавляет +372, если у номера нет кода страны."""
+    p = (phone or "").strip()
+    if not p:
+        return p
+    if p.startswith("+"):
+        return p
+    digits = re.sub(r"[^\d]", "", p)
+    if not digits:
+        return p
+    if digits.startswith("372"):
+        return "+" + digits
+    return "+372" + digits
+
 def _pet_photo_key(phone, pet):
     raw = f"{(phone or '').strip()}|{(pet or '').strip()}".lower()
     import hashlib
@@ -1241,7 +1255,7 @@ def _get_reminder_dashboard_rows():
         stage2_done = bool(saved.get("stage2_done")) if saved.get("last_date") == date_str else False
         client_saved = _load_client_data(phone)
         display_name = client_saved.get("name") or info["name"]
-        display_phone = client_saved.get("phone_override") or phone
+        display_phone = _normalize_phone(client_saved.get("phone_override") or phone)
         display_email = client_saved.get("email") or info["email"]
         rows.append({
             "phone": phone, "display_phone": display_phone, "name": display_name, "pet": info["pet"],
@@ -2743,7 +2757,7 @@ def admin_client_detail():
     if saved_data.get("name"):
         name = saved_data["name"]
     comment = saved_data.get("comment", "")
-    display_phone = saved_data.get("phone_override") or phone
+    display_phone = _normalize_phone(saved_data.get("phone_override") or phone)
 
     wa_digits = re.sub(r"[^\d]", "", display_phone)
     pets_str = ", ".join(f"{p} ({b})" if b else p for p, b in pets.items()) or "—"
@@ -3046,7 +3060,7 @@ def admin_clients_page():
             saved = _load_client_data(phone)
             if saved.get("name"):
                 entry["name"] = saved["name"]
-            entry["display_phone"] = saved.get("phone_override") or phone
+            entry["display_phone"] = _normalize_phone(saved.get("phone_override") or phone)
 
         clients = sorted(by_phone.values(), key=lambda c: c["last_date"] or datetime.min.date(), reverse=True)
     except Exception as e:
@@ -3287,7 +3301,7 @@ def admin_client_search():
                 saved = _load_client_data(entry["phone"]) if entry["phone"] else {}
                 if saved.get("name"):
                     entry["name"] = saved["name"]
-                entry["display_phone"] = saved.get("phone_override") or entry["phone"]
+                entry["display_phone"] = _normalize_phone(saved.get("phone_override") or entry["phone"])
 
             results = sorted(by_phone.values(), key=lambda x: x["_d"] or datetime.min.date(), reverse=True)
         except Exception as e:
