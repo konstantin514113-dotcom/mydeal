@@ -3032,6 +3032,7 @@ def admin_clients_page():
     rows_html = "".join(client_html(c) for c in clients) if clients else '<div class="empty">Клиентов не найдено</div>'
     error_html = f'<div class="empty" style="color:#e0824a">Ошибка загрузки данных: {error}</div>' if error else ""
     total_revenue = sum(c["total"] for c in clients)
+    total_pets = sum(len(c["pets"]) for c in clients)
 
     html = f"""<!DOCTYPE html>
 <html lang="ru">
@@ -3050,7 +3051,7 @@ def admin_clients_page():
   .sub{{font-size:0.78rem;color:rgba(242,237,226,.5);margin-bottom:20px}}
   .quick-links{{display:flex;gap:10px;margin-bottom:24px}}
   .search-link{{flex:1;display:block;text-align:center;background:rgba(201,160,90,.1);border:1px solid rgba(201,160,90,.4);color:#c9a05a;border-radius:10px;padding:12px;font-size:0.85rem;font-weight:600;text-decoration:none}}
-  .stats{{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-bottom:32px}}
+  .stats{{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:32px}}
   .stat{{background:#151310;border:1px solid rgba(201,160,90,.18);border-radius:12px;padding:18px 14px}}
   .stat .n{{font-family:'Playfair Display',serif;font-size:1.9rem;font-weight:600;color:#c9a05a}}
   .stat .l{{font-size:0.66rem;letter-spacing:.08em;text-transform:uppercase;color:rgba(242,237,226,.5);margin-top:4px}}
@@ -3084,6 +3085,7 @@ def admin_clients_page():
 
   <div class="stats">
     <div class="stat"><div class="n">{len(clients)}</div><div class="l">клиентов</div></div>
+    <div class="stat"><div class="n">{total_pets}</div><div class="l">питомцев</div></div>
     <div class="stat"><div class="n">{total_revenue:.0f}€</div><div class="l">выручка всего</div></div>
   </div>
 
