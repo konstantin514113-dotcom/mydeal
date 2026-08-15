@@ -3278,26 +3278,29 @@ def admin_client_search():
             error = str(e)
 
     def result_html(r):
+        import urllib.parse as _urlp_s
         wa_digits = re.sub(r"[^\d]", "", r["phone"] or "")
+        phone_encoded = _urlp_s.quote(r["phone"] or "")
         return f"""
-        <div class="row">
+        <a class="row" href="/admin/client?phone={phone_encoded}&pass=anza1985">
           <div class="row-top">
             <div class="who">
               <span class="name">{r['name'] or '—'}</span>
               <span class="pet">{r['pet'] or '—'} · {r['breed'] or '—'}</span>
             </div>
+            <span class="row-arrow">→</span>
           </div>
           <div class="row-bottom">
             <span>Последний визит: {r['date'] or '—'} · {r['master'] or '—'}</span>
           </div>
           <div class="row-bottom" style="margin-top:6px">
             <span class="contacts">
-              <a class="phone" href="tel:{r['phone']}">{r['phone'] or '—'}</a>
-              <a class="wa" href="https://wa.me/{wa_digits}" target="_blank" rel="noopener">WhatsApp</a>
+              <span onclick="event.stopPropagation();location.href='tel:{r['phone']}'" style="color:#c9a05a">{r['phone'] or '—'}</span>
+              <span onclick="event.stopPropagation();window.open('https://wa.me/{wa_digits}','_blank')" class="wa">WhatsApp</span>
             </span>
           </div>
           <div class="row-hint">Скопируй имя выше и вставь в поиск Instagram Direct, чтобы найти переписку</div>
-        </div>"""
+        </a>"""
 
     if query and not results and not error:
         results_html = '<div class="empty">Ничего не найдено — проверь написание или попробуй телефон/кличку</div>'
@@ -3326,15 +3329,15 @@ def admin_client_search():
   input[type=text]{{flex:1;background:#151310;border:1px solid rgba(201,160,90,.3);border-radius:10px;padding:14px 16px;color:#f2ede2;font-family:'Montserrat',sans-serif;font-size:0.95rem}}
   input[type=text]:focus{{outline:none;border-color:#c9a05a}}
   button{{background:#c9a05a;color:#0a0a09;border:none;border-radius:10px;padding:0 22px;font-weight:600;font-size:0.9rem;cursor:pointer}}
-  .row{{background:#131210;border:1px solid rgba(255,255,255,.06);border-radius:12px;padding:16px 18px;margin-bottom:10px}}
-  .row-top{{margin-bottom:10px}}
+  .row{{display:block;background:#131210;border:1px solid rgba(255,255,255,.06);border-radius:12px;padding:16px 18px;margin-bottom:10px;text-decoration:none;color:inherit}}
+  .row-top{{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:10px}}
   .who{{display:flex;flex-direction:column}}
   .name{{font-family:'Playfair Display',serif;font-size:1.2rem;font-weight:600}}
   .pet{{font-size:0.76rem;color:rgba(242,237,226,.5);margin-top:2px}}
+  .row-arrow{{color:rgba(201,160,90,.6)}}
   .row-bottom{{font-size:0.78rem;color:rgba(242,237,226,.55)}}
   .contacts{{display:flex;align-items:center;gap:10px}}
-  .phone{{color:#c9a05a;text-decoration:none}}
-  .wa{{color:#4ade80;text-decoration:none;font-size:0.72rem;font-weight:600;border:1px solid rgba(74,222,128,.35);border-radius:20px;padding:3px 10px}}
+  .wa{{color:#4ade80;font-size:0.72rem;font-weight:600;border:1px solid rgba(74,222,128,.35);border-radius:20px;padding:3px 10px;cursor:pointer}}
   .row-hint{{margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,.06);font-size:0.7rem;color:rgba(201,160,90,.7);font-style:italic}}
   .empty{{text-align:center;padding:40px 0;color:rgba(242,237,226,.4);font-size:0.85rem}}
 </style>
