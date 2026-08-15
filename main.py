@@ -3108,6 +3108,9 @@ def admin_hub():
         pass
 
     P = "?pass=anza1985"
+    import urllib.parse as _urlp_hub
+    _calendar_id = "50218a0d445e1be8f510d21128b82c0d33b6a78c57bb5a4ea9d14eb2fbcfeaa6@group.calendar.google.com"
+    gcal_link = f"https://calendar.google.com/calendar/u/0/r?cid={_urlp_hub.quote(_calendar_id)}"
     html = f"""<!DOCTYPE html>
 <html lang="ru">
 <head>
@@ -3174,6 +3177,14 @@ def admin_hub():
       <div class="card-txt">
         <div class="card-name">Клиенты</div>
         <div class="card-desc">Вся база — история визитов и контакты</div>
+      </div>
+      <div class="card-arrow">→</div>
+    </a>
+    <a class="card" href="{gcal_link}" target="_blank" rel="noopener">
+      <div class="card-icon">🗓️</div>
+      <div class="card-txt">
+        <div class="card-name">Google Calendar</div>
+        <div class="card-desc">Сам календарь салона — все брони</div>
       </div>
       <div class="card-arrow">→</div>
     </a>
