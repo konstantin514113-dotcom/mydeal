@@ -1239,9 +1239,13 @@ def _get_reminder_dashboard_rows():
         saved = reminder_status.get(phone, {})
         stage1_done = bool(saved.get("stage1_done")) if saved.get("last_date") == date_str else False
         stage2_done = bool(saved.get("stage2_done")) if saved.get("last_date") == date_str else False
+        client_saved = _load_client_data(phone)
+        display_name = client_saved.get("name") or info["name"]
+        display_phone = client_saved.get("phone_override") or phone
+        display_email = client_saved.get("email") or info["email"]
         rows.append({
-            "phone": phone, "name": info["name"], "pet": info["pet"],
-            "breed": info["breed"], "master": info["master"], "email": info["email"],
+            "phone": phone, "display_phone": display_phone, "name": display_name, "pet": info["pet"],
+            "breed": info["breed"], "master": info["master"], "email": display_email,
             "date": info["date"], "days_since": days_since, "status": stage_status,
             "stage1_done": stage1_done, "stage2_done": stage2_done
         })
@@ -3038,6 +3042,12 @@ def admin_clients_page():
                 entry["last_date"] = d
                 entry["last_master"] = b.get("master", "")
 
+        for phone, entry in by_phone.items():
+            saved = _load_client_data(phone)
+            if saved.get("name"):
+                entry["name"] = saved["name"]
+            entry["display_phone"] = saved.get("phone_override") or phone
+
         clients = sorted(by_phone.values(), key=lambda c: c["last_date"] or datetime.min.date(), reverse=True)
     except Exception as e:
         error = str(e)
@@ -3060,7 +3070,7 @@ def admin_clients_page():
             <span class="days">{c['total']:.0f}€</span>
           </div>
           <div class="row-bottom" style="margin-top:6px">
-            <span class="contacts">{c['phone']}</span>
+            <span class="contacts">{c.get('display_phone', c['phone'])}</span>
             <span class="row-arrow">→</span>
           </div>
         </a>"""
@@ -3273,13 +3283,20 @@ def admin_client_search():
                         "breed": b.get("breed", ""), "master": b.get("master", ""),
                         "date": b.get("date", ""), "service": b.get("service", "")
                     }
+            for key, entry in by_phone.items():
+                saved = _load_client_data(entry["phone"]) if entry["phone"] else {}
+                if saved.get("name"):
+                    entry["name"] = saved["name"]
+                entry["display_phone"] = saved.get("phone_override") or entry["phone"]
+
             results = sorted(by_phone.values(), key=lambda x: x["_d"] or datetime.min.date(), reverse=True)
         except Exception as e:
             error = str(e)
 
     def result_html(r):
         import urllib.parse as _urlp_s
-        wa_digits = re.sub(r"[^\d]", "", r["phone"] or "")
+        display_phone = r.get("display_phone") or r["phone"]
+        wa_digits = re.sub(r"[^\d]", "", display_phone or "")
         phone_encoded = _urlp_s.quote(r["phone"] or "")
         return f"""
         <a class="row" href="/admin/client?phone={phone_encoded}&pass=anza1985">
@@ -3295,7 +3312,7 @@ def admin_client_search():
           </div>
           <div class="row-bottom" style="margin-top:6px">
             <span class="contacts">
-              <span onclick="event.stopPropagation();location.href='tel:{r['phone']}'" style="color:#c9a05a">{r['phone'] or '—'}</span>
+              <span onclick="event.stopPropagation();location.href='tel:{display_phone}'" style="color:#c9a05a">{display_phone or '—'}</span>
               <span onclick="event.stopPropagation();window.open('https://wa.me/{wa_digits}','_blank')" class="wa">WhatsApp</span>
             </span>
           </div>
@@ -3391,7 +3408,7 @@ def admin_reminders_dashboard():
         meta = STATUS_META[r["status"]]
         bar = bar_color(r["days_since"])
         email_html = f'<a class="email" href="mailto:{r["email"]}">{r["email"]}</a>' if r.get("email") else '<span class="email-empty">email не указан</span>'
-        wa_digits = re.sub(r"[^\d]", "", r["phone"] or "")
+        wa_digits = re.sub(r"[^\d]", "", r.get("display_phone") or r["phone"] or "")
         date_str = r["date"].strftime("%d.%m.%Y")
 
         first_name = (r["name"] or "").split()[0] if r["name"] else ""
@@ -3457,7 +3474,7 @@ def admin_reminders_dashboard():
             <span>Визит {date_str} · {r['master'] or '—'}</span>
             <span class="days">{r['days_since']} дн.</span>
             <span class="contacts">
-              <a class="phone" href="tel:{r['phone']}">{r['phone']}</a>
+              <a class="phone" href="tel:{r.get('display_phone') or r['phone']}">{r.get('display_phone') or r['phone']}</a>
               <a class="wa" href="{wa_href}" target="_blank" rel="noopener">WhatsApp{' с текстом' if msg else ''}</a>
             </span>
           </div>
