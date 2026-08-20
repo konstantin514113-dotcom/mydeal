@@ -1038,23 +1038,46 @@ def _reminder_scheduler_loop():
 
 threading.Thread(target=_reminder_scheduler_loop, daemon=True).start()
 
-_REMINDER_STATUS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "reminder_status.json")
-_reminder_status_lock = threading.Lock()
+_REMINDER_STATUS_PUBLIC_ID = "rjgrooming/reminder_status_index.json"
+
+def _reminder_status_url():
+    return f"https://res.cloudinary.com/{CLOUDINARY_CLOUD_NAME}/raw/upload/{_REMINDER_STATUS_PUBLIC_ID}"
 
 def _load_reminder_status():
     try:
-        with open(_REMINDER_STATUS_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
+        r = requests.get(_reminder_status_url(), timeout=8)
+        if r.status_code == 200:
+            return r.json()
     except Exception:
-        return {}
+        pass
+    return {}
 
 def _save_reminder_status(data):
-    with _reminder_status_lock:
-        try:
-            with open(_REMINDER_STATUS_FILE, "w", encoding="utf-8") as f:
-                json.dump(data, f, ensure_ascii=False)
-        except Exception as e:
-            print(f"REMINDER STATUS SAVE ERROR: {e}", flush=True)
+    import hashlib as _hashlib
+    timestamp = int(_time.time())
+    params_to_sign = {"overwrite": "true", "public_id": _REMINDER_STATUS_PUBLIC_ID, "timestamp": timestamp}
+    to_sign = "&".join(f"{k}={v}" for k, v in sorted(params_to_sign.items()))
+    signature = _hashlib.sha1((to_sign + CLOUDINARY_API_SECRET).encode("utf-8")).hexdigest()
+    payload = json.dumps(data, ensure_ascii=False)
+    try:
+        resp = requests.post(
+            f"https://api.cloudinary.com/v1_1/{CLOUDINARY_CLOUD_NAME}/raw/upload",
+            data={
+                "api_key": CLOUDINARY_API_KEY,
+                "timestamp": timestamp,
+                "public_id": _REMINDER_STATUS_PUBLIC_ID,
+                "overwrite": "true",
+                "signature": signature,
+            },
+            files={"file": ("data.json", payload, "application/json")},
+            timeout=15
+        )
+        if resp.status_code != 200:
+            print(f"REMINDER STATUS SAVE ERROR: {resp.status_code} {resp.text[:200]}", flush=True)
+        return resp.status_code == 200
+    except Exception as e:
+        print(f"REMINDER STATUS SAVE ERROR: {e}", flush=True)
+        return False
 
 @app.route("/api/mark-reminder", methods=["POST"])
 def api_mark_reminder():
@@ -1072,8 +1095,8 @@ def api_mark_reminder():
         entry = {"last_date": date_str}
     entry[f"stage{stage}_done"] = done
     status[phone] = entry
-    _save_reminder_status(status)
-    return jsonify({"success": True})
+    ok = _save_reminder_status(status)
+    return jsonify({"success": ok})
 
 # ── ФОТО АНКЕТ ПИТОМЦЕВ (Cloudinary, постоянное хранение) ───────────────
 CLOUDINARY_CLOUD_NAME = os.environ.get("CLOUDINARY_CLOUD_NAME", "u35xfusf")
