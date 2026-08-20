@@ -2541,6 +2541,18 @@ def api_callback():
     twilio_from  = os.environ.get("TWILIO_ADMIN_PHONE", "+37266922128")
     admin_to     = "+37258243141"
     print(f"[callback] name={name!r} phone={phone!r} sid_set={bool(twilio_sid)} from={twilio_from}", flush=True)
+
+    # Telegram (не зависит от статуса email-домена)
+    try:
+        _send_reminder_telegram(
+            f"📞 <b>Заявка на обратный звонок</b>\n\n"
+            f"👤 Имя: {name or '—'}\n"
+            f"📱 Телефон: {phone or '—'}\n\n"
+            f"Клиент не нашёл удобное время в виджете бронирования."
+        )
+    except Exception as e:
+        print(f"[callback] Telegram error: {e}", flush=True)
+
     # SMS через Twilio
     if twilio_sid and twilio_token:
         try:
