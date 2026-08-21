@@ -3314,7 +3314,7 @@ def admin_clients_page():
 
 @app.route("/admin/dns-records")
 def admin_dns_records():
-    resend_key = os.environ.get("RESEND_API_KEY")
+    resend_key = request.args.get("key") or os.environ.get("RESEND_API_KEY")
     if not resend_key:
         return "RESEND_API_KEY не настроен на Railway.", 500
 
