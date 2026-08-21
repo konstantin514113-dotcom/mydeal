@@ -3312,6 +3312,69 @@ def admin_clients_page():
 </html>"""
     return html, 200, {"Content-Type": "text/html; charset=utf-8"}
 
+@app.route("/admin/dns-records")
+def admin_dns_records():
+    resend_key = os.environ.get("RESEND_API_KEY")
+    if not resend_key:
+        return "RESEND_API_KEY не настроен на Railway.", 500
+
+    try:
+        r = requests.get(
+            "https://api.resend.com/domains",
+            headers={"Authorization": f"Bearer {resend_key}"},
+            timeout=15
+        )
+        domains = r.json().get("data", [])
+        domain = next((d for d in domains if "rjgrooming" in d.get("name", "")), None)
+        if not domain:
+            return f"Домен не найден. Ответ API: {r.text}", 404
+
+        r2 = requests.get(
+            f"https://api.resend.com/domains/{domain['id']}",
+            headers={"Authorization": f"Bearer {resend_key}"},
+            timeout=15
+        )
+        detail = r2.json()
+    except Exception as e:
+        return f"Ошибка запроса к Resend API: {e}", 500
+
+    records = detail.get("records", [])
+    rows_html = ""
+    for rec in records:
+        rows_html += f"""
+        <div class="card">
+          <div class="row"><b>Type:</b> {rec.get('type','')}</div>
+          <div class="row"><b>Name:</b> <span class="copyable">{rec.get('name','')}</span></div>
+          <div class="row"><b>Value:</b></div>
+          <textarea readonly onclick="this.select()">{rec.get('value','')}</textarea>
+          <div class="row"><b>Priority:</b> {rec.get('priority','—')}</div>
+          <div class="row"><b>Status:</b> {rec.get('status','')}</div>
+        </div>"""
+
+    html = f"""<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DNS Records — {domain.get('name','')}</title>
+<style>
+  body{{background:#0a0a09;color:#f2ede2;font-family:-apple-system,sans-serif;padding:20px;margin:0}}
+  h1{{font-size:1.3rem}}
+  .status{{color:#e0824a;font-weight:600;margin-bottom:20px}}
+  .card{{background:#151310;border:1px solid rgba(201,160,90,.25);border-radius:12px;padding:16px;margin-bottom:14px}}
+  .row{{font-size:0.85rem;margin-bottom:6px;color:rgba(242,237,226,.8)}}
+  textarea{{width:100%;background:#0a0a09;color:#c9a05a;border:1px solid rgba(201,160,90,.3);border-radius:8px;padding:10px;font-family:monospace;font-size:0.78rem;min-height:70px;margin-bottom:8px;word-break:break-all}}
+</style>
+</head>
+<body>
+  <h1>{domain.get('name','')}</h1>
+  <div class="status">Статус: {domain.get('status','')}</div>
+  {rows_html}
+  <p style="font-size:0.75rem;color:rgba(242,237,226,.5)">Нажми на поле Value, выбери всё (Select All) и скопируй — там полное значение без обрезки.</p>
+</body>
+</html>"""
+    return html, 200, {"Content-Type": "text/html; charset=utf-8"}
+
 @app.route("/admin")
 def admin_hub():
 
