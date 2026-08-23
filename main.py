@@ -3248,6 +3248,7 @@ def admin_clients_page():
     error_html = f'<div class="empty" style="color:#e0824a">Ошибка загрузки данных: {error}</div>' if error else ""
     total_revenue = sum(c["total"] for c in clients)
     total_pets = sum(len(c["pets"]) for c in clients)
+    returning_clients = sum(1 for c in clients if c["visits"] >= 2)
 
     html = f"""<!DOCTYPE html>
 <html lang="ru">
@@ -3298,9 +3299,10 @@ def admin_clients_page():
     <a href="/admin/export-clients?pass=anza1985" class="search-link">⬇️ Excel-выгрузка</a>
   </div>
 
-  <div class="stats">
+  <div class="stats" style="grid-template-columns:repeat(2,1fr)">
     <div class="stat"><div class="n">{len(clients)}</div><div class="l">клиентов</div></div>
     <div class="stat"><div class="n">{total_pets}</div><div class="l">питомцев</div></div>
+    <div class="stat"><div class="n">{returning_clients}</div><div class="l">повторных (2+ визита)</div></div>
     <div class="stat"><div class="n">{total_revenue:.0f}€</div><div class="l">выручка всего</div></div>
   </div>
 
