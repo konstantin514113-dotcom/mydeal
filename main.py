@@ -910,6 +910,37 @@ def confirm():
 # ── BOOKING → GOOGLE CALENDAR ──────────────────────────────────────────────
 GOOGLE_SCRIPT = os.environ.get("GOOGLE_SCRIPT", "")
 
+# ── Кеш полной истории календаря (общий для всех страниц админки) ───────
+_full_history_cache = {"data": None, "fetched_at": 0, "to_date": None}
+_full_history_cache_lock = threading.Lock()
+_FULL_HISTORY_CACHE_TTL = 180  # секунд
+
+def _fetch_full_history_bookings():
+    """Общая история броней с 01.01.2020 по (сегодня+180дн), с кешем на
+    несколько минут — избавляет от повторного тяжёлого запроса к календарю
+    при каждом открытии Клиенты/Напоминания/Поиск/Экспорт."""
+    today = datetime.now(_REMINDER_TZ).date() if _REMINDER_TZ else datetime.utcnow().date()
+    to_date = (today + timedelta(days=180)).strftime("%d.%m.%Y")
+    now_ts = _time.time()
+
+    with _full_history_cache_lock:
+        if (_full_history_cache["data"] is not None
+                and _full_history_cache["to_date"] == to_date
+                and now_ts - _full_history_cache["fetched_at"] < _FULL_HISTORY_CACHE_TTL):
+            return _full_history_cache["data"]
+
+    params = {"action": "stats", "from": "01.01.2020", "to": to_date}
+    r = requests.get(GOOGLE_SCRIPT, params=params, timeout=30)
+    data = r.json()
+    bookings = data.get("bookings", []) if isinstance(data, dict) else []
+
+    with _full_history_cache_lock:
+        _full_history_cache["data"] = bookings
+        _full_history_cache["fetched_at"] = now_ts
+        _full_history_cache["to_date"] = to_date
+
+    return bookings
+
 # ── 35-ДНЕВНОЕ НАПОМИНАНИЕ (первый визит → напоминание админу в Telegram) ──
 try:
     from zoneinfo import ZoneInfo
@@ -2682,10 +2713,7 @@ def _build_client_export_workbook():
     from io import BytesIO
 
     today = datetime.now(_REMINDER_TZ).date() if _REMINDER_TZ else datetime.utcnow().date()
-    params = {"action": "stats", "from": "01.01.2020", "to": (today + timedelta(days=180)).strftime("%d.%m.%Y")}
-    r = requests.get(GOOGLE_SCRIPT, params=params, timeout=30)
-    data = r.json()
-    bookings = data.get("bookings", []) if isinstance(data, dict) else []
+    bookings = _fetch_full_history_bookings()
 
     def parse_date(s):
         try:
@@ -2861,10 +2889,7 @@ def admin_client_detail():
 
     try:
         today = datetime.now(_REMINDER_TZ).date() if _REMINDER_TZ else datetime.utcnow().date()
-        params = {"action": "stats", "from": "01.01.2020", "to": (today + timedelta(days=180)).strftime("%d.%m.%Y")}
-        r = requests.get(GOOGLE_SCRIPT, params=params, timeout=30)
-        data = r.json()
-        bookings = data.get("bookings", []) if isinstance(data, dict) else []
+        bookings = _fetch_full_history_bookings()
 
         def parse_date(s):
             try:
@@ -3210,10 +3235,7 @@ function uploadPetPhoto(input, key, phone, pet){{
 def api_find_duplicates():
     try:
         today = datetime.now(_REMINDER_TZ).date() if _REMINDER_TZ else datetime.utcnow().date()
-        params = {"action": "stats", "from": "01.01.2020", "to": (today + timedelta(days=180)).strftime("%d.%m.%Y")}
-        r = requests.get(GOOGLE_SCRIPT, params=params, timeout=30)
-        data = r.json()
-        bookings = data.get("bookings", []) if isinstance(data, dict) else []
+        bookings = _fetch_full_history_bookings()
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 
@@ -3447,10 +3469,7 @@ def admin_clients_page():
     clients = []
     try:
         today = datetime.now(_REMINDER_TZ).date() if _REMINDER_TZ else datetime.utcnow().date()
-        params = {"action": "stats", "from": "01.01.2020", "to": (today + timedelta(days=180)).strftime("%d.%m.%Y")}
-        r = requests.get(GOOGLE_SCRIPT, params=params, timeout=30)
-        data = r.json()
-        bookings = data.get("bookings", []) if isinstance(data, dict) else []
+        bookings = _fetch_full_history_bookings()
 
         def parse_date(s):
             try:
@@ -4033,10 +4052,7 @@ def admin_client_search():
     if query:
         try:
             today = datetime.now(_REMINDER_TZ).date() if _REMINDER_TZ else datetime.utcnow().date()
-            params = {"action": "stats", "from": "01.01.2020", "to": (today + timedelta(days=180)).strftime("%d.%m.%Y")}
-            r = requests.get(GOOGLE_SCRIPT, params=params, timeout=30)
-            data = r.json()
-            bookings = data.get("bookings", []) if isinstance(data, dict) else []
+            bookings = _fetch_full_history_bookings()
 
             q_lower = query.lower()
             q_digits = re.sub(r"[^\d]", "", query)
