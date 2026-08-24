@@ -3488,7 +3488,7 @@ def admin_memberships_page():
     <button class="create-btn" onclick="createMembership()">Создать абонемент</button>
   </div>
 
-  <div class="list-label">Все абонементы ({len(items)})</div>
+  <div class="list-label" id="memListLabel">Все абонементы ({len(items)})</div>
   {cards_html}
 </div>
 <div id="toast" class="toast"></div>
@@ -3643,12 +3643,27 @@ function undoVisit(id){{
 
 function deleteMembership(id){{
   if(!confirm('Удалить абонемент ' + id + '? Это действие необратимо.')) return;
+  var card = document.getElementById('card-' + id);
+  if(card){{ card.style.opacity = '0.4'; card.style.pointerEvents = 'none'; }}
   fetch('/api/membership/delete', {{
     method:'POST', headers:{{'Content-Type':'application/json'}}, body: JSON.stringify({{id:id}})
   }}).then(function(r){{return r.json();}}).then(function(res){{
-    if(res.success){{ showToast('Удалён'); setTimeout(function(){{location.reload();}}, 900); }}
-    else{{ showToast('Ошибка: ' + (res.error||'')); }}
-  }}).catch(function(){{ showToast('Ошибка сети'); }});
+    if(res.success){{
+      showToast('Удалён');
+      if(card){{ card.remove(); }}
+      var label = document.getElementById('memListLabel');
+      if(label){{
+        var n = document.querySelectorAll('.mem-card').length;
+        label.textContent = 'Все абонементы (' + n + ')';
+      }}
+    }} else {{
+      if(card){{ card.style.opacity = '1'; card.style.pointerEvents = 'auto'; }}
+      showToast('Ошибка: ' + (res.error||''));
+    }}
+  }}).catch(function(){{
+    if(card){{ card.style.opacity = '1'; card.style.pointerEvents = 'auto'; }}
+    showToast('Ошибка сети');
+  }});
 }}
 </script>
 </body>
