@@ -4012,6 +4012,15 @@ def api_membership_delete():
 
 @app.route("/membership/<mid>")
 def public_membership_card(mid):
+    try:
+        return _render_membership_card(mid)
+    except Exception as e:
+        import traceback
+        tb = traceback.format_exc()
+        print(f"MEMBERSHIP CARD ERROR: {tb}", flush=True)
+        return f"<pre>{tb}</pre>", 500
+
+def _render_membership_card(mid):
     import urllib.parse as _urlp_q
     memberships = _load_memberships()
     m = memberships.get(mid)
