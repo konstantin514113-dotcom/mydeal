@@ -4065,6 +4065,11 @@ def _render_membership_card(mid):
     page_url = f"https://rjgrooming.up.railway.app/membership/{mid}"
     qr_url = f"https://api.qrserver.com/v1/create-qr-code/?size=180x180&bgcolor=0a0a09&color=ffffff&qzone=1&data={_urlp_q.quote(page_url)}"
 
+    icon_person = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="4" stroke="rgba(230,225,215,.55)" stroke-width="1.5"/><path d="M4 20c0-4.4 3.6-7 8-7s8 2.6 8 7" stroke="rgba(230,225,215,.55)" stroke-width="1.5" stroke-linecap="round"/></svg>'
+    icon_paw = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none"><ellipse cx="12" cy="16" rx="5.5" ry="4.5" stroke="rgba(230,225,215,.55)" stroke-width="1.5"/><circle cx="5.5" cy="9" r="2.1" stroke="rgba(230,225,215,.55)" stroke-width="1.5"/><circle cx="10" cy="5.5" r="2.1" stroke="rgba(230,225,215,.55)" stroke-width="1.5"/><circle cx="14.5" cy="5.5" r="2.1" stroke="rgba(230,225,215,.55)" stroke-width="1.5"/><circle cx="18.5" cy="9" r="2.1" stroke="rgba(230,225,215,.55)" stroke-width="1.5"/></svg>'
+    icon_tag = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M11 3H5a2 2 0 00-2 2v6l10.6 10.6a2 2 0 002.8 0l5.2-5.2a2 2 0 000-2.8L11 3z" stroke="rgba(230,225,215,.55)" stroke-width="1.5" stroke-linejoin="round"/><circle cx="7.5" cy="7.5" r="1.4" stroke="rgba(230,225,215,.55)" stroke-width="1.3"/></svg>'
+    icon_cal = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none"><rect x="4" y="6" width="16" height="14" rx="2" stroke="rgba(230,225,215,.55)" stroke-width="1.5"/><path d="M8 3.5v4M16 3.5v4M4 10.5h16" stroke="rgba(230,225,215,.55)" stroke-width="1.5" stroke-linecap="round"/></svg>'
+
     html = f"""<!DOCTYPE html>
 <html lang="ru">
 <head>
@@ -4074,84 +4079,136 @@ def _render_membership_card(mid):
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,500;0,600;0,700;1,500&family=Montserrat:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
   *{{{{box-sizing:border-box;margin:0;padding:0}}}}
-  body{{{{background:#0a0a09;color:#f2ede2;font-family:'Montserrat',sans-serif;padding:32px 20px 60px;-webkit-font-smoothing:antialiased}}}}
+  body{{{{background:#0a0a09;color:#f2ede2;font-family:'Montserrat',sans-serif;padding:28px 18px 50px;-webkit-font-smoothing:antialiased;min-height:100vh}}}}
   .wrap{{{{max-width:420px;margin:0 auto}}}}
-  .logo-row{{{{text-align:center;margin-bottom:8px}}}}
-  .logo-img{{{{height:56px;width:auto;margin:0 auto;display:block}}}}
-  .card-type{{{{text-align:center;font-size:0.66rem;letter-spacing:.35em;text-transform:uppercase;color:rgba(230,225,215,.55);margin-bottom:32px}}}}
-  .card{{{{background:linear-gradient(155deg,#151412 0%,#0e0d0b 100%);border:1px solid rgba(200,195,180,.18);border-radius:18px;padding:26px 24px;margin-bottom:22px;position:relative;overflow:hidden}}}}
-  .card::before{{{{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,rgba(210,205,190,.5),transparent)}}}}
-  .mem-id-label{{{{font-size:0.62rem;letter-spacing:.15em;text-transform:uppercase;color:rgba(230,225,215,.4);margin-bottom:4px}}}}
-  .mem-id{{{{font-family:'Playfair Display',serif;font-size:1.7rem;font-weight:600;color:#f2ede2;margin-bottom:18px}}}}
-  .info-grid{{{{display:grid;grid-template-columns:1fr 1fr;gap:14px 10px;margin-bottom:4px}}}}
-  .info-item .info-label{{{{font-size:0.62rem;letter-spacing:.08em;text-transform:uppercase;color:rgba(230,225,215,.4);margin-bottom:3px}}}}
-  .info-item .info-val{{{{font-size:0.92rem;color:#f2ede2;font-weight:500}}}}
 
-  .counter-card{{{{background:#131210;border:1px solid rgba(255,255,255,.08);border-radius:16px;padding:22px 20px;margin-bottom:18px}}}}
-  .counter-label{{{{font-size:0.64rem;letter-spacing:.2em;text-transform:uppercase;color:rgba(200,195,180,.6);margin-bottom:16px;text-align:center}}}}
-  .visit-circles{{{{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin-bottom:18px}}}}
-  .visit-circle{{{{width:38px;height:38px;border-radius:50%;border:1.5px solid rgba(200,195,180,.35);display:flex;align-items:center;justify-content:center;font-size:0.85rem;color:rgba(230,225,215,.4);font-family:'Playfair Display',serif}}}}
+  .flip-wrap{{{{perspective:1800px;margin-bottom:26px}}}}
+  .flip-card{{{{position:relative;width:100%;height:88vh;min-height:520px;max-height:640px;transform-style:preserve-3d;transition:transform .75s cubic-bezier(.42,.15,.16,1);cursor:pointer}}}}
+  .flip-card.flipped{{{{transform:rotateY(180deg)}}}}
+  .face{{{{position:absolute;inset:0;backface-visibility:hidden;-webkit-backface-visibility:hidden;border-radius:20px;overflow:hidden;background:#0a0a09;border:1px solid rgba(200,195,180,.16)}}}}
+
+  .face-front{{{{display:flex;align-items:center;justify-content:center}}}}
+  .brand-frame{{{{position:absolute;inset:14px;border:1px solid rgba(200,195,180,.4);border-radius:12px}}}}
+  .brand-inner{{{{position:absolute;inset:26px;border:1px solid rgba(200,195,180,.22);border-radius:6px;display:flex;flex-direction:column;align-items:center;justify-content:center}}}}
+  .brand-logo{{{{font-family:'Playfair Display',serif;font-size:4.4rem;font-weight:600;display:flex;align-items:baseline;gap:8px;
+    background:linear-gradient(158deg,#f7f4ea 0%,#cdc7b5 30%,#8d8874 50%,#e9e4d5 70%,#a49e89 100%);
+    -webkit-background-clip:text;background-clip:text;color:transparent}}}}
+  .brand-logo .amp{{{{font-size:2.3rem;font-style:italic}}}}
+  .brand-rule{{{{width:130px;height:1px;background:linear-gradient(90deg,transparent,rgba(205,199,181,.7),transparent);margin:16px 0 12px}}}}
+  .brand-sub{{{{font-family:'Montserrat',sans-serif;font-size:0.9rem;letter-spacing:.55em;color:rgba(205,199,181,.8);padding-left:.55em}}}}
+  .tap-hint{{{{position:absolute;bottom:22px;left:0;right:0;text-align:center;font-size:0.62rem;letter-spacing:.18em;text-transform:uppercase;color:rgba(205,199,181,.35)}}}}
+
+  .face-back{{{{transform:rotateY(180deg);padding:24px 22px;overflow-y:auto;display:flex;flex-direction:column}}}}
+  .back-head{{{{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}}}}
+  .flip-back-btn{{{{background:none;border:1px solid rgba(255,255,255,.18);color:rgba(230,225,215,.7);font-size:0.62rem;letter-spacing:.12em;text-transform:uppercase;padding:6px 12px;border-radius:20px;cursor:pointer;font-family:'Montserrat',sans-serif}}}}
+  .mem-id-label{{{{font-size:0.62rem;letter-spacing:.15em;text-transform:uppercase;color:rgba(230,225,215,.4)}}}}
+  .mem-id{{{{font-family:'Playfair Display',serif;font-size:1.5rem;font-weight:600;color:#f2ede2}}}}
+
+  .info-rows{{{{border-top:1px solid rgba(255,255,255,.08);margin-bottom:6px}}}}
+  .info-row{{{{display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid rgba(255,255,255,.08)}}}}
+  .info-row .ico{{{{flex-shrink:0;width:30px;height:30px;border-radius:50%;background:rgba(255,255,255,.05);display:flex;align-items:center;justify-content:center}}}}
+  .info-row .info-label{{{{font-size:0.6rem;letter-spacing:.1em;text-transform:uppercase;color:rgba(230,225,215,.42);margin-bottom:2px}}}}
+  .info-row .info-val{{{{font-size:0.92rem;color:#f2ede2;font-weight:500}}}}
+  .info-row.two-col{{{{display:grid;grid-template-columns:1fr 1fr;gap:12px;align-items:start}}}}
+  .info-row.two-col .info-sub{{{{display:flex;align-items:center;gap:10px}}}}
+
+  .counter-card{{{{background:#131210;border:1px solid rgba(255,255,255,.08);border-radius:14px;padding:18px 16px;margin:16px 0}}}}
+  .counter-label{{{{font-size:0.6rem;letter-spacing:.2em;text-transform:uppercase;color:rgba(200,195,180,.6);margin-bottom:14px;text-align:center}}}}
+  .visit-circles{{{{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-bottom:16px}}}}
+  .visit-circle{{{{width:32px;height:32px;border-radius:50%;border:1.5px solid rgba(200,195,180,.35);display:flex;align-items:center;justify-content:center;font-size:0.78rem;color:rgba(230,225,215,.4);font-family:'Playfair Display',serif}}}}
   .visit-circle.filled{{{{background:#e6e1d5;border-color:#e6e1d5;color:#0a0a09;font-weight:700}}}}
-  .counter-stats{{{{display:flex;justify-content:space-around;text-align:center;padding-top:14px;border-top:1px solid rgba(255,255,255,.07)}}}}
-  .counter-stat .n{{{{font-family:'Playfair Display',serif;font-size:1.4rem;font-weight:600;color:#f2ede2}}}}
-  .counter-stat .l{{{{font-size:0.62rem;letter-spacing:.06em;text-transform:uppercase;color:rgba(230,225,215,.45);margin-top:2px}}}}
+  .counter-stats{{{{display:flex;justify-content:space-around;text-align:center;padding-top:12px;border-top:1px solid rgba(255,255,255,.07)}}}}
+  .counter-stat .n{{{{font-family:'Playfair Display',serif;font-size:1.25rem;font-weight:600;color:#f2ede2}}}}
+  .counter-stat .l{{{{font-size:0.58rem;letter-spacing:.06em;text-transform:uppercase;color:rgba(230,225,215,.45);margin-top:2px}}}}
 
-  .list-label{{{{font-size:0.66rem;letter-spacing:.2em;text-transform:uppercase;color:rgba(230,225,215,.5);margin:22px 0 12px}}}}
-  .hist-row{{{{display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid rgba(255,255,255,.06);font-size:0.85rem}}}}
+  .list-label{{{{font-size:0.62rem;letter-spacing:.18em;text-transform:uppercase;color:rgba(230,225,215,.5);margin:6px 0 10px}}}}
+  .hist-row{{{{display:flex;justify-content:space-between;padding:9px 0;border-bottom:1px solid rgba(255,255,255,.06);font-size:0.82rem}}}}
   .hist-date{{{{color:rgba(230,225,215,.5)}}}}
   .hist-note{{{{color:#f2ede2}}}}
-  .hist-empty{{{{text-align:center;padding:20px 0;color:rgba(230,225,215,.35);font-size:0.82rem}}}}
+  .hist-empty{{{{text-align:center;padding:16px 0;color:rgba(230,225,215,.35);font-size:0.8rem}}}}
 
-  .completed-banner{{{{text-align:center;background:#131210;border:1px solid rgba(255,255,255,.1);border-radius:14px;padding:24px 20px;margin:22px 0}}}}
-  .completed-title{{{{font-family:'Playfair Display',serif;font-size:1.15rem;margin-bottom:14px}}}}
-  .new-membership-btn{{{{display:inline-block;background:#e6e1d5;color:#0a0a09;text-decoration:none;padding:12px 24px;border-radius:8px;font-size:0.85rem;font-weight:600}}}}
+  .completed-banner{{{{text-align:center;background:#131210;border:1px solid rgba(255,255,255,.1);border-radius:14px;padding:20px 18px;margin:16px 0}}}}
+  .completed-title{{{{font-family:'Playfair Display',serif;font-size:1.05rem;margin-bottom:12px}}}}
+  .new-membership-btn{{{{display:inline-block;background:#e6e1d5;color:#0a0a09;text-decoration:none;padding:11px 22px;border-radius:8px;font-size:0.82rem;font-weight:600}}}}
 
-  .qr-section{{{{text-align:center;margin-top:26px}}}}
+  .qr-section{{{{text-align:center;margin-top:auto;padding-top:18px}}}}
   .qr-section img{{{{border-radius:10px;border:1px solid rgba(255,255,255,.1)}}}}
-  .qr-caption{{{{font-size:0.68rem;color:rgba(230,225,215,.4);margin-top:8px}}}}
+  .qr-caption{{{{font-size:0.64rem;color:rgba(230,225,215,.4);margin-top:8px}}}}
 </style>
 </head>
 <body>
 <div class="wrap">
-  <div class="logo-row"><img src="data:image/png;base64,LOGOPLACEHOLDER" class="logo-img" alt="R&J"></div>
-  <div class="card-type">Care Membership</div>
 
-  <div class="card">
-    <div class="mem-id-label">Абонемент</div>
-    <div class="mem-id">{m.get('id','')}</div>
-    <div class="info-grid">
-      <div class="info-item"><div class="info-label">Владелец</div><div class="info-val">{m.get('client_name','—')}</div></div>
-      <div class="info-item"><div class="info-label">Питомец</div><div class="info-val">{m.get('pet_name','—')}</div></div>
-      <div class="info-item"><div class="info-label">Тип</div><div class="info-val">{m.get('pet_type','—')}</div></div>
-      <div class="info-item"><div class="info-label">Абонемент</div><div class="info-val">{m.get('plan_name','—')}</div></div>
-      <div class="info-item"><div class="info-label">Приобретён</div><div class="info-val">{m.get('purchase_date','—')}</div></div>
-      <div class="info-item"><div class="info-label">Действителен до</div><div class="info-val">{m.get('expiry_date','—')}</div></div>
+  <div class="flip-wrap">
+    <div class="flip-card" id="flipCard">
+
+      <div class="face face-front" id="cardFront">
+        <div class="brand-frame"></div>
+        <div class="brand-inner">
+          <div class="brand-logo">R<span class="amp">&amp;</span>J</div>
+          <div class="brand-rule"></div>
+          <div class="brand-sub">GROOMING</div>
+        </div>
+        <div class="tap-hint">Нажмите, чтобы открыть абонемент</div>
+      </div>
+
+      <div class="face face-back">
+        <div class="back-head">
+          <div>
+            <div class="mem-id-label">Абонемент</div>
+            <div class="mem-id">{m.get('id','')}</div>
+          </div>
+          <button class="flip-back-btn" id="flipBackBtn">← Назад</button>
+        </div>
+
+        <div class="info-rows">
+          <div class="info-row"><div class="ico">{icon_person}</div><div><div class="info-label">Владелец</div><div class="info-val">{m.get('client_name','—')}</div></div></div>
+          <div class="info-row"><div class="ico">{icon_paw}</div><div><div class="info-label">Питомец</div><div class="info-val">{m.get('pet_name','—')} · {m.get('pet_type','—')}</div></div></div>
+          <div class="info-row"><div class="ico">{icon_tag}</div><div><div class="info-label">Абонемент</div><div class="info-val">{m.get('plan_name','—')}</div></div></div>
+          <div class="info-row two-col">
+            <div class="info-sub"><div class="ico">{icon_cal}</div><div><div class="info-label">Приобретён</div><div class="info-val">{m.get('purchase_date','—')}</div></div></div>
+            <div class="info-sub"><div class="ico">{icon_cal}</div><div><div class="info-label">До</div><div class="info-val">{m.get('expiry_date','—')}</div></div></div>
+          </div>
+        </div>
+
+        <div class="counter-card">
+          <div class="counter-label">Посещения</div>
+          <div class="visit-circles">{circles_html}</div>
+          <div class="counter-stats">
+            <div class="counter-stat"><div class="n">{used}</div><div class="l">использовано</div></div>
+            <div class="counter-stat"><div class="n">{remaining}</div><div class="l">осталось</div></div>
+            <div class="counter-stat"><div class="n">{total}</div><div class="l">всего</div></div>
+          </div>
+        </div>
+
+        {completed_banner}
+
+        <div class="list-label">История посещений</div>
+        {history_html}
+
+        <div class="qr-section">
+          <img src="{qr_url}" width="120" height="120" alt="QR">
+          <div class="qr-caption">{m.get('id','')} · rjgrooming.salon</div>
+        </div>
+      </div>
+
     </div>
   </div>
 
-  <div class="counter-card">
-    <div class="counter-label">Посещения</div>
-    <div class="visit-circles">{circles_html}</div>
-    <div class="counter-stats">
-      <div class="counter-stat"><div class="n">{used}</div><div class="l">использовано</div></div>
-      <div class="counter-stat"><div class="n">{remaining}</div><div class="l">осталось</div></div>
-      <div class="counter-stat"><div class="n">{total}</div><div class="l">всего</div></div>
-    </div>
-  </div>
-
-  {completed_banner}
-
-  <div class="list-label">История посещений</div>
-  {history_html}
-
-  <div class="qr-section">
-    <img src="{qr_url}" width="140" height="140" alt="QR">
-    <div class="qr-caption">{m.get('id','')} · rjgrooming.salon</div>
-  </div>
 </div>
+<script>
+var flipCard = document.getElementById('flipCard');
+var flipBackBtn = document.getElementById('flipBackBtn');
+document.getElementById('cardFront').addEventListener('click', function(){{
+  flipCard.classList.add('flipped');
+}});
+flipBackBtn.addEventListener('click', function(e){{
+  e.stopPropagation();
+  flipCard.classList.remove('flipped');
+}});
+</script>
 </body>
 </html>"""
-    html = html.replace("LOGOPLACEHOLDER", _get_logo_b64())
     return html, 200, {"Content-Type": "text/html; charset=utf-8"}
 
 @app.route("/admin/migrate-client-data")
