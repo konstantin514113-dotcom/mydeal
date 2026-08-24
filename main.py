@@ -4078,62 +4078,62 @@ def _render_membership_card(mid):
 <title>{m.get('id','')} — R&J Grooming Membership</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,500;0,600;0,700;1,500&family=Montserrat:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
-  *{{{{box-sizing:border-box;margin:0;padding:0}}}}
-  body{{{{background:#0a0a09;color:#f2ede2;font-family:'Montserrat',sans-serif;padding:28px 18px 50px;-webkit-font-smoothing:antialiased;min-height:100vh}}}}
-  .wrap{{{{max-width:420px;margin:0 auto}}}}
+  *{{box-sizing:border-box;margin:0;padding:0}}
+  body{{background:#0a0a09;color:#f2ede2;font-family:'Montserrat',sans-serif;padding:28px 18px 50px;-webkit-font-smoothing:antialiased;min-height:100vh}}
+  .wrap{{max-width:420px;margin:0 auto}}
 
-  .flip-wrap{{{{perspective:1800px;margin-bottom:26px}}}}
-  .flip-card{{{{position:relative;width:100%;height:88vh;min-height:520px;max-height:640px;transform-style:preserve-3d;transition:transform .75s cubic-bezier(.42,.15,.16,1);cursor:pointer}}}}
-  .flip-card.flipped{{{{transform:rotateY(180deg)}}}}
-  .face{{{{position:absolute;inset:0;backface-visibility:hidden;-webkit-backface-visibility:hidden;border-radius:20px;overflow:hidden;background:#0a0a09;border:1px solid rgba(200,195,180,.16)}}}}
+  .flip-wrap{{perspective:1800px;margin-bottom:26px}}
+  .flip-card{{position:relative;width:100%;height:88vh;min-height:520px;max-height:640px;transform-style:preserve-3d;transition:transform .75s cubic-bezier(.42,.15,.16,1);cursor:pointer}}
+  .flip-card.flipped{{transform:rotateY(180deg)}}
+  .face{{position:absolute;inset:0;backface-visibility:hidden;-webkit-backface-visibility:hidden;border-radius:20px;overflow:hidden;background:#0a0a09;border:1px solid rgba(200,195,180,.16)}}
 
-  .face-front{{{{display:flex;align-items:center;justify-content:center}}}}
-  .brand-frame{{{{position:absolute;inset:14px;border:1px solid rgba(200,195,180,.4);border-radius:12px}}}}
-  .brand-inner{{{{position:absolute;inset:26px;border:1px solid rgba(200,195,180,.22);border-radius:6px;display:flex;flex-direction:column;align-items:center;justify-content:center}}}}
-  .brand-logo{{{{font-family:'Playfair Display',serif;font-size:4.4rem;font-weight:600;display:flex;align-items:baseline;gap:8px;
+  .face-front{{display:flex;align-items:center;justify-content:center}}
+  .brand-frame{{position:absolute;inset:14px;border:1px solid rgba(200,195,180,.4);border-radius:12px}}
+  .brand-inner{{position:absolute;inset:26px;border:1px solid rgba(200,195,180,.22);border-radius:6px;display:flex;flex-direction:column;align-items:center;justify-content:center}}
+  .brand-logo{{font-family:'Playfair Display',serif;font-size:4.4rem;font-weight:600;display:flex;align-items:baseline;gap:8px;
     background:linear-gradient(158deg,#f7f4ea 0%,#cdc7b5 30%,#8d8874 50%,#e9e4d5 70%,#a49e89 100%);
-    -webkit-background-clip:text;background-clip:text;color:transparent}}}}
-  .brand-logo .amp{{{{font-size:2.3rem;font-style:italic}}}}
-  .brand-rule{{{{width:130px;height:1px;background:linear-gradient(90deg,transparent,rgba(205,199,181,.7),transparent);margin:16px 0 12px}}}}
-  .brand-sub{{{{font-family:'Montserrat',sans-serif;font-size:0.9rem;letter-spacing:.55em;color:rgba(205,199,181,.8);padding-left:.55em}}}}
-  .tap-hint{{{{position:absolute;bottom:22px;left:0;right:0;text-align:center;font-size:0.62rem;letter-spacing:.18em;text-transform:uppercase;color:rgba(205,199,181,.35)}}}}
+    -webkit-background-clip:text;background-clip:text;color:transparent}}
+  .brand-logo .amp{{font-size:2.3rem;font-style:italic}}
+  .brand-rule{{width:130px;height:1px;background:linear-gradient(90deg,transparent,rgba(205,199,181,.7),transparent);margin:16px 0 12px}}
+  .brand-sub{{font-family:'Montserrat',sans-serif;font-size:0.9rem;letter-spacing:.55em;color:rgba(205,199,181,.8);padding-left:.55em}}
+  .tap-hint{{position:absolute;bottom:22px;left:0;right:0;text-align:center;font-size:0.62rem;letter-spacing:.18em;text-transform:uppercase;color:rgba(205,199,181,.35)}}
 
-  .face-back{{{{transform:rotateY(180deg);padding:24px 22px;overflow-y:auto;display:flex;flex-direction:column}}}}
-  .back-head{{{{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}}}}
-  .flip-back-btn{{{{background:none;border:1px solid rgba(255,255,255,.18);color:rgba(230,225,215,.7);font-size:0.62rem;letter-spacing:.12em;text-transform:uppercase;padding:6px 12px;border-radius:20px;cursor:pointer;font-family:'Montserrat',sans-serif}}}}
-  .mem-id-label{{{{font-size:0.62rem;letter-spacing:.15em;text-transform:uppercase;color:rgba(230,225,215,.4)}}}}
-  .mem-id{{{{font-family:'Playfair Display',serif;font-size:1.5rem;font-weight:600;color:#f2ede2}}}}
+  .face-back{{transform:rotateY(180deg);padding:24px 22px;overflow-y:auto;display:flex;flex-direction:column}}
+  .back-head{{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}}
+  .flip-back-btn{{background:none;border:1px solid rgba(255,255,255,.18);color:rgba(230,225,215,.7);font-size:0.62rem;letter-spacing:.12em;text-transform:uppercase;padding:6px 12px;border-radius:20px;cursor:pointer;font-family:'Montserrat',sans-serif}}
+  .mem-id-label{{font-size:0.62rem;letter-spacing:.15em;text-transform:uppercase;color:rgba(230,225,215,.4)}}
+  .mem-id{{font-family:'Playfair Display',serif;font-size:1.5rem;font-weight:600;color:#f2ede2}}
 
-  .info-rows{{{{border-top:1px solid rgba(255,255,255,.08);margin-bottom:6px}}}}
-  .info-row{{{{display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid rgba(255,255,255,.08)}}}}
-  .info-row .ico{{{{flex-shrink:0;width:30px;height:30px;border-radius:50%;background:rgba(255,255,255,.05);display:flex;align-items:center;justify-content:center}}}}
-  .info-row .info-label{{{{font-size:0.6rem;letter-spacing:.1em;text-transform:uppercase;color:rgba(230,225,215,.42);margin-bottom:2px}}}}
-  .info-row .info-val{{{{font-size:0.92rem;color:#f2ede2;font-weight:500}}}}
-  .info-row.two-col{{{{display:grid;grid-template-columns:1fr 1fr;gap:12px;align-items:start}}}}
-  .info-row.two-col .info-sub{{{{display:flex;align-items:center;gap:10px}}}}
+  .info-rows{{border-top:1px solid rgba(255,255,255,.08);margin-bottom:6px}}
+  .info-row{{display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid rgba(255,255,255,.08)}}
+  .info-row .ico{{flex-shrink:0;width:30px;height:30px;border-radius:50%;background:rgba(255,255,255,.05);display:flex;align-items:center;justify-content:center}}
+  .info-row .info-label{{font-size:0.6rem;letter-spacing:.1em;text-transform:uppercase;color:rgba(230,225,215,.42);margin-bottom:2px}}
+  .info-row .info-val{{font-size:0.92rem;color:#f2ede2;font-weight:500}}
+  .info-row.two-col{{display:grid;grid-template-columns:1fr 1fr;gap:12px;align-items:start}}
+  .info-row.two-col .info-sub{{display:flex;align-items:center;gap:10px}}
 
-  .counter-card{{{{background:#131210;border:1px solid rgba(255,255,255,.08);border-radius:14px;padding:18px 16px;margin:16px 0}}}}
-  .counter-label{{{{font-size:0.6rem;letter-spacing:.2em;text-transform:uppercase;color:rgba(200,195,180,.6);margin-bottom:14px;text-align:center}}}}
-  .visit-circles{{{{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-bottom:16px}}}}
-  .visit-circle{{{{width:32px;height:32px;border-radius:50%;border:1.5px solid rgba(200,195,180,.35);display:flex;align-items:center;justify-content:center;font-size:0.78rem;color:rgba(230,225,215,.4);font-family:'Playfair Display',serif}}}}
-  .visit-circle.filled{{{{background:#e6e1d5;border-color:#e6e1d5;color:#0a0a09;font-weight:700}}}}
-  .counter-stats{{{{display:flex;justify-content:space-around;text-align:center;padding-top:12px;border-top:1px solid rgba(255,255,255,.07)}}}}
-  .counter-stat .n{{{{font-family:'Playfair Display',serif;font-size:1.25rem;font-weight:600;color:#f2ede2}}}}
-  .counter-stat .l{{{{font-size:0.58rem;letter-spacing:.06em;text-transform:uppercase;color:rgba(230,225,215,.45);margin-top:2px}}}}
+  .counter-card{{background:#131210;border:1px solid rgba(255,255,255,.08);border-radius:14px;padding:18px 16px;margin:16px 0}}
+  .counter-label{{font-size:0.6rem;letter-spacing:.2em;text-transform:uppercase;color:rgba(200,195,180,.6);margin-bottom:14px;text-align:center}}
+  .visit-circles{{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-bottom:16px}}
+  .visit-circle{{width:32px;height:32px;border-radius:50%;border:1.5px solid rgba(200,195,180,.35);display:flex;align-items:center;justify-content:center;font-size:0.78rem;color:rgba(230,225,215,.4);font-family:'Playfair Display',serif}}
+  .visit-circle.filled{{background:#e6e1d5;border-color:#e6e1d5;color:#0a0a09;font-weight:700}}
+  .counter-stats{{display:flex;justify-content:space-around;text-align:center;padding-top:12px;border-top:1px solid rgba(255,255,255,.07)}}
+  .counter-stat .n{{font-family:'Playfair Display',serif;font-size:1.25rem;font-weight:600;color:#f2ede2}}
+  .counter-stat .l{{font-size:0.58rem;letter-spacing:.06em;text-transform:uppercase;color:rgba(230,225,215,.45);margin-top:2px}}
 
-  .list-label{{{{font-size:0.62rem;letter-spacing:.18em;text-transform:uppercase;color:rgba(230,225,215,.5);margin:6px 0 10px}}}}
-  .hist-row{{{{display:flex;justify-content:space-between;padding:9px 0;border-bottom:1px solid rgba(255,255,255,.06);font-size:0.82rem}}}}
-  .hist-date{{{{color:rgba(230,225,215,.5)}}}}
-  .hist-note{{{{color:#f2ede2}}}}
-  .hist-empty{{{{text-align:center;padding:16px 0;color:rgba(230,225,215,.35);font-size:0.8rem}}}}
+  .list-label{{font-size:0.62rem;letter-spacing:.18em;text-transform:uppercase;color:rgba(230,225,215,.5);margin:6px 0 10px}}
+  .hist-row{{display:flex;justify-content:space-between;padding:9px 0;border-bottom:1px solid rgba(255,255,255,.06);font-size:0.82rem}}
+  .hist-date{{color:rgba(230,225,215,.5)}}
+  .hist-note{{color:#f2ede2}}
+  .hist-empty{{text-align:center;padding:16px 0;color:rgba(230,225,215,.35);font-size:0.8rem}}
 
-  .completed-banner{{{{text-align:center;background:#131210;border:1px solid rgba(255,255,255,.1);border-radius:14px;padding:20px 18px;margin:16px 0}}}}
-  .completed-title{{{{font-family:'Playfair Display',serif;font-size:1.05rem;margin-bottom:12px}}}}
-  .new-membership-btn{{{{display:inline-block;background:#e6e1d5;color:#0a0a09;text-decoration:none;padding:11px 22px;border-radius:8px;font-size:0.82rem;font-weight:600}}}}
+  .completed-banner{{text-align:center;background:#131210;border:1px solid rgba(255,255,255,.1);border-radius:14px;padding:20px 18px;margin:16px 0}}
+  .completed-title{{font-family:'Playfair Display',serif;font-size:1.05rem;margin-bottom:12px}}
+  .new-membership-btn{{display:inline-block;background:#e6e1d5;color:#0a0a09;text-decoration:none;padding:11px 22px;border-radius:8px;font-size:0.82rem;font-weight:600}}
 
-  .qr-section{{{{text-align:center;margin-top:auto;padding-top:18px}}}}
-  .qr-section img{{{{border-radius:10px;border:1px solid rgba(255,255,255,.1)}}}}
-  .qr-caption{{{{font-size:0.64rem;color:rgba(230,225,215,.4);margin-top:8px}}}}
+  .qr-section{{text-align:center;margin-top:auto;padding-top:18px}}
+  .qr-section img{{border-radius:10px;border:1px solid rgba(255,255,255,.1)}}
+  .qr-caption{{font-size:0.64rem;color:rgba(230,225,215,.4);margin-top:8px}}
 </style>
 </head>
 <body>
