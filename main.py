@@ -3304,6 +3304,21 @@ def admin_memberships_page():
             actions += f'<button class="mem-btn mem-btn-mark" onclick="markVisit(\'{m["id"]}\')">Отметить визит</button>'
         if m["used_visits"] > 0:
             actions += f'<button class="mem-btn mem-btn-undo" onclick="undoVisit(\'{m["id"]}\')">Отменить отметку</button>'
+
+        pricing_html = ""
+        single_price = m.get("single_visit_price") or 0
+        total_price = m.get("total_price") or 0
+        total_visits = m.get("total_visits") or 0
+        if single_price and total_price and total_visits:
+            per_visit = total_price / total_visits
+            total_saving = (single_price - per_visit) * total_visits
+            service_line = f'{m.get("service_type","")} · ' if m.get("service_type") else ""
+            pricing_html = f"""
+          <div class="mem-pricing">
+            <div class="mem-pricing-row">{service_line}разово {single_price:.0f}€ → по абонементу {per_visit:.1f}€/визит</div>
+            <div class="mem-pricing-row mem-pricing-highlight">Абонемент {total_price:.0f}€ · выгода клиента {total_saving:.0f}€</div>
+          </div>"""
+
         return f"""
         <div class="mem-card" id="card-{m['id']}">
           <div class="mem-top">
@@ -3318,6 +3333,7 @@ def admin_memberships_page():
             <span class="mem-progress-text">{m['used_visits']}/{m['total_visits']}</span>
           </div>
           <div class="mem-meta">{m.get('plan_name','')} · до {m.get('expiry_date','—')}</div>
+          {pricing_html}
           <div class="mem-actions">
             {actions}
             <a class="mem-btn mem-btn-link" href="/membership/{m['id']}" target="_blank">Открыть карточку</a>
@@ -3347,6 +3363,13 @@ def admin_memberships_page():
   .form-field label{{display:block;font-size:0.72rem;color:rgba(242,237,226,.5);margin-bottom:5px}}
   .form-field input{{width:100%;background:#0e0d0b;border:1px solid rgba(201,160,90,.3);border-radius:8px;padding:10px 12px;color:#f2ede2;font-family:'Montserrat',sans-serif;font-size:0.85rem}}
   .form-field input:focus{{outline:none;border-color:#c9a05a}}
+  .form-field select{{width:100%;background:#0e0d0b;border:1px solid rgba(201,160,90,.3);border-radius:8px;padding:10px 12px;color:#f2ede2;font-family:'Montserrat',sans-serif;font-size:0.85rem}}
+  .form-field select:focus{{outline:none;border-color:#c9a05a}}
+  .savings-preview{{background:rgba(74,222,128,.06);border:1px solid rgba(74,222,128,.25);border-radius:10px;padding:12px 14px;margin-bottom:14px}}
+  .savings-row{{display:flex;justify-content:space-between;font-size:0.78rem;color:rgba(242,237,226,.7);padding:4px 0}}
+  .savings-row span:last-child{{font-weight:600;color:#4ade80}}
+  .savings-total{{border-top:1px solid rgba(74,222,128,.2);margin-top:4px;padding-top:8px}}
+  .savings-total span{{font-size:0.85rem}}
   .create-btn{{width:100%;background:#c9a05a;color:#0a0a09;border:none;border-radius:8px;padding:12px;font-weight:600;font-size:0.88rem;cursor:pointer;margin-top:6px}}
   .list-label{{font-size:0.68rem;letter-spacing:.2em;text-transform:uppercase;color:#c9a05a;margin-bottom:14px}}
   .mem-card{{background:#131210;border:1px solid rgba(255,255,255,.06);border-radius:12px;padding:16px 18px;margin-bottom:10px}}
@@ -3359,6 +3382,9 @@ def admin_memberships_page():
   .mem-progress-fill{{height:100%;background:#c9a05a}}
   .mem-progress-text{{font-size:0.75rem;color:rgba(242,237,226,.7);font-weight:600}}
   .mem-meta{{font-size:0.72rem;color:rgba(242,237,226,.5);margin-bottom:12px}}
+  .mem-pricing{{background:rgba(74,222,128,.05);border:1px solid rgba(74,222,128,.2);border-radius:8px;padding:8px 12px;margin-bottom:12px}}
+  .mem-pricing-row{{font-size:0.72rem;color:rgba(242,237,226,.6)}}
+  .mem-pricing-highlight{{color:#4ade80;font-weight:600;margin-top:2px}}
   .mem-actions{{display:flex;gap:8px;flex-wrap:wrap}}
   .mem-btn{{font-size:0.72rem;padding:8px 12px;border-radius:8px;border:1px solid;cursor:pointer;text-decoration:none;font-family:'Montserrat',sans-serif}}
   .mem-btn-mark{{background:rgba(74,222,128,.1);border-color:rgba(74,222,128,.4);color:#4ade80}}
@@ -3385,13 +3411,35 @@ def admin_memberships_page():
       <div class="form-field"><label>Кличка питомца</label><input type="text" id="fPetName" value="{prefill_pet}"></div>
       <div class="form-field"><label>Вид питомца</label><input type="text" id="fPetType" placeholder="Кошка / Собака" value="{prefill_pet_type}"></div>
     </div>
+    <div class="form-field">
+      <label>Тип услуги</label>
+      <select id="fServiceType" onchange="updateSavingsPreview()">
+        <option value="">— выбрать услугу —</option>
+        <option value="Базовый уход">Базовый уход</option>
+        <option value="Гигиенический уход">Гигиенический уход</option>
+        <option value="Комплексный уход">Комплексный уход</option>
+        <option value="SPA-уход">SPA-уход</option>
+        <option value="Экспресс-линька">Экспресс-линька</option>
+        <option value="Тримминг">Тримминг</option>
+        <option value="Вычес">Вычес (кошки)</option>
+      </select>
+    </div>
     <div class="form-row">
       <div class="form-field"><label>Название абонемента</label><input type="text" id="fPlanName" placeholder="5 посещений"></div>
-      <div class="form-field"><label>Кол-во посещений</label><input type="number" id="fTotalVisits" min="1" value="5"></div>
+      <div class="form-field"><label>Кол-во посещений</label><input type="number" id="fTotalVisits" min="1" value="5" oninput="updateSavingsPreview()"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-field"><label>Цена разового визита, €</label><input type="number" id="fSingleVisitPrice" min="0" step="0.5" placeholder="60" oninput="updateSavingsPreview()"></div>
+      <div class="form-field"><label>Стоимость абонемента, €</label><input type="number" id="fTotalPrice" min="0" step="0.5" placeholder="250" oninput="updateSavingsPreview()"></div>
     </div>
     <div class="form-row">
       <div class="form-field"><label>Дата покупки</label><input type="text" id="fPurchaseDate" placeholder="24.08.2026"></div>
       <div class="form-field"><label>Действителен до</label><input type="text" id="fExpiryDate" placeholder="24.02.2027"></div>
+    </div>
+    <div class="savings-preview" id="savingsPreview" style="display:none">
+      <div class="savings-row"><span>Цена за визит по абонементу</span><span id="spPerVisit">—</span></div>
+      <div class="savings-row"><span>Выгода за визит</span><span id="spPerVisitSaving">—</span></div>
+      <div class="savings-row savings-total"><span>Общая выгода клиента</span><span id="spTotalSaving">—</span></div>
     </div>
     <button class="create-btn" onclick="createMembership()">Создать абонемент</button>
   </div>
@@ -3417,7 +3465,10 @@ function createMembership(){{
     plan_name: document.getElementById('fPlanName').value.trim(),
     total_visits: document.getElementById('fTotalVisits').value,
     purchase_date: document.getElementById('fPurchaseDate').value.trim(),
-    expiry_date: document.getElementById('fExpiryDate').value.trim()
+    expiry_date: document.getElementById('fExpiryDate').value.trim(),
+    service_type: document.getElementById('fServiceType').value,
+    single_visit_price: document.getElementById('fSingleVisitPrice').value,
+    total_price: document.getElementById('fTotalPrice').value
   }};
   if(!data.client_name || !data.pet_name || !data.total_visits){{
     showToast('Заполни имя клиента, кличку и число посещений');
@@ -3433,6 +3484,24 @@ function createMembership(){{
       showToast('Ошибка: ' + (res.error||'не удалось создать'));
     }}
   }}).catch(function(){{ showToast('Ошибка сети'); }});
+}}
+
+function updateSavingsPreview(){{
+  var totalVisits = parseFloat(document.getElementById('fTotalVisits').value) || 0;
+  var singlePrice = parseFloat(document.getElementById('fSingleVisitPrice').value) || 0;
+  var totalPrice = parseFloat(document.getElementById('fTotalPrice').value) || 0;
+  var block = document.getElementById('savingsPreview');
+  if(!totalVisits || !singlePrice || !totalPrice){{
+    block.style.display = 'none';
+    return;
+  }}
+  var perVisit = totalPrice / totalVisits;
+  var savingPerVisit = singlePrice - perVisit;
+  var totalSaving = savingPerVisit * totalVisits;
+  document.getElementById('spPerVisit').textContent = perVisit.toFixed(2) + ' €';
+  document.getElementById('spPerVisitSaving').textContent = (savingPerVisit >= 0 ? '−' : '+') + Math.abs(savingPerVisit).toFixed(2) + ' €';
+  document.getElementById('spTotalSaving').textContent = (totalSaving >= 0 ? '−' : '+') + Math.abs(totalSaving).toFixed(2) + ' €';
+  block.style.display = 'block';
 }}
 
 function markVisit(id){{
@@ -3676,6 +3745,9 @@ def api_membership_create():
     total_visits = body.get("total_visits")
     purchase_date = (body.get("purchase_date") or "").strip()
     expiry_date = (body.get("expiry_date") or "").strip()
+    service_type = (body.get("service_type") or "").strip()
+    single_visit_price = body.get("single_visit_price")
+    total_price = body.get("total_price")
 
     if not client_name or not pet_name or not total_visits:
         return jsonify({"success": False, "error": "client_name, pet_name и total_visits обязательны"}), 400
@@ -3683,6 +3755,15 @@ def api_membership_create():
         total_visits = int(total_visits)
     except Exception:
         return jsonify({"success": False, "error": "total_visits должно быть числом"}), 400
+
+    try:
+        single_visit_price = float(single_visit_price) if single_visit_price not in (None, "") else 0.0
+    except Exception:
+        single_visit_price = 0.0
+    try:
+        total_price = float(total_price) if total_price not in (None, "") else 0.0
+    except Exception:
+        total_price = 0.0
 
     memberships = _load_memberships()
     mid = _next_membership_id(memberships)
@@ -3693,10 +3774,13 @@ def api_membership_create():
         "pet_name": pet_name,
         "pet_type": pet_type,
         "plan_name": plan_name or f"{total_visits} посещений",
+        "service_type": service_type,
         "total_visits": total_visits,
         "used_visits": 0,
         "purchase_date": purchase_date,
         "expiry_date": expiry_date,
+        "single_visit_price": single_visit_price,
+        "total_price": total_price,
         "visit_history": [],
         "status": "active",
         "created_at": datetime.now(_REMINDER_TZ).isoformat() if _REMINDER_TZ else datetime.utcnow().isoformat()
