@@ -3368,6 +3368,15 @@ def admin_memberships_page():
   .form-field input{{width:100%;background:#0e0d0b;border:1px solid rgba(201,160,90,.3);border-radius:8px;padding:10px 12px;color:#f2ede2;font-family:'Montserrat',sans-serif;font-size:0.85rem}}
   .form-field input:focus{{outline:none;border-color:#c9a05a}}
   .form-field select{{width:100%;background:#0e0d0b;border:1px solid rgba(201,160,90,.3);border-radius:8px;padding:10px 12px;color:#f2ede2;font-family:'Montserrat',sans-serif;font-size:0.85rem}}
+  .form-field input[readonly]{{color:rgba(242,237,226,.5);cursor:not-allowed}}
+  .breed-search-wrap{{position:relative}}
+  .breed-drop{{display:none;position:absolute;top:100%;left:0;right:0;background:#141310;border:1px solid rgba(201,160,90,.35);border-radius:8px;margin-top:4px;max-height:220px;overflow-y:auto;z-index:20}}
+  .breed-drop.open{{display:block}}
+  .breed-drop-item{{padding:9px 12px;font-size:0.82rem;color:#f2ede2;cursor:pointer;border-bottom:1px solid rgba(255,255,255,.05)}}
+  .breed-drop-item:last-child{{border-bottom:none}}
+  .breed-drop-item:hover{{background:rgba(201,160,90,.1)}}
+  .breed-drop-item mark{{background:none;color:#c9a05a;font-weight:600}}
+  .breed-drop-empty{{padding:12px;font-size:0.78rem;color:rgba(242,237,226,.4);text-align:center}}
   .form-field select:focus{{outline:none;border-color:#c9a05a}}
   .savings-preview{{background:rgba(74,222,128,.06);border:1px solid rgba(74,222,128,.25);border-radius:10px;padding:12px 14px;margin-bottom:14px}}
   .savings-row{{display:flex;justify-content:space-between;font-size:0.78rem;color:rgba(242,237,226,.7);padding:4px 0}}
@@ -3415,9 +3424,10 @@ def admin_memberships_page():
       <div class="form-field"><label>Кличка питомца</label><input type="text" id="fPetName" value="{prefill_pet}"></div>
       <div class="form-field">
         <label>Порода</label>
-        <select id="fBreed" onchange="onBreedChange()">
-          <option value="">— загрузка пород... —</option>
-        </select>
+        <div class="breed-search-wrap">
+          <input type="text" id="fBreedSearch" placeholder="Начните вводить породу..." autocomplete="off" oninput="onBreedSearchInput()">
+          <div class="breed-drop" id="breedDrop"></div>
+        </div>
       </div>
     </div>
     <div class="form-row">
@@ -3430,11 +3440,11 @@ def admin_memberships_page():
       <div class="form-field"><label>Разовая цена, €</label><input type="number" id="fSingleVisitPrice" min="0" step="0.5" placeholder="—" oninput="updateSavingsPreview()"></div>
     </div>
     <div class="form-row">
-      <div class="form-field"><label>Название абонемента</label><input type="text" id="fPlanName" placeholder="5 посещений"></div>
-      <div class="form-field"><label>Кол-во посещений</label><input type="number" id="fTotalVisits" min="1" value="5" oninput="updateSavingsPreview()"></div>
+      <div class="form-field"><label>Название абонемента</label><input type="text" id="fPlanName" placeholder="сформируется автоматически" readonly></div>
+      <div class="form-field"><label>Кол-во посещений</label><input type="number" id="fTotalVisits" min="1" value="5" oninput="updatePlanName();updateSavingsPreview()"></div>
     </div>
     <div class="form-field">
-      <label>Скидка на абонемент, %</label>
+      <label>Выгода в процентах от обычного посещения, %</label>
       <input type="number" id="fDiscountPercent" min="0" max="100" step="1" placeholder="20" oninput="updateSavingsPreview()">
     </div>
     <div class="form-row">
@@ -3463,48 +3473,67 @@ function showToast(msg){{
 }}
 
 var breedData = [];
+var selectedBreed = null;
 
 function loadBreeds(){{
   fetch('/api/breed-prices').then(function(r){{ return r.json(); }}).then(function(res){{
-    var sel = document.getElementById('fBreed');
-    if(!res.success){{
-      sel.innerHTML = '<option value="">Ошибка загрузки пород</option>';
-      return;
-    }}
-    breedData = res.breeds;
-    sel.innerHTML = '<option value="">— выбрать породу —</option>' +
-      breedData.map(function(b){{ return '<option value="' + b.breed + '">' + b.breed + '</option>'; }}).join('');
-  }}).catch(function(){{
-    document.getElementById('fBreed').innerHTML = '<option value="">Ошибка сети</option>';
-  }});
+    if(res.success){{ breedData = res.breeds; }}
+  }}).catch(function(){{}});
 }}
 loadBreeds();
 
-function onBreedChange(){{
-  var breedName = document.getElementById('fBreed').value;
-  var serviceSel = document.getElementById('fServiceType');
-  var found = breedData.find(function(b){{ return b.breed === breedName; }});
-  if(!found){{
-    serviceSel.innerHTML = '<option value="">— сначала выбери породу —</option>';
-    document.getElementById('fSingleVisitPrice').value = '';
-    updateSavingsPreview();
-    return;
+function onBreedSearchInput(){{
+  var q = document.getElementById('fBreedSearch').value.trim();
+  var drop = document.getElementById('breedDrop');
+  if(!q){{ drop.classList.remove('open'); drop.innerHTML=''; return; }}
+  var qLower = q.toLowerCase();
+  var res = breedData.filter(function(b){{ return b.breed.toLowerCase().indexOf(qLower) !== -1; }}).slice(0, 30);
+  drop.innerHTML = '';
+  if(!res.length){{
+    drop.innerHTML = '<div class="breed-drop-empty">Порода не найдена</div>';
+  }} else {{
+    res.forEach(function(b){{
+      var idx = b.breed.toLowerCase().indexOf(qLower);
+      var item = document.createElement('div');
+      item.className = 'breed-drop-item';
+      item.innerHTML = b.breed.substring(0, idx) + '<mark>' + b.breed.substring(idx, idx + q.length) + '</mark>' + b.breed.substring(idx + q.length);
+      item.onclick = function(){{ pickBreed(b); }};
+      drop.appendChild(item);
+    }});
   }}
-  var services = found.services;
+  drop.classList.add('open');
+}}
+
+function pickBreed(b){{
+  selectedBreed = b;
+  document.getElementById('fBreedSearch').value = b.breed;
+  document.getElementById('breedDrop').classList.remove('open');
+  document.getElementById('breedDrop').innerHTML = '';
+
+  var serviceSel = document.getElementById('fServiceType');
   serviceSel.innerHTML = '<option value="">— выбрать услугу —</option>' +
-    Object.keys(services).map(function(s){{ return '<option value="' + s + '">' + s + ' — ' + services[s] + '€</option>'; }}).join('');
+    Object.keys(b.services).map(function(s){{ return '<option value="' + s + '">' + s + ' — ' + b.services[s] + '€</option>'; }}).join('');
   document.getElementById('fSingleVisitPrice').value = '';
   updateSavingsPreview();
 }}
 
+document.addEventListener('click', function(e){{
+  if(!e.target.closest('.breed-search-wrap')) document.getElementById('breedDrop').classList.remove('open');
+}});
+
 function onServiceChange(){{
-  var breedName = document.getElementById('fBreed').value;
   var serviceName = document.getElementById('fServiceType').value;
-  var found = breedData.find(function(b){{ return b.breed === breedName; }});
-  if(found && found.services[serviceName] !== undefined){{
-    document.getElementById('fSingleVisitPrice').value = found.services[serviceName];
+  if(selectedBreed && selectedBreed.services[serviceName] !== undefined){{
+    document.getElementById('fSingleVisitPrice').value = selectedBreed.services[serviceName];
   }}
+  updatePlanName();
   updateSavingsPreview();
+}}
+
+function updatePlanName(){{
+  var visits = document.getElementById('fTotalVisits').value;
+  var service = document.getElementById('fServiceType').value;
+  document.getElementById('fPlanName').value = (visits && service) ? (visits + ' посещений — ' + service) : '';
 }}
 
 function createMembership(){{
@@ -3512,7 +3541,7 @@ function createMembership(){{
     client_name: document.getElementById('fClientName').value.trim(),
     client_phone: document.getElementById('fClientPhone').value.trim(),
     pet_name: document.getElementById('fPetName').value.trim(),
-    pet_type: document.getElementById('fBreed').value,
+    pet_type: selectedBreed ? selectedBreed.breed : document.getElementById('fBreedSearch').value.trim(),
     plan_name: document.getElementById('fPlanName').value.trim(),
     total_visits: document.getElementById('fTotalVisits').value,
     purchase_date: document.getElementById('fPurchaseDate').value.trim(),
