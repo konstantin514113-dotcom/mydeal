@@ -1217,30 +1217,58 @@ def api_upload_pet_photo():
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 
-# ── РУЧНЫЕ ДАННЫЕ КЛИЕНТА (email, Instagram) — Cloudinary raw, постоянно ──
+# ── РУЧНЫЕ ДАННЫЕ КЛИЕНТА (email, Instagram) — Cloudinary raw, единый индекс ──
+_CLIENT_DATA_INDEX_PUBLIC_ID = "rjgrooming/client_data_index.json"
+
 def _client_data_key(phone):
     import hashlib
     return hashlib.sha1((phone or "").strip().lower().encode("utf-8")).hexdigest()
 
-def _client_data_public_id(key):
-    return f"rjgrooming/client_data/{key}.json"
+def _client_data_index_url():
+    return f"https://res.cloudinary.com/{CLOUDINARY_CLOUD_NAME}/raw/upload/{_CLIENT_DATA_INDEX_PUBLIC_ID}"
 
-def _client_data_url(key):
-    return f"https://res.cloudinary.com/{CLOUDINARY_CLOUD_NAME}/raw/upload/{_client_data_public_id(key)}"
-
-def _load_client_data(phone):
-    key = _client_data_key(phone)
+def _load_all_client_data():
+    """Один запрос — все сохранённые правки клиентов разом (ключ = хэш телефона)."""
     try:
-        r = requests.get(_client_data_url(key), timeout=8)
+        r = requests.get(_client_data_index_url(), timeout=8)
         if r.status_code == 200:
             return r.json()
     except Exception:
         pass
     return {}
 
+def _save_all_client_data(data):
+    import hashlib as _hashlib
+    timestamp = int(_time.time())
+    params_to_sign = {"overwrite": "true", "public_id": _CLIENT_DATA_INDEX_PUBLIC_ID, "timestamp": timestamp}
+    to_sign = "&".join(f"{k}={v}" for k, v in sorted(params_to_sign.items()))
+    signature = _hashlib.sha1((to_sign + CLOUDINARY_API_SECRET).encode("utf-8")).hexdigest()
+    payload = json.dumps(data, ensure_ascii=False)
+    try:
+        resp = requests.post(
+            f"https://api.cloudinary.com/v1_1/{CLOUDINARY_CLOUD_NAME}/raw/upload",
+            data={
+                "api_key": CLOUDINARY_API_KEY,
+                "timestamp": timestamp,
+                "public_id": _CLIENT_DATA_INDEX_PUBLIC_ID,
+                "overwrite": "true",
+                "signature": signature,
+            },
+            files={"file": ("data.json", payload, "application/json")},
+            timeout=20
+        )
+        return resp.status_code == 200
+    except Exception as e:
+        print(f"CLIENT DATA SAVE ERROR: {e}", flush=True)
+        return False
+
+def _load_client_data(phone):
+    """Совместимость: одна запись из общего индекса."""
+    key = _client_data_key(phone)
+    return _load_all_client_data().get(key, {})
+
 @app.route("/api/save-client-data", methods=["POST"])
 def api_save_client_data():
-    import hashlib as _hashlib
     body = request.get_json(force=True) or {}
     phone = (body.get("phone") or "").strip()
     if not phone:
@@ -1251,37 +1279,17 @@ def api_save_client_data():
     email = (body.get("email") or "").strip()
     instagram = (body.get("instagram") or "").strip().lstrip("@")
     comment = (body.get("comment") or "").strip()
-    payload = json.dumps({
-        "name": name, "phone_override": phone_override,
-        "email": email, "instagram": instagram, "comment": comment
-    }, ensure_ascii=False)
 
     key = _client_data_key(phone)
-    public_id = _client_data_public_id(key)
-    timestamp = int(_time.time())
-    params_to_sign = {"overwrite": "true", "public_id": public_id, "timestamp": timestamp}
-    to_sign = "&".join(f"{k}={v}" for k, v in sorted(params_to_sign.items()))
-    signature = _hashlib.sha1((to_sign + CLOUDINARY_API_SECRET).encode("utf-8")).hexdigest()
-
-    try:
-        resp = requests.post(
-            f"https://api.cloudinary.com/v1_1/{CLOUDINARY_CLOUD_NAME}/raw/upload",
-            data={
-                "api_key": CLOUDINARY_API_KEY,
-                "timestamp": timestamp,
-                "public_id": public_id,
-                "overwrite": "true",
-                "signature": signature,
-            },
-            files={"file": ("data.json", payload, "application/json")},
-            timeout=20
-        )
-        rbody = resp.json()
-        if resp.status_code != 200 or "secure_url" not in rbody:
-            return jsonify({"success": False, "error": rbody.get("error", {}).get("message", "Cloudinary upload failed")}), 500
-        return jsonify({"success": True, "name": name, "phone_override": phone_override, "email": email, "instagram": instagram, "comment": comment})
-    except Exception as e:
-        return jsonify({"success": False, "error": str(e)}), 500
+    all_data = _load_all_client_data()
+    all_data[key] = {
+        "name": name, "phone_override": phone_override,
+        "email": email, "instagram": instagram, "comment": comment
+    }
+    ok = _save_all_client_data(all_data)
+    if not ok:
+        return jsonify({"success": False, "error": "Cloudinary upload failed"}), 500
+    return jsonify({"success": True, "name": name, "phone_override": phone_override, "email": email, "instagram": instagram, "comment": comment})
 
 def _get_reminder_dashboard_rows():
     """Общая функция: последний визит на клиента за всю историю,
@@ -1315,6 +1323,7 @@ def _get_reminder_dashboard_rows():
             }
 
     reminder_status = _load_reminder_status()
+    all_client_data = _load_all_client_data()
     rows = []
     for phone, info in by_phone.items():
         days_since = (today - info["date"]).days
@@ -1328,7 +1337,7 @@ def _get_reminder_dashboard_rows():
         saved = reminder_status.get(phone, {})
         stage1_done = bool(saved.get("stage1_done")) if saved.get("last_date") == date_str else False
         stage2_done = bool(saved.get("stage2_done")) if saved.get("last_date") == date_str else False
-        client_saved = _load_client_data(phone)
+        client_saved = all_client_data.get(_client_data_key(phone), {})
         display_name = client_saved.get("name") or info["name"]
         display_phone = _normalize_phone(client_saved.get("phone_override") or phone)
         display_email = client_saved.get("email") or info["email"]
@@ -3474,8 +3483,9 @@ def admin_clients_page():
                 entry["last_date"] = d
                 entry["last_master"] = b.get("master", "")
 
+        all_client_data = _load_all_client_data()
         for phone, entry in by_phone.items():
-            saved = _load_client_data(phone)
+            saved = all_client_data.get(_client_data_key(phone), {})
             if saved.get("name"):
                 entry["name"] = saved["name"]
             entry["display_phone"] = _normalize_phone(saved.get("phone_override") or phone)
@@ -4006,8 +4016,9 @@ def admin_client_search():
                         "breed": b.get("breed", ""), "master": b.get("master", ""),
                         "date": b.get("date", ""), "service": b.get("service", "")
                     }
+            all_client_data = _load_all_client_data()
             for key, entry in by_phone.items():
-                saved = _load_client_data(entry["phone"]) if entry["phone"] else {}
+                saved = all_client_data.get(_client_data_key(entry["phone"]), {}) if entry["phone"] else {}
                 if saved.get("name"):
                     entry["name"] = saved["name"]
                 entry["display_phone"] = _normalize_phone(saved.get("phone_override") or entry["phone"])
