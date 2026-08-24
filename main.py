@@ -2942,7 +2942,9 @@ def admin_client_detail():
             pet = b.get("petName", "")
             breed = b.get("breed", "")
             if pet:
-                pets[pet] = breed
+                if breed or pet not in pets:
+                    pets[pet] = breed
+
             try:
                 price = float(b.get("price") or 0)
             except Exception:
@@ -3527,6 +3529,9 @@ function loadBreeds(){{
       breedData = res.breeds;
       if(PREFILL_BREED){{
         var match = breedData.find(function(b){{ return b.breed === PREFILL_BREED; }});
+        if(!match){{
+          match = breedData.find(function(b){{ return b.breed.indexOf(PREFILL_BREED) === 0 || PREFILL_BREED.indexOf(b.breed) === 0; }});
+        }}
         if(match){{ pickBreed(match); }}
         else {{ document.getElementById('fBreedSearch').value = PREFILL_BREED; }}
       }}
