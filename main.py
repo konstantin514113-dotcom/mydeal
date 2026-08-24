@@ -1326,11 +1326,7 @@ def _get_reminder_dashboard_rows():
     """Общая функция: последний визит на клиента за всю историю,
     с расчётом стадии напоминания. Используется дашбордом и отчётами."""
     today = datetime.now(_REMINDER_TZ).date() if _REMINDER_TZ else datetime.utcnow().date()
-    from_date = "01.01.2020"
-    to_date = today.strftime("%d.%m.%Y")
-    r = requests.get(GOOGLE_SCRIPT, params={"action": "stats", "from": from_date, "to": to_date}, timeout=30)
-    data = r.json()
-    bookings = data.get("bookings", []) if isinstance(data, dict) else []
+    bookings = _fetch_full_history_bookings()
 
     by_phone = {}
     for b in bookings:
