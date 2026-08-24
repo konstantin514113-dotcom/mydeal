@@ -2928,6 +2928,33 @@ def admin_client_detail():
 
     pet_photos_html = "".join(pet_photo_card(p, b) for p, b in pets.items()) if pets else '<div class="empty">Питомцы не найдены</div>'
 
+    all_memberships = _load_memberships()
+    client_memberships = [m for m in all_memberships.values() if (m.get("client_phone") or "").strip() == phone]
+    client_memberships.sort(key=lambda m: m.get("id", ""), reverse=True)
+
+    def membership_row_html(m):
+        pct = round((m["used_visits"] / m["total_visits"]) * 100) if m["total_visits"] else 0
+        status_label = "Завершён" if m["status"] == "completed" else "Активен"
+        status_color = "#8a8578" if m["status"] == "completed" else "#4ade80"
+        return f"""
+        <a class="membership-row" href="/membership/{m['id']}" target="_blank">
+          <div class="membership-row-top">
+            <span class="membership-row-id">{m['id']}</span>
+            <span class="membership-row-status" style="color:{status_color};border-color:{status_color}55">{status_label}</span>
+          </div>
+          <div class="membership-row-meta">{m.get('plan_name','')} · {m.get('pet_name','')} · до {m.get('expiry_date','—')}</div>
+          <div class="membership-row-progress-bar"><div class="membership-row-progress-fill" style="width:{pct}%"></div></div>
+          <div class="membership-row-count">{m['used_visits']}/{m['total_visits']} посещений</div>
+        </a>"""
+
+    memberships_html = "".join(membership_row_html(m) for m in client_memberships) if client_memberships else '<div class="empty">Абонементов нет</div>'
+    first_pet_name = next(iter(pets.keys()), "")
+    first_pet_type = pets.get(first_pet_name, "") if first_pet_name else ""
+    new_membership_link = (
+        f"/admin/memberships?client_name={_urlp.quote(name)}&client_phone={_urlp.quote(phone)}"
+        f"&pet_name={_urlp.quote(first_pet_name)}&pet_type={_urlp.quote(first_pet_type)}"
+    )
+
     def visit_row(v):
         return f"""
         <div class="vrow">
@@ -3004,6 +3031,15 @@ def admin_client_detail():
   .pet-photo-img{{width:100%;max-height:340px;object-fit:contain;border-radius:10px;background:#0a0a09;display:block;margin-bottom:10px}}
   .pet-photo-placeholder{{width:100%;height:80px;border:1px dashed rgba(242,237,226,.2);border-radius:10px;display:flex;align-items:center;justify-content:center;color:rgba(242,237,226,.35);font-size:0.78rem;margin-bottom:10px}}
   .pet-photo-btn{{display:block;text-align:center;background:rgba(201,160,90,.1);border:1px solid rgba(201,160,90,.4);color:#c9a05a;border-radius:10px;padding:11px;font-size:0.82rem;font-weight:600;cursor:pointer}}
+  .membership-row{{display:block;background:#141310;border:1px solid rgba(255,255,255,.07);border-radius:12px;padding:14px 16px;margin-bottom:8px;text-decoration:none;color:inherit}}
+  .membership-row-top{{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}}
+  .membership-row-id{{font-family:'Playfair Display',serif;font-size:1rem;font-weight:600;color:#c9a05a}}
+  .membership-row-status{{font-size:0.6rem;text-transform:uppercase;letter-spacing:.05em;padding:3px 9px;border-radius:20px;border:1px solid}}
+  .membership-row-meta{{font-size:0.74rem;color:rgba(242,237,226,.55);margin-bottom:8px}}
+  .membership-row-progress-bar{{height:5px;background:rgba(255,255,255,.08);border-radius:4px;overflow:hidden;margin-bottom:6px}}
+  .membership-row-progress-fill{{height:100%;background:#c9a05a}}
+  .membership-row-count{{font-size:0.72rem;color:rgba(242,237,226,.6)}}
+  .new-membership-link{{display:block;text-align:center;background:rgba(201,160,90,.08);border:1px dashed rgba(201,160,90,.4);color:#c9a05a;border-radius:10px;padding:11px;font-size:0.8rem;text-decoration:none;margin-bottom:24px}}
   .upload-toast{{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);background:#151310;border:1px solid rgba(201,160,90,.4);color:#f2ede2;padding:10px 20px;border-radius:20px;font-size:0.8rem;opacity:0;pointer-events:none;transition:all .25s;z-index:999}}
   .upload-toast.show{{opacity:1;transform:translateX(-50%) translateY(0)}}
 </style>
@@ -3069,6 +3105,10 @@ def admin_client_detail():
       </div>
     </div>
   </div>
+
+  <div class="list-label">Абонементы</div>
+  <div class="memberships-list">{memberships_html}</div>
+  <a class="new-membership-link" href="{new_membership_link}">+ Новый абонемент</a>
 
   <div class="list-label">Анкеты питомцев</div>
   <div class="pet-photos-grid">{pet_photos_html}</div>
@@ -3221,6 +3261,10 @@ def api_find_duplicates():
 
 @app.route("/admin/memberships")
 def admin_memberships_page():
+    prefill_name = request.args.get("client_name", "")
+    prefill_phone = request.args.get("client_phone", "")
+    prefill_pet = request.args.get("pet_name", "")
+    prefill_pet_type = request.args.get("pet_type", "")
     memberships = _load_memberships()
     items = sorted(memberships.values(), key=lambda m: m.get("id", ""), reverse=True)
 
@@ -3307,12 +3351,12 @@ def admin_memberships_page():
   <div class="form-card">
     <div class="form-title">Новый абонемент</div>
     <div class="form-row">
-      <div class="form-field"><label>Имя клиента</label><input type="text" id="fClientName"></div>
-      <div class="form-field"><label>Телефон</label><input type="text" id="fClientPhone"></div>
+      <div class="form-field"><label>Имя клиента</label><input type="text" id="fClientName" value="{prefill_name}"></div>
+      <div class="form-field"><label>Телефон</label><input type="text" id="fClientPhone" value="{prefill_phone}"></div>
     </div>
     <div class="form-row">
-      <div class="form-field"><label>Кличка питомца</label><input type="text" id="fPetName"></div>
-      <div class="form-field"><label>Вид питомца</label><input type="text" id="fPetType" placeholder="Кошка / Собака"></div>
+      <div class="form-field"><label>Кличка питомца</label><input type="text" id="fPetName" value="{prefill_pet}"></div>
+      <div class="form-field"><label>Вид питомца</label><input type="text" id="fPetType" placeholder="Кошка / Собака" value="{prefill_pet_type}"></div>
     </div>
     <div class="form-row">
       <div class="form-field"><label>Название абонемента</label><input type="text" id="fPlanName" placeholder="5 посещений"></div>
