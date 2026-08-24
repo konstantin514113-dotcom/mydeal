@@ -4153,6 +4153,34 @@ def api_breed_prices():
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 
+@app.route("/admin/debug-memberships")
+def admin_debug_memberships():
+    import base64 as _b64_mod
+    debug = {}
+
+    debug["env_check"] = {
+        "cloud_name": CLOUDINARY_CLOUD_NAME,
+        "api_key_set": bool(CLOUDINARY_API_KEY),
+        "api_secret_set": bool(CLOUDINARY_API_SECRET),
+    }
+
+    try:
+        auth = _b64_mod.b64encode(f"{CLOUDINARY_API_KEY}:{CLOUDINARY_API_SECRET}".encode()).decode()
+        meta_r = requests.get(
+            f"https://api.cloudinary.com/v1_1/{CLOUDINARY_CLOUD_NAME}/resources/raw/upload/{_MEMBERSHIP_INDEX_PUBLIC_ID}",
+            headers={"Authorization": f"Basic {auth}"},
+            timeout=8
+        )
+        debug["admin_api_status"] = meta_r.status_code
+        debug["admin_api_response"] = meta_r.json()
+    except Exception as e:
+        debug["admin_api_error"] = str(e)
+
+    debug["load_memberships_result"] = _load_memberships()
+    debug["load_memberships_keys"] = list(debug["load_memberships_result"].keys())
+
+    return jsonify(debug)
+
 @app.route("/admin")
 def admin_hub():
 
