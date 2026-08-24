@@ -1117,6 +1117,25 @@ def _membership_index_url():
     return f"https://res.cloudinary.com/{CLOUDINARY_CLOUD_NAME}/raw/upload/{_MEMBERSHIP_INDEX_PUBLIC_ID}"
 
 def _load_memberships():
+    import base64 as _b64_mod
+    try:
+        auth = _b64_mod.b64encode(f"{CLOUDINARY_API_KEY}:{CLOUDINARY_API_SECRET}".encode()).decode()
+        meta_r = requests.get(
+            f"https://api.cloudinary.com/v1_1/{CLOUDINARY_CLOUD_NAME}/resources/raw/upload/{_MEMBERSHIP_INDEX_PUBLIC_ID}",
+            headers={"Authorization": f"Basic {auth}"},
+            timeout=8
+        )
+        if meta_r.status_code == 200:
+            version = meta_r.json().get("version")
+            if version:
+                versioned_url = f"https://res.cloudinary.com/{CLOUDINARY_CLOUD_NAME}/raw/upload/v{version}/{_MEMBERSHIP_INDEX_PUBLIC_ID}"
+                r = requests.get(versioned_url, timeout=8)
+                if r.status_code == 200:
+                    return r.json()
+    except Exception as e:
+        print(f"MEMBERSHIP LOAD (versioned) ERROR: {e}", flush=True)
+
+    # запасной вариант — обычный запрос без версии
     try:
         r = requests.get(_membership_index_url(), params={"_": int(_time.time() * 1000)}, timeout=8)
         if r.status_code == 200:
