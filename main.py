@@ -1118,7 +1118,7 @@ def _membership_index_url():
 
 def _load_memberships():
     try:
-        r = requests.get(_membership_index_url(), timeout=8)
+        r = requests.get(_membership_index_url(), params={"_": int(_time.time() * 1000)}, timeout=8)
         if r.status_code == 200:
             return r.json()
     except Exception:
@@ -1128,7 +1128,7 @@ def _load_memberships():
 def _save_memberships(data):
     import hashlib as _hashlib
     timestamp = int(_time.time())
-    params_to_sign = {"overwrite": "true", "public_id": _MEMBERSHIP_INDEX_PUBLIC_ID, "timestamp": timestamp}
+    params_to_sign = {"invalidate": "true", "overwrite": "true", "public_id": _MEMBERSHIP_INDEX_PUBLIC_ID, "timestamp": timestamp}
     to_sign = "&".join(f"{k}={v}" for k, v in sorted(params_to_sign.items()))
     signature = _hashlib.sha1((to_sign + CLOUDINARY_API_SECRET).encode("utf-8")).hexdigest()
     payload = json.dumps(data, ensure_ascii=False)
@@ -1140,6 +1140,7 @@ def _save_memberships(data):
                 "timestamp": timestamp,
                 "public_id": _MEMBERSHIP_INDEX_PUBLIC_ID,
                 "overwrite": "true",
+                "invalidate": "true",
                 "signature": signature,
             },
             files={"file": ("data.json", payload, "application/json")},
