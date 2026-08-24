@@ -3003,6 +3003,7 @@ def admin_client_detail():
     new_membership_link = (
         f"/admin/memberships?client_name={_urlp.quote(name)}&client_phone={_urlp.quote(phone)}"
         f"&pet_name={_urlp.quote(first_pet_name)}&pet_type={_urlp.quote(first_pet_type)}"
+        f"&client_email={_urlp.quote(email)}"
     )
 
     def visit_row(v):
@@ -3312,6 +3313,7 @@ def admin_memberships_page():
     prefill_phone = request.args.get("client_phone", "")
     prefill_pet = request.args.get("pet_name", "")
     prefill_pet_type = request.args.get("pet_type", "")
+    prefill_email = request.args.get("client_email", "")
     memberships = _load_memberships()
     items = sorted(memberships.values(), key=lambda m: m.get("id", ""), reverse=True)
 
@@ -3444,6 +3446,9 @@ def admin_memberships_page():
     </div>
     <div class="form-row">
       <div class="form-field"><label>Кличка питомца</label><input type="text" id="fPetName" value="{prefill_pet}"></div>
+      <div class="form-field"><label>Email</label><input type="email" id="fClientEmail" value="{prefill_email}" placeholder="client@example.com"></div>
+    </div>
+    <div class="form-row">
       <div class="form-field">
         <label>Порода</label>
         <div class="breed-search-wrap">
@@ -3451,15 +3456,16 @@ def admin_memberships_page():
           <div class="breed-drop" id="breedDrop"></div>
         </div>
       </div>
-    </div>
-    <div class="form-row">
       <div class="form-field">
         <label>Тип услуги</label>
         <select id="fServiceType" onchange="onServiceChange()">
           <option value="">— сначала выбери породу —</option>
         </select>
       </div>
+    </div>
+    <div class="form-row">
       <div class="form-field"><label>Разовая цена, €</label><input type="number" id="fSingleVisitPrice" min="0" step="0.5" placeholder="—" oninput="updateSavingsPreview()"></div>
+      <div class="form-field"></div>
     </div>
     <div class="form-row">
       <div class="form-field"><label>Название абонемента</label><input type="text" id="fPlanName" placeholder="сформируется автоматически" readonly></div>
@@ -3496,10 +3502,18 @@ function showToast(msg){{
 
 var breedData = [];
 var selectedBreed = null;
+var PREFILL_BREED = {json.dumps(prefill_pet_type)};
 
 function loadBreeds(){{
   fetch('/api/breed-prices').then(function(r){{ return r.json(); }}).then(function(res){{
-    if(res.success){{ breedData = res.breeds; }}
+    if(res.success){{
+      breedData = res.breeds;
+      if(PREFILL_BREED){{
+        var match = breedData.find(function(b){{ return b.breed === PREFILL_BREED; }});
+        if(match){{ pickBreed(match); }}
+        else {{ document.getElementById('fBreedSearch').value = PREFILL_BREED; }}
+      }}
+    }}
   }}).catch(function(){{}});
 }}
 loadBreeds();
@@ -3562,6 +3576,7 @@ function createMembership(){{
   var data = {{
     client_name: document.getElementById('fClientName').value.trim(),
     client_phone: document.getElementById('fClientPhone').value.trim(),
+    client_email: document.getElementById('fClientEmail').value.trim(),
     pet_name: document.getElementById('fPetName').value.trim(),
     pet_type: selectedBreed ? selectedBreed.breed : document.getElementById('fBreedSearch').value.trim(),
     plan_name: document.getElementById('fPlanName').value.trim(),
@@ -3857,6 +3872,7 @@ def api_membership_create():
     body = request.get_json(force=True) or {}
     client_name = (body.get("client_name") or "").strip()
     client_phone = (body.get("client_phone") or "").strip()
+    client_email = (body.get("client_email") or "").strip()
     pet_name = (body.get("pet_name") or "").strip()
     pet_type = (body.get("pet_type") or "").strip()
     plan_name = (body.get("plan_name") or "").strip()
@@ -3893,6 +3909,7 @@ def api_membership_create():
         "id": mid,
         "client_name": client_name,
         "client_phone": client_phone,
+        "client_email": client_email,
         "pet_name": pet_name,
         "pet_type": pet_type,
         "plan_name": plan_name or f"{total_visits} посещений",
