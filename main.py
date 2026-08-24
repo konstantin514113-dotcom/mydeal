@@ -3309,14 +3309,18 @@ def admin_memberships_page():
         single_price = m.get("single_visit_price") or 0
         total_price = m.get("total_price") or 0
         total_visits = m.get("total_visits") or 0
+        discount_pct = m.get("discount_percent") or 0
         if single_price and total_price and total_visits:
-            per_visit = total_price / total_visits
-            total_saving = (single_price - per_visit) * total_visits
+            per_visit = m.get("per_visit_price") or (total_price / total_visits)
+            without_total = single_price * total_visits
+            total_saving = without_total - total_price
             service_line = f'{m.get("service_type","")} · ' if m.get("service_type") else ""
+            discount_line = f' · скидка {discount_pct:.0f}%' if discount_pct else ""
             pricing_html = f"""
           <div class="mem-pricing">
-            <div class="mem-pricing-row">{service_line}разово {single_price:.0f}€ → по абонементу {per_visit:.1f}€/визит</div>
-            <div class="mem-pricing-row mem-pricing-highlight">Абонемент {total_price:.0f}€ · выгода клиента {total_saving:.0f}€</div>
+            <div class="mem-pricing-row">{service_line}разово {single_price:.0f}€ → по абонементу {per_visit:.1f}€/визит{discount_line}</div>
+            <div class="mem-pricing-row">Без абонемента: {without_total:.0f}€ · С абонементом: {total_price:.0f}€</div>
+            <div class="mem-pricing-row mem-pricing-highlight">Выгода клиента: {total_saving:.0f}€</div>
           </div>"""
 
         return f"""
@@ -3409,28 +3413,29 @@ def admin_memberships_page():
     </div>
     <div class="form-row">
       <div class="form-field"><label>Кличка питомца</label><input type="text" id="fPetName" value="{prefill_pet}"></div>
-      <div class="form-field"><label>Вид питомца</label><input type="text" id="fPetType" placeholder="Кошка / Собака" value="{prefill_pet_type}"></div>
+      <div class="form-field">
+        <label>Порода</label>
+        <select id="fBreed" onchange="onBreedChange()">
+          <option value="">— загрузка пород... —</option>
+        </select>
+      </div>
     </div>
-    <div class="form-field">
-      <label>Тип услуги</label>
-      <select id="fServiceType" onchange="updateSavingsPreview()">
-        <option value="">— выбрать услугу —</option>
-        <option value="Базовый уход">Базовый уход</option>
-        <option value="Гигиенический уход">Гигиенический уход</option>
-        <option value="Комплексный уход">Комплексный уход</option>
-        <option value="SPA-уход">SPA-уход</option>
-        <option value="Экспресс-линька">Экспресс-линька</option>
-        <option value="Тримминг">Тримминг</option>
-        <option value="Вычес">Вычес (кошки)</option>
-      </select>
+    <div class="form-row">
+      <div class="form-field">
+        <label>Тип услуги</label>
+        <select id="fServiceType" onchange="onServiceChange()">
+          <option value="">— сначала выбери породу —</option>
+        </select>
+      </div>
+      <div class="form-field"><label>Разовая цена, €</label><input type="number" id="fSingleVisitPrice" min="0" step="0.5" placeholder="—" oninput="updateSavingsPreview()"></div>
     </div>
     <div class="form-row">
       <div class="form-field"><label>Название абонемента</label><input type="text" id="fPlanName" placeholder="5 посещений"></div>
       <div class="form-field"><label>Кол-во посещений</label><input type="number" id="fTotalVisits" min="1" value="5" oninput="updateSavingsPreview()"></div>
     </div>
-    <div class="form-row">
-      <div class="form-field"><label>Цена разового визита, €</label><input type="number" id="fSingleVisitPrice" min="0" step="0.5" placeholder="60" oninput="updateSavingsPreview()"></div>
-      <div class="form-field"><label>Стоимость абонемента, €</label><input type="number" id="fTotalPrice" min="0" step="0.5" placeholder="250" oninput="updateSavingsPreview()"></div>
+    <div class="form-field">
+      <label>Скидка на абонемент, %</label>
+      <input type="number" id="fDiscountPercent" min="0" max="100" step="1" placeholder="20" oninput="updateSavingsPreview()">
     </div>
     <div class="form-row">
       <div class="form-field"><label>Дата покупки</label><input type="text" id="fPurchaseDate" placeholder="24.08.2026"></div>
@@ -3438,7 +3443,8 @@ def admin_memberships_page():
     </div>
     <div class="savings-preview" id="savingsPreview" style="display:none">
       <div class="savings-row"><span>Цена за визит по абонементу</span><span id="spPerVisit">—</span></div>
-      <div class="savings-row"><span>Выгода за визит</span><span id="spPerVisitSaving">—</span></div>
+      <div class="savings-row"><span>Стоимость абонемента</span><span id="spTotalPrice">—</span></div>
+      <div class="savings-row"><span>Без абонемента за визиты</span><span id="spWithoutTotal">—</span></div>
       <div class="savings-row savings-total"><span>Общая выгода клиента</span><span id="spTotalSaving">—</span></div>
     </div>
     <button class="create-btn" onclick="createMembership()">Создать абонемент</button>
@@ -3456,19 +3462,64 @@ function showToast(msg){{
   setTimeout(function(){{ t.classList.remove('show'); }}, 2500);
 }}
 
+var breedData = [];
+
+function loadBreeds(){{
+  fetch('/api/breed-prices').then(function(r){{ return r.json(); }}).then(function(res){{
+    var sel = document.getElementById('fBreed');
+    if(!res.success){{
+      sel.innerHTML = '<option value="">Ошибка загрузки пород</option>';
+      return;
+    }}
+    breedData = res.breeds;
+    sel.innerHTML = '<option value="">— выбрать породу —</option>' +
+      breedData.map(function(b){{ return '<option value="' + b.breed + '">' + b.breed + '</option>'; }}).join('');
+  }}).catch(function(){{
+    document.getElementById('fBreed').innerHTML = '<option value="">Ошибка сети</option>';
+  }});
+}}
+loadBreeds();
+
+function onBreedChange(){{
+  var breedName = document.getElementById('fBreed').value;
+  var serviceSel = document.getElementById('fServiceType');
+  var found = breedData.find(function(b){{ return b.breed === breedName; }});
+  if(!found){{
+    serviceSel.innerHTML = '<option value="">— сначала выбери породу —</option>';
+    document.getElementById('fSingleVisitPrice').value = '';
+    updateSavingsPreview();
+    return;
+  }}
+  var services = found.services;
+  serviceSel.innerHTML = '<option value="">— выбрать услугу —</option>' +
+    Object.keys(services).map(function(s){{ return '<option value="' + s + '">' + s + ' — ' + services[s] + '€</option>'; }}).join('');
+  document.getElementById('fSingleVisitPrice').value = '';
+  updateSavingsPreview();
+}}
+
+function onServiceChange(){{
+  var breedName = document.getElementById('fBreed').value;
+  var serviceName = document.getElementById('fServiceType').value;
+  var found = breedData.find(function(b){{ return b.breed === breedName; }});
+  if(found && found.services[serviceName] !== undefined){{
+    document.getElementById('fSingleVisitPrice').value = found.services[serviceName];
+  }}
+  updateSavingsPreview();
+}}
+
 function createMembership(){{
   var data = {{
     client_name: document.getElementById('fClientName').value.trim(),
     client_phone: document.getElementById('fClientPhone').value.trim(),
     pet_name: document.getElementById('fPetName').value.trim(),
-    pet_type: document.getElementById('fPetType').value.trim(),
+    pet_type: document.getElementById('fBreed').value,
     plan_name: document.getElementById('fPlanName').value.trim(),
     total_visits: document.getElementById('fTotalVisits').value,
     purchase_date: document.getElementById('fPurchaseDate').value.trim(),
     expiry_date: document.getElementById('fExpiryDate').value.trim(),
     service_type: document.getElementById('fServiceType').value,
     single_visit_price: document.getElementById('fSingleVisitPrice').value,
-    total_price: document.getElementById('fTotalPrice').value
+    discount_percent: document.getElementById('fDiscountPercent').value
   }};
   if(!data.client_name || !data.pet_name || !data.total_visits){{
     showToast('Заполни имя клиента, кличку и число посещений');
@@ -3489,18 +3540,20 @@ function createMembership(){{
 function updateSavingsPreview(){{
   var totalVisits = parseFloat(document.getElementById('fTotalVisits').value) || 0;
   var singlePrice = parseFloat(document.getElementById('fSingleVisitPrice').value) || 0;
-  var totalPrice = parseFloat(document.getElementById('fTotalPrice').value) || 0;
+  var discountPct = parseFloat(document.getElementById('fDiscountPercent').value) || 0;
   var block = document.getElementById('savingsPreview');
-  if(!totalVisits || !singlePrice || !totalPrice){{
+  if(!totalVisits || !singlePrice){{
     block.style.display = 'none';
     return;
   }}
-  var perVisit = totalPrice / totalVisits;
-  var savingPerVisit = singlePrice - perVisit;
-  var totalSaving = savingPerVisit * totalVisits;
+  var perVisit = singlePrice * (1 - discountPct / 100);
+  var totalPrice = perVisit * totalVisits;
+  var withoutTotal = singlePrice * totalVisits;
+  var totalSaving = withoutTotal - totalPrice;
   document.getElementById('spPerVisit').textContent = perVisit.toFixed(2) + ' €';
-  document.getElementById('spPerVisitSaving').textContent = (savingPerVisit >= 0 ? '−' : '+') + Math.abs(savingPerVisit).toFixed(2) + ' €';
-  document.getElementById('spTotalSaving').textContent = (totalSaving >= 0 ? '−' : '+') + Math.abs(totalSaving).toFixed(2) + ' €';
+  document.getElementById('spTotalPrice').textContent = totalPrice.toFixed(2) + ' €';
+  document.getElementById('spWithoutTotal').textContent = totalVisits + ' × ' + singlePrice.toFixed(2) + ' € = ' + withoutTotal.toFixed(2) + ' €';
+  document.getElementById('spTotalSaving').textContent = totalSaving.toFixed(2) + ' €';
   block.style.display = 'block';
 }}
 
@@ -3747,7 +3800,7 @@ def api_membership_create():
     expiry_date = (body.get("expiry_date") or "").strip()
     service_type = (body.get("service_type") or "").strip()
     single_visit_price = body.get("single_visit_price")
-    total_price = body.get("total_price")
+    discount_percent = body.get("discount_percent")
 
     if not client_name or not pet_name or not total_visits:
         return jsonify({"success": False, "error": "client_name, pet_name и total_visits обязательны"}), 400
@@ -3761,9 +3814,13 @@ def api_membership_create():
     except Exception:
         single_visit_price = 0.0
     try:
-        total_price = float(total_price) if total_price not in (None, "") else 0.0
+        discount_percent = float(discount_percent) if discount_percent not in (None, "") else 0.0
     except Exception:
-        total_price = 0.0
+        discount_percent = 0.0
+    discount_percent = max(0.0, min(100.0, discount_percent))
+
+    per_visit_price = round(single_visit_price * (1 - discount_percent / 100), 2)
+    total_price = round(per_visit_price * total_visits, 2)
 
     memberships = _load_memberships()
     mid = _next_membership_id(memberships)
@@ -3780,6 +3837,8 @@ def api_membership_create():
         "purchase_date": purchase_date,
         "expiry_date": expiry_date,
         "single_visit_price": single_visit_price,
+        "discount_percent": discount_percent,
+        "per_visit_price": per_visit_price,
         "total_price": total_price,
         "visit_history": [],
         "status": "active",
@@ -4014,6 +4073,20 @@ def admin_migrate_client_data():
         "errors": errors,
         "total_in_new_index": len(all_data)
     })
+
+@app.route("/api/breed-prices")
+def api_breed_prices():
+    import base64 as _b64_mod
+    try:
+        html = _b64_mod.b64decode(BOOKING_HTML_B64).decode("utf-8")
+        m = re.search(r"var DATA = (\[.*?\]);", html, re.DOTALL)
+        if not m:
+            return jsonify({"success": False, "error": "Не удалось найти данные о ценах"}), 500
+        data = json.loads(m.group(1))
+        result = [{"breed": d["breed"], "services": d["services"]} for d in data]
+        return jsonify({"success": True, "breeds": result})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
 
 @app.route("/admin")
 def admin_hub():
