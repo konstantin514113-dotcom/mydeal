@@ -3612,14 +3612,18 @@ function deleteMembership(id){{
   fetch('/api/membership/delete', {{
     method:'POST', headers:{{'Content-Type':'application/json'}}, body: JSON.stringify({{id:id}})
   }}).then(function(r){{return r.json();}}).then(function(res){{
-    if(res.success){{ showToast('Удалён'); setTimeout(function(){{location.reload();}}, 500); }}
+    if(res.success){{ showToast('Удалён'); setTimeout(function(){{location.reload();}}, 900); }}
     else{{ showToast('Ошибка: ' + (res.error||'')); }}
   }}).catch(function(){{ showToast('Ошибка сети'); }});
 }}
 </script>
 </body>
 </html>"""
-    return html, 200, {"Content-Type": "text/html; charset=utf-8"}
+    return html, 200, {
+        "Content-Type": "text/html; charset=utf-8",
+        "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+        "Pragma": "no-cache"
+    }
 
 @app.route("/admin/clients")
 def admin_clients_page():
