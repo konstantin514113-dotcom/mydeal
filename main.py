@@ -4090,12 +4090,7 @@ def _render_membership_card(mid):
   .face-front{{display:flex;align-items:center;justify-content:center}}
   .brand-frame{{position:absolute;inset:14px;border:1px solid rgba(200,195,180,.4);border-radius:12px}}
   .brand-inner{{position:absolute;inset:26px;border:1px solid rgba(200,195,180,.22);border-radius:6px;display:flex;flex-direction:column;align-items:center;justify-content:center}}
-  .brand-logo{{font-family:'Playfair Display',serif;font-size:4.4rem;font-weight:600;display:flex;align-items:baseline;gap:8px;
-    background:linear-gradient(158deg,#f7f4ea 0%,#cdc7b5 30%,#8d8874 50%,#e9e4d5 70%,#a49e89 100%);
-    -webkit-background-clip:text;background-clip:text;color:transparent}}
-  .brand-logo .amp{{font-size:2.3rem;font-style:italic}}
-  .brand-rule{{width:130px;height:1px;background:linear-gradient(90deg,transparent,rgba(205,199,181,.7),transparent);margin:16px 0 12px}}
-  .brand-sub{{font-family:'Montserrat',sans-serif;font-size:0.9rem;letter-spacing:.55em;color:rgba(205,199,181,.8);padding-left:.55em}}
+  .brand-logo-img{{width:58%;max-width:230px;height:auto;display:block;filter:drop-shadow(0 0 18px rgba(255,255,255,.06))}}
   .tap-hint{{position:absolute;bottom:22px;left:0;right:0;text-align:center;font-size:0.62rem;letter-spacing:.18em;text-transform:uppercase;color:rgba(205,199,181,.35)}}
 
   .face-back{{transform:rotateY(180deg);padding:24px 22px;overflow-y:auto;display:flex;flex-direction:column}}
@@ -4145,9 +4140,7 @@ def _render_membership_card(mid):
       <div class="face face-front" id="cardFront">
         <div class="brand-frame"></div>
         <div class="brand-inner">
-          <div class="brand-logo">R<span class="amp">&amp;</span>J</div>
-          <div class="brand-rule"></div>
-          <div class="brand-sub">GROOMING</div>
+          <img class="brand-logo-img" src="data:image/png;base64,{_get_logo_b64()}" alt="R&amp;J Grooming">
         </div>
         <div class="tap-hint">Нажмите, чтобы открыть абонемент</div>
       </div>
