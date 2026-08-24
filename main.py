@@ -3868,6 +3868,54 @@ def public_membership_card(mid):
     html = html.replace("LOGOPLACEHOLDER", logo_b64)
     return html, 200, {"Content-Type": "text/html; charset=utf-8"}
 
+@app.route("/admin/migrate-client-data")
+def admin_migrate_client_data():
+    """Разовая миграция: старые отдельные файлы rjgrooming/client_data/*.json
+    переносятся в единый rjgrooming/client_data_index.json."""
+    import base64 as _b64
+    auth = _b64.b64encode(f"{CLOUDINARY_API_KEY}:{CLOUDINARY_API_SECRET}".encode()).decode()
+    headers = {"Authorization": f"Basic {auth}"}
+
+    try:
+        r = requests.get(
+            f"https://api.cloudinary.com/v1_1/{CLOUDINARY_CLOUD_NAME}/resources/raw",
+            headers=headers,
+            params={"prefix": "rjgrooming/client_data/", "type": "upload", "max_results": 500},
+            timeout=20
+        )
+        listing = r.json()
+    except Exception as e:
+        return jsonify({"success": False, "error": f"list failed: {e}"}), 500
+
+    resources = listing.get("resources", [])
+    all_data = _load_all_client_data()
+    migrated = []
+    errors = []
+
+    for res in resources:
+        public_id = res.get("public_id", "")
+        key = public_id.split("/")[-1]
+        secure_url = res.get("secure_url")
+        if not secure_url:
+            continue
+        try:
+            fr = requests.get(secure_url, timeout=10)
+            if fr.status_code == 200:
+                all_data[key] = fr.json()
+                migrated.append(key)
+        except Exception as e:
+            errors.append(f"{key}: {e}")
+
+    ok = _save_all_client_data(all_data)
+    return jsonify({
+        "success": ok,
+        "found_old_files": len(resources),
+        "migrated_count": len(migrated),
+        "migrated_keys": migrated,
+        "errors": errors,
+        "total_in_new_index": len(all_data)
+    })
+
 @app.route("/admin")
 def admin_hub():
 
