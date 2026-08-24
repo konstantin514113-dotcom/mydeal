@@ -1079,6 +1079,58 @@ def _save_reminder_status(data):
         print(f"REMINDER STATUS SAVE ERROR: {e}", flush=True)
         return False
 
+# ── АБОНЕМЕНТЫ (цифровая карта посещений) ────────────────────────────────
+_MEMBERSHIP_INDEX_PUBLIC_ID = "rjgrooming/membership_index.json"
+
+def _membership_index_url():
+    return f"https://res.cloudinary.com/{CLOUDINARY_CLOUD_NAME}/raw/upload/{_MEMBERSHIP_INDEX_PUBLIC_ID}"
+
+def _load_memberships():
+    try:
+        r = requests.get(_membership_index_url(), timeout=8)
+        if r.status_code == 200:
+            return r.json()
+    except Exception:
+        pass
+    return {}
+
+def _save_memberships(data):
+    import hashlib as _hashlib
+    timestamp = int(_time.time())
+    params_to_sign = {"overwrite": "true", "public_id": _MEMBERSHIP_INDEX_PUBLIC_ID, "timestamp": timestamp}
+    to_sign = "&".join(f"{k}={v}" for k, v in sorted(params_to_sign.items()))
+    signature = _hashlib.sha1((to_sign + CLOUDINARY_API_SECRET).encode("utf-8")).hexdigest()
+    payload = json.dumps(data, ensure_ascii=False)
+    try:
+        resp = requests.post(
+            f"https://api.cloudinary.com/v1_1/{CLOUDINARY_CLOUD_NAME}/raw/upload",
+            data={
+                "api_key": CLOUDINARY_API_KEY,
+                "timestamp": timestamp,
+                "public_id": _MEMBERSHIP_INDEX_PUBLIC_ID,
+                "overwrite": "true",
+                "signature": signature,
+            },
+            files={"file": ("data.json", payload, "application/json")},
+            timeout=15
+        )
+        if resp.status_code != 200:
+            print(f"MEMBERSHIP SAVE ERROR: {resp.status_code} {resp.text[:200]}", flush=True)
+        return resp.status_code == 200
+    except Exception as e:
+        print(f"MEMBERSHIP SAVE ERROR: {e}", flush=True)
+        return False
+
+def _next_membership_id(memberships):
+    nums = []
+    for k in memberships.keys():
+        try:
+            nums.append(int(k.replace("RJ-", "")))
+        except Exception:
+            pass
+    n = (max(nums) + 1) if nums else 1
+    return f"RJ-{n:03d}"
+
 @app.route("/api/mark-reminder", methods=["POST"])
 def api_mark_reminder():
     body = request.get_json(force=True) or {}
@@ -3167,6 +3219,173 @@ def api_find_duplicates():
         "name_dupes_count": len(name_dupes)
     })
 
+@app.route("/admin/memberships")
+def admin_memberships_page():
+    memberships = _load_memberships()
+    items = sorted(memberships.values(), key=lambda m: m.get("id", ""), reverse=True)
+
+    def card_html(m):
+        pct = round((m["used_visits"] / m["total_visits"]) * 100) if m["total_visits"] else 0
+        status_label = "Завершён" if m["status"] == "completed" else "Активен"
+        status_color = "#8a8578" if m["status"] == "completed" else "#4ade80"
+        actions = ""
+        if m["status"] != "completed" and m["used_visits"] < m["total_visits"]:
+            actions += f'<button class="mem-btn mem-btn-mark" onclick="markVisit(\'{m["id"]}\')">Отметить визит</button>'
+        if m["used_visits"] > 0:
+            actions += f'<button class="mem-btn mem-btn-undo" onclick="undoVisit(\'{m["id"]}\')">Отменить отметку</button>'
+        return f"""
+        <div class="mem-card" id="card-{m['id']}">
+          <div class="mem-top">
+            <div>
+              <div class="mem-id">{m['id']}</div>
+              <div class="mem-client">{m['client_name']} · {m['pet_name']}</div>
+            </div>
+            <div class="mem-status" style="color:{status_color};border-color:{status_color}55">{status_label}</div>
+          </div>
+          <div class="mem-progress-row">
+            <div class="mem-progress-bar"><div class="mem-progress-fill" style="width:{pct}%"></div></div>
+            <span class="mem-progress-text">{m['used_visits']}/{m['total_visits']}</span>
+          </div>
+          <div class="mem-meta">{m.get('plan_name','')} · до {m.get('expiry_date','—')}</div>
+          <div class="mem-actions">
+            {actions}
+            <a class="mem-btn mem-btn-link" href="/membership/{m['id']}" target="_blank">Открыть карточку</a>
+          </div>
+        </div>"""
+
+    cards_html = "".join(card_html(m) for m in items) if items else '<div class="empty">Абонементов пока нет</div>'
+
+    html = f"""<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>R&J Grooming — Абонементы</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,500;0,600;0,700;1,500&family=Montserrat:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  *{{box-sizing:border-box;margin:0;padding:0}}
+  body{{background:#0a0a09;color:#f2ede2;font-family:'Montserrat',sans-serif;padding:36px 20px 80px}}
+  .wrap{{max-width:640px;margin:0 auto}}
+  .back-link{{display:inline-block;font-size:0.74rem;color:rgba(201,160,90,.75);text-decoration:none;margin-bottom:16px}}
+  .eyebrow{{font-size:0.68rem;letter-spacing:.3em;text-transform:uppercase;color:rgba(242,237,226,.4);margin-bottom:10px}}
+  h1{{font-family:'Playfair Display',serif;font-weight:600;font-size:2.1rem;margin-bottom:24px}}
+  .form-card{{background:#141310;border:1px solid rgba(201,160,90,.25);border-radius:14px;padding:20px;margin-bottom:28px}}
+  .form-title{{font-size:0.66rem;letter-spacing:.15em;text-transform:uppercase;color:#c9a05a;margin-bottom:14px}}
+  .form-row{{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px}}
+  .form-field{{margin-bottom:10px}}
+  .form-field label{{display:block;font-size:0.72rem;color:rgba(242,237,226,.5);margin-bottom:5px}}
+  .form-field input{{width:100%;background:#0e0d0b;border:1px solid rgba(201,160,90,.3);border-radius:8px;padding:10px 12px;color:#f2ede2;font-family:'Montserrat',sans-serif;font-size:0.85rem}}
+  .form-field input:focus{{outline:none;border-color:#c9a05a}}
+  .create-btn{{width:100%;background:#c9a05a;color:#0a0a09;border:none;border-radius:8px;padding:12px;font-weight:600;font-size:0.88rem;cursor:pointer;margin-top:6px}}
+  .list-label{{font-size:0.68rem;letter-spacing:.2em;text-transform:uppercase;color:#c9a05a;margin-bottom:14px}}
+  .mem-card{{background:#131210;border:1px solid rgba(255,255,255,.06);border-radius:12px;padding:16px 18px;margin-bottom:10px}}
+  .mem-top{{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px}}
+  .mem-id{{font-family:'Playfair Display',serif;font-size:1.1rem;font-weight:600;color:#c9a05a}}
+  .mem-client{{font-size:0.85rem;color:rgba(242,237,226,.75);margin-top:2px}}
+  .mem-status{{font-size:0.62rem;text-transform:uppercase;letter-spacing:.05em;padding:4px 10px;border-radius:20px;border:1px solid;white-space:nowrap}}
+  .mem-progress-row{{display:flex;align-items:center;gap:10px;margin-bottom:8px}}
+  .mem-progress-bar{{flex:1;height:6px;background:rgba(255,255,255,.08);border-radius:4px;overflow:hidden}}
+  .mem-progress-fill{{height:100%;background:#c9a05a}}
+  .mem-progress-text{{font-size:0.75rem;color:rgba(242,237,226,.7);font-weight:600}}
+  .mem-meta{{font-size:0.72rem;color:rgba(242,237,226,.5);margin-bottom:12px}}
+  .mem-actions{{display:flex;gap:8px;flex-wrap:wrap}}
+  .mem-btn{{font-size:0.72rem;padding:8px 12px;border-radius:8px;border:1px solid;cursor:pointer;text-decoration:none;font-family:'Montserrat',sans-serif}}
+  .mem-btn-mark{{background:rgba(74,222,128,.1);border-color:rgba(74,222,128,.4);color:#4ade80}}
+  .mem-btn-undo{{background:none;border-color:rgba(224,82,74,.4);color:#e0524a}}
+  .mem-btn-link{{background:rgba(201,160,90,.1);border-color:rgba(201,160,90,.4);color:#c9a05a}}
+  .empty{{text-align:center;padding:40px 0;color:rgba(242,237,226,.4);font-size:0.85rem}}
+  .toast{{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);background:#151310;border:1px solid rgba(201,160,90,.4);color:#f2ede2;padding:10px 20px;border-radius:20px;font-size:0.8rem;opacity:0;pointer-events:none;transition:all .25s;z-index:999}}
+  .toast.show{{opacity:1;transform:translateX(-50%) translateY(0)}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a href="/admin" class="back-link">← Админ-панель</a>
+  <div class="eyebrow">R&J Grooming · Абонементы</div>
+  <h1>Абонементы</h1>
+
+  <div class="form-card">
+    <div class="form-title">Новый абонемент</div>
+    <div class="form-row">
+      <div class="form-field"><label>Имя клиента</label><input type="text" id="fClientName"></div>
+      <div class="form-field"><label>Телефон</label><input type="text" id="fClientPhone"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-field"><label>Кличка питомца</label><input type="text" id="fPetName"></div>
+      <div class="form-field"><label>Вид питомца</label><input type="text" id="fPetType" placeholder="Кошка / Собака"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-field"><label>Название абонемента</label><input type="text" id="fPlanName" placeholder="5 посещений"></div>
+      <div class="form-field"><label>Кол-во посещений</label><input type="number" id="fTotalVisits" min="1" value="5"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-field"><label>Дата покупки</label><input type="text" id="fPurchaseDate" placeholder="24.08.2026"></div>
+      <div class="form-field"><label>Действителен до</label><input type="text" id="fExpiryDate" placeholder="24.02.2027"></div>
+    </div>
+    <button class="create-btn" onclick="createMembership()">Создать абонемент</button>
+  </div>
+
+  <div class="list-label">Все абонементы ({len(items)})</div>
+  {cards_html}
+</div>
+<div id="toast" class="toast"></div>
+<script>
+function showToast(msg){{
+  var t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(function(){{ t.classList.remove('show'); }}, 2500);
+}}
+
+function createMembership(){{
+  var data = {{
+    client_name: document.getElementById('fClientName').value.trim(),
+    client_phone: document.getElementById('fClientPhone').value.trim(),
+    pet_name: document.getElementById('fPetName').value.trim(),
+    pet_type: document.getElementById('fPetType').value.trim(),
+    plan_name: document.getElementById('fPlanName').value.trim(),
+    total_visits: document.getElementById('fTotalVisits').value,
+    purchase_date: document.getElementById('fPurchaseDate').value.trim(),
+    expiry_date: document.getElementById('fExpiryDate').value.trim()
+  }};
+  if(!data.client_name || !data.pet_name || !data.total_visits){{
+    showToast('Заполни имя клиента, кличку и число посещений');
+    return;
+  }}
+  fetch('/api/membership/create', {{
+    method: 'POST', headers: {{'Content-Type':'application/json'}}, body: JSON.stringify(data)
+  }}).then(function(r){{ return r.json(); }}).then(function(res){{
+    if(res.success){{
+      showToast('Создан: ' + res.id);
+      setTimeout(function(){{ location.reload(); }}, 700);
+    }} else {{
+      showToast('Ошибка: ' + (res.error||'не удалось создать'));
+    }}
+  }}).catch(function(){{ showToast('Ошибка сети'); }});
+}}
+
+function markVisit(id){{
+  fetch('/api/membership/mark-visit', {{
+    method:'POST', headers:{{'Content-Type':'application/json'}}, body: JSON.stringify({{id:id}})
+  }}).then(function(r){{return r.json();}}).then(function(res){{
+    if(res.success){{ showToast('Визит отмечен ✓'); setTimeout(function(){{location.reload();}}, 600); }}
+    else{{ showToast('Ошибка: ' + (res.error||'')); }}
+  }}).catch(function(){{ showToast('Ошибка сети'); }});
+}}
+
+function undoVisit(id){{
+  fetch('/api/membership/undo-visit', {{
+    method:'POST', headers:{{'Content-Type':'application/json'}}, body: JSON.stringify({{id:id}})
+  }}).then(function(r){{return r.json();}}).then(function(res){{
+    if(res.success){{ showToast('Отметка отменена'); setTimeout(function(){{location.reload();}}, 600); }}
+    else{{ showToast('Ошибка: ' + (res.error||'')); }}
+  }}).catch(function(){{ showToast('Ошибка сети'); }});
+}}
+</script>
+</body>
+</html>"""
+    return html, 200, {"Content-Type": "text/html; charset=utf-8"}
+
 @app.route("/admin/clients")
 def admin_clients_page():
     import urllib.parse as _urlp
@@ -3377,6 +3596,224 @@ def admin_dns_records():
 </html>"""
     return html, 200, {"Content-Type": "text/html; charset=utf-8"}
 
+@app.route("/api/membership/create", methods=["POST"])
+def api_membership_create():
+    body = request.get_json(force=True) or {}
+    client_name = (body.get("client_name") or "").strip()
+    client_phone = (body.get("client_phone") or "").strip()
+    pet_name = (body.get("pet_name") or "").strip()
+    pet_type = (body.get("pet_type") or "").strip()
+    plan_name = (body.get("plan_name") or "").strip()
+    total_visits = body.get("total_visits")
+    purchase_date = (body.get("purchase_date") or "").strip()
+    expiry_date = (body.get("expiry_date") or "").strip()
+
+    if not client_name or not pet_name or not total_visits:
+        return jsonify({"success": False, "error": "client_name, pet_name и total_visits обязательны"}), 400
+    try:
+        total_visits = int(total_visits)
+    except Exception:
+        return jsonify({"success": False, "error": "total_visits должно быть числом"}), 400
+
+    memberships = _load_memberships()
+    mid = _next_membership_id(memberships)
+    memberships[mid] = {
+        "id": mid,
+        "client_name": client_name,
+        "client_phone": client_phone,
+        "pet_name": pet_name,
+        "pet_type": pet_type,
+        "plan_name": plan_name or f"{total_visits} посещений",
+        "total_visits": total_visits,
+        "used_visits": 0,
+        "purchase_date": purchase_date,
+        "expiry_date": expiry_date,
+        "visit_history": [],
+        "status": "active",
+        "created_at": datetime.now(_REMINDER_TZ).isoformat() if _REMINDER_TZ else datetime.utcnow().isoformat()
+    }
+    ok = _save_memberships(memberships)
+    return jsonify({"success": ok, "id": mid})
+
+@app.route("/api/membership/mark-visit", methods=["POST"])
+def api_membership_mark_visit():
+    body = request.get_json(force=True) or {}
+    mid = (body.get("id") or "").strip()
+    note = (body.get("note") or "уход").strip()
+    memberships = _load_memberships()
+    m = memberships.get(mid)
+    if not m:
+        return jsonify({"success": False, "error": "Абонемент не найден"}), 404
+    if m["used_visits"] >= m["total_visits"]:
+        return jsonify({"success": False, "error": "Все посещения уже использованы"}), 400
+
+    today = datetime.now(_REMINDER_TZ).date() if _REMINDER_TZ else datetime.utcnow().date()
+    m["used_visits"] += 1
+    m["visit_history"].append({"date": today.strftime("%d.%m.%Y"), "note": note})
+    if m["used_visits"] >= m["total_visits"]:
+        m["status"] = "completed"
+    ok = _save_memberships(memberships)
+    return jsonify({"success": ok, "used_visits": m["used_visits"], "status": m["status"]})
+
+@app.route("/api/membership/undo-visit", methods=["POST"])
+def api_membership_undo_visit():
+    body = request.get_json(force=True) or {}
+    mid = (body.get("id") or "").strip()
+    memberships = _load_memberships()
+    m = memberships.get(mid)
+    if not m:
+        return jsonify({"success": False, "error": "Абонемент не найден"}), 404
+    if m["used_visits"] <= 0:
+        return jsonify({"success": False, "error": "Нет отметок для отмены"}), 400
+
+    m["used_visits"] -= 1
+    if m["visit_history"]:
+        m["visit_history"].pop()
+    m["status"] = "active"
+    ok = _save_memberships(memberships)
+    return jsonify({"success": ok, "used_visits": m["used_visits"], "status": m["status"]})
+
+@app.route("/api/membership/delete", methods=["POST"])
+def api_membership_delete():
+    body = request.get_json(force=True) or {}
+    mid = (body.get("id") or "").strip()
+    memberships = _load_memberships()
+    if mid not in memberships:
+        return jsonify({"success": False, "error": "Абонемент не найден"}), 404
+    del memberships[mid]
+    ok = _save_memberships(memberships)
+    return jsonify({"success": ok})
+
+@app.route("/membership/<mid>")
+def public_membership_card(mid):
+    import urllib.parse as _urlp_q
+    memberships = _load_memberships()
+    m = memberships.get(mid)
+    if not m:
+        return "Абонемент не найден. Проверьте ссылку.", 404
+
+    total = m.get("total_visits", 0)
+    used = m.get("used_visits", 0)
+    remaining = max(0, total - used)
+    is_completed = m.get("status") == "completed" or used >= total
+
+    def circle_html(i):
+        filled = i <= used
+        cls = "visit-circle filled" if filled else "visit-circle"
+        mark = "\u2713" if filled else str(i)
+        return f'<div class="{cls}">{mark}</div>'
+
+    circles_html = "".join(circle_html(i) for i in range(1, total + 1))
+
+    history = m.get("visit_history", [])
+    if history:
+        history_html = "".join(
+            f'<div class="hist-row"><span class="hist-date">{h.get("date","")}</span><span class="hist-note">{h.get("note","уход")} \u2713</span></div>'
+            for h in reversed(history)
+        )
+    else:
+        history_html = '<div class="hist-empty">Визитов пока не было</div>'
+
+    completed_banner = ""
+    if is_completed:
+        completed_banner = """
+        <div class="completed-banner">
+          <div class="completed-title">Абонемент завершён \U0001F90D</div>
+          <a class="new-membership-btn" href="/app">Приобрести новый абонемент</a>
+        </div>"""
+
+    page_url = f"https://rjgrooming.up.railway.app/membership/{mid}"
+    qr_url = f"https://api.qrserver.com/v1/create-qr-code/?size=180x180&bgcolor=0a0a09&color=ffffff&qzone=1&data={_urlp_q.quote(page_url)}"
+
+    html = f"""<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{m.get('id','')} — R&J Grooming Membership</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,500;0,600;0,700;1,500&family=Montserrat:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  *{{{{box-sizing:border-box;margin:0;padding:0}}}}
+  body{{{{background:#0a0a09;color:#f2ede2;font-family:'Montserrat',sans-serif;padding:32px 20px 60px;-webkit-font-smoothing:antialiased}}}}
+  .wrap{{{{max-width:420px;margin:0 auto}}}}
+  .logo-row{{{{text-align:center;margin-bottom:8px}}}}
+  .logo-img{{{{height:56px;width:auto;margin:0 auto;display:block}}}}
+  .card-type{{{{text-align:center;font-size:0.66rem;letter-spacing:.35em;text-transform:uppercase;color:rgba(230,225,215,.55);margin-bottom:32px}}}}
+  .card{{{{background:linear-gradient(155deg,#151412 0%,#0e0d0b 100%);border:1px solid rgba(200,195,180,.18);border-radius:18px;padding:26px 24px;margin-bottom:22px;position:relative;overflow:hidden}}}}
+  .card::before{{{{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,rgba(210,205,190,.5),transparent)}}}}
+  .mem-id-label{{{{font-size:0.62rem;letter-spacing:.15em;text-transform:uppercase;color:rgba(230,225,215,.4);margin-bottom:4px}}}}
+  .mem-id{{{{font-family:'Playfair Display',serif;font-size:1.7rem;font-weight:600;color:#f2ede2;margin-bottom:18px}}}}
+  .info-grid{{{{display:grid;grid-template-columns:1fr 1fr;gap:14px 10px;margin-bottom:4px}}}}
+  .info-item .info-label{{{{font-size:0.62rem;letter-spacing:.08em;text-transform:uppercase;color:rgba(230,225,215,.4);margin-bottom:3px}}}}
+  .info-item .info-val{{{{font-size:0.92rem;color:#f2ede2;font-weight:500}}}}
+
+  .counter-card{{{{background:#131210;border:1px solid rgba(255,255,255,.08);border-radius:16px;padding:22px 20px;margin-bottom:18px}}}}
+  .counter-label{{{{font-size:0.64rem;letter-spacing:.2em;text-transform:uppercase;color:rgba(200,195,180,.6);margin-bottom:16px;text-align:center}}}}
+  .visit-circles{{{{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin-bottom:18px}}}}
+  .visit-circle{{{{width:38px;height:38px;border-radius:50%;border:1.5px solid rgba(200,195,180,.35);display:flex;align-items:center;justify-content:center;font-size:0.85rem;color:rgba(230,225,215,.4);font-family:'Playfair Display',serif}}}}
+  .visit-circle.filled{{{{background:#e6e1d5;border-color:#e6e1d5;color:#0a0a09;font-weight:700}}}}
+  .counter-stats{{{{display:flex;justify-content:space-around;text-align:center;padding-top:14px;border-top:1px solid rgba(255,255,255,.07)}}}}
+  .counter-stat .n{{{{font-family:'Playfair Display',serif;font-size:1.4rem;font-weight:600;color:#f2ede2}}}}
+  .counter-stat .l{{{{font-size:0.62rem;letter-spacing:.06em;text-transform:uppercase;color:rgba(230,225,215,.45);margin-top:2px}}}}
+
+  .list-label{{{{font-size:0.66rem;letter-spacing:.2em;text-transform:uppercase;color:rgba(230,225,215,.5);margin:22px 0 12px}}}}
+  .hist-row{{{{display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid rgba(255,255,255,.06);font-size:0.85rem}}}}
+  .hist-date{{{{color:rgba(230,225,215,.5)}}}}
+  .hist-note{{{{color:#f2ede2}}}}
+  .hist-empty{{{{text-align:center;padding:20px 0;color:rgba(230,225,215,.35);font-size:0.82rem}}}}
+
+  .completed-banner{{{{text-align:center;background:#131210;border:1px solid rgba(255,255,255,.1);border-radius:14px;padding:24px 20px;margin:22px 0}}}}
+  .completed-title{{{{font-family:'Playfair Display',serif;font-size:1.15rem;margin-bottom:14px}}}}
+  .new-membership-btn{{{{display:inline-block;background:#e6e1d5;color:#0a0a09;text-decoration:none;padding:12px 24px;border-radius:8px;font-size:0.85rem;font-weight:600}}}}
+
+  .qr-section{{{{text-align:center;margin-top:26px}}}}
+  .qr-section img{{{{border-radius:10px;border:1px solid rgba(255,255,255,.1)}}}}
+  .qr-caption{{{{font-size:0.68rem;color:rgba(230,225,215,.4);margin-top:8px}}}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="logo-row"><img src="data:image/png;base64,LOGOPLACEHOLDER" class="logo-img" alt="R&J"></div>
+  <div class="card-type">Care Membership</div>
+
+  <div class="card">
+    <div class="mem-id-label">Абонемент</div>
+    <div class="mem-id">{m.get('id','')}</div>
+    <div class="info-grid">
+      <div class="info-item"><div class="info-label">Владелец</div><div class="info-val">{m.get('client_name','—')}</div></div>
+      <div class="info-item"><div class="info-label">Питомец</div><div class="info-val">{m.get('pet_name','—')}</div></div>
+      <div class="info-item"><div class="info-label">Тип</div><div class="info-val">{m.get('pet_type','—')}</div></div>
+      <div class="info-item"><div class="info-label">Абонемент</div><div class="info-val">{m.get('plan_name','—')}</div></div>
+      <div class="info-item"><div class="info-label">Приобретён</div><div class="info-val">{m.get('purchase_date','—')}</div></div>
+      <div class="info-item"><div class="info-label">Действителен до</div><div class="info-val">{m.get('expiry_date','—')}</div></div>
+    </div>
+  </div>
+
+  <div class="counter-card">
+    <div class="counter-label">Посещения</div>
+    <div class="visit-circles">{circles_html}</div>
+    <div class="counter-stats">
+      <div class="counter-stat"><div class="n">{used}</div><div class="l">использовано</div></div>
+      <div class="counter-stat"><div class="n">{remaining}</div><div class="l">осталось</div></div>
+      <div class="counter-stat"><div class="n">{total}</div><div class="l">всего</div></div>
+    </div>
+  </div>
+
+  {completed_banner}
+
+  <div class="list-label">История посещений</div>
+  {history_html}
+
+  <div class="qr-section">
+    <img src="{qr_url}" width="140" height="140" alt="QR">
+    <div class="qr-caption">{m.get('id','')} · rjgrooming.salon</div>
+  </div>
+</div>
+</body>
+</html>"""
+    html = html.replace("LOGOPLACEHOLDER", logo_b64)
+    return html, 200, {"Content-Type": "text/html; charset=utf-8"}
+
 @app.route("/admin")
 def admin_hub():
 
@@ -3459,6 +3896,14 @@ def admin_hub():
       <div class="card-txt">
         <div class="card-name">Клиенты</div>
         <div class="card-desc">Вся база — история визитов и контакты</div>
+      </div>
+      <div class="card-arrow">→</div>
+    </a>
+    <a class="card" href="/admin/memberships{P}">
+      <div class="card-icon">🎫</div>
+      <div class="card-txt">
+        <div class="card-name">Абонементы</div>
+        <div class="card-desc">Цифровые карты посещений</div>
       </div>
       <div class="card-arrow">→</div>
     </a>
