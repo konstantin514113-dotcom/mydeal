@@ -1172,6 +1172,23 @@ def _save_memberships(data):
         print(f"MEMBERSHIP SAVE ERROR: {e}", flush=True)
         return False
 
+_LOGO_B64_CACHE = None
+def _get_logo_b64():
+    """Извлекает base64 логотипа R&J из уже закоммиченного BOOKING_HTML_B64 (первая data:image/png в разметке)."""
+    global _LOGO_B64_CACHE
+    if _LOGO_B64_CACHE:
+        return _LOGO_B64_CACHE
+    try:
+        import base64 as _b64_mod
+        html = _b64_mod.b64decode(BOOKING_HTML_B64).decode("utf-8")
+        m = re.search(r"data:image/png;base64,([A-Za-z0-9+/=]+)", html)
+        if m:
+            _LOGO_B64_CACHE = m.group(1)
+            return _LOGO_B64_CACHE
+    except Exception as e:
+        print(f"LOGO EXTRACT ERROR: {e}", flush=True)
+    return ""
+
 def _next_membership_id(memberships):
     nums = []
     for k in memberships.keys():
@@ -4120,7 +4137,7 @@ def public_membership_card(mid):
 </div>
 </body>
 </html>"""
-    html = html.replace("LOGOPLACEHOLDER", logo_b64)
+    html = html.replace("LOGOPLACEHOLDER", _get_logo_b64())
     return html, 200, {"Content-Type": "text/html; charset=utf-8"}
 
 @app.route("/admin/migrate-client-data")
