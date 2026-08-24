@@ -3341,6 +3341,7 @@ def admin_memberships_page():
           <div class="mem-actions">
             {actions}
             <a class="mem-btn mem-btn-link" href="/membership/{m['id']}" target="_blank">Открыть карточку</a>
+            <button class="mem-btn mem-btn-delete" onclick="deleteMembership('{m['id']}')">Удалить</button>
           </div>
         </div>"""
 
@@ -3403,6 +3404,7 @@ def admin_memberships_page():
   .mem-btn-mark{{background:rgba(74,222,128,.1);border-color:rgba(74,222,128,.4);color:#4ade80}}
   .mem-btn-undo{{background:none;border-color:rgba(224,82,74,.4);color:#e0524a}}
   .mem-btn-link{{background:rgba(201,160,90,.1);border-color:rgba(201,160,90,.4);color:#c9a05a}}
+  .mem-btn-delete{{background:none;border-color:rgba(224,82,74,.25);color:rgba(224,82,74,.6)}}
   .empty{{text-align:center;padding:40px 0;color:rgba(242,237,226,.4);font-size:0.85rem}}
   .toast{{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);background:#151310;border:1px solid rgba(201,160,90,.4);color:#f2ede2;padding:10px 20px;border-radius:20px;font-size:0.8rem;opacity:0;pointer-events:none;transition:all .25s;z-index:999}}
   .toast.show{{opacity:1;transform:translateX(-50%) translateY(0)}}
@@ -3600,6 +3602,16 @@ function undoVisit(id){{
     method:'POST', headers:{{'Content-Type':'application/json'}}, body: JSON.stringify({{id:id}})
   }}).then(function(r){{return r.json();}}).then(function(res){{
     if(res.success){{ showToast('Отметка отменена'); setTimeout(function(){{location.reload();}}, 600); }}
+    else{{ showToast('Ошибка: ' + (res.error||'')); }}
+  }}).catch(function(){{ showToast('Ошибка сети'); }});
+}}
+
+function deleteMembership(id){{
+  if(!confirm('Удалить абонемент ' + id + '? Это действие необратимо.')) return;
+  fetch('/api/membership/delete', {{
+    method:'POST', headers:{{'Content-Type':'application/json'}}, body: JSON.stringify({{id:id}})
+  }}).then(function(r){{return r.json();}}).then(function(res){{
+    if(res.success){{ showToast('Удалён'); setTimeout(function(){{location.reload();}}, 500); }}
     else{{ showToast('Ошибка: ' + (res.error||'')); }}
   }}).catch(function(){{ showToast('Ошибка сети'); }});
 }}
