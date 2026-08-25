@@ -2108,6 +2108,32 @@ def cron_review_request():
         except Exception as e:
             return f"Error: {e}", 500
 
+    # ── Тестовый режим: ?test_sms=+79114204546 шлёт одно SMS сразу ──
+    test_sms = request.args.get("test_sms", "").strip()
+    if test_sms:
+        if not review_link:
+            return "GOOGLE_REVIEW_LINK not set", 500
+        twilio_sid = os.environ.get("TWILIO_ACCOUNT_SID")
+        twilio_token = os.environ.get("TWILIO_AUTH_TOKEN")
+        twilio_from = os.environ.get("TWILIO_PHONE", "+37266922128")
+        if not (twilio_sid and twilio_token):
+            return "TWILIO not configured", 500
+        sms_to = test_sms if test_sms.startswith("+") else "+" + test_sms
+        sms_text = f"[ТЕСТ] Спасибо, что были у нас в R&J Grooming! 🐾 Будем рады короткому отзыву: {review_link}"
+        try:
+            sr = requests.post(
+                f"https://api.twilio.com/2010-04-01/Accounts/{twilio_sid}/Messages.json",
+                auth=(twilio_sid, twilio_token),
+                data={"From": twilio_from, "To": sms_to, "Body": sms_text},
+                timeout=10,
+            )
+            if sr.status_code == 201:
+                return f"Test SMS sent to {sms_to}", 200
+            else:
+                return f"Twilio error {sr.status_code}: {sr.text[:300]}", 500
+        except Exception as e:
+            return f"Error: {e}", 500
+
     yesterday = _dt.date.today() - _dt.timedelta(days=1)
     date_gs = yesterday.strftime("%d.%m.%Y")
 
