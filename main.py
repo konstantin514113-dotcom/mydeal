@@ -1189,6 +1189,19 @@ def _get_logo_b64():
         print(f"LOGO EXTRACT ERROR: {e}", flush=True)
     return ""
 
+@app.route("/assets/logo.png")
+def asset_logo_png():
+    """Отдаёт логотип R&J как обычную картинку по стабильной ссылке — для email-рассылок
+    (base64 data: URI ненадёжен в почтовых клиентах, обычная <img src> работает везде)."""
+    import base64 as _b64_mod
+    logo_b64 = _get_logo_b64()
+    if not logo_b64:
+        return "Logo not found", 404
+    png_bytes = _b64_mod.b64decode(logo_b64)
+    resp = app.response_class(png_bytes, mimetype="image/png")
+    resp.headers["Cache-Control"] = "public, max-age=86400"
+    return resp
+
 def _next_membership_id(memberships):
     nums = []
     for k in memberships.keys():
@@ -2078,7 +2091,7 @@ def cron_review_request():
                     "subject": "[ТЕСТ] Спасибо, что были у нас! 🐾",
                     "html": (
                         "<div style='background:#0a0a09;padding:32px 24px;font-family:Arial,sans-serif;color:#f2ede2'>"
-                        "<h2 style='margin:0 0 6px'>R&amp;J Grooming</h2>"
+                        "<img src='https://rjgrooming.up.railway.app/assets/logo.png' alt='R&amp;J Grooming' style='height:48px;margin-bottom:14px;display:block'>"
                         "<p style='color:#cfc9ba'>Здравствуйте, Константин! Спасибо, что доверили нам уход за питомцем.</p>"
                         "<p style='color:#cfc9ba'>Будем очень благодарны, если оставите короткий отзыв — это помогает другим владельцам питомцев нас найти.</p>"
                         f"<p style='margin:24px 0'><a href='{review_link}' style='background:#e6e1d5;color:#0a0a09;text-decoration:none;padding:12px 22px;border-radius:8px;font-weight:bold;display:inline-block'>Оставить отзыв</a></p>"
@@ -2138,7 +2151,7 @@ def cron_review_request():
                         "subject": "Спасибо, что были у нас! 🐾",
                         "html": (
                             "<div style='background:#0a0a09;padding:32px 24px;font-family:Arial,sans-serif;color:#f2ede2'>"
-                            "<h2 style='margin:0 0 6px'>R&amp;J Grooming</h2>"
+                            "<img src='https://rjgrooming.up.railway.app/assets/logo.png' alt='R&amp;J Grooming' style='height:48px;margin-bottom:14px;display:block'>"
                             f"<p style='color:#cfc9ba'>Здравствуйте, {name}! Спасибо, что доверили нам уход за питомцем.</p>"
                             "<p style='color:#cfc9ba'>Будем очень благодарны, если оставите короткий отзыв — это помогает другим владельцам питомцев нас найти.</p>"
                             f"<p style='margin:24px 0'><a href='{review_link}' style='background:#e6e1d5;color:#0a0a09;text-decoration:none;padding:12px 22px;border-radius:8px;font-weight:bold;display:inline-block'>Оставить отзыв</a></p>"
@@ -4256,7 +4269,7 @@ def api_membership_send_email():
                 "subject": f"Ваш абонемент {mid} — R&J Grooming",
                 "html": (
                     "<div style='background:#0a0a09;padding:32px 24px;font-family:Arial,sans-serif;color:#f2ede2'>"
-                    "<h2 style='margin:0 0 6px'>R&amp;J Grooming</h2>"
+                    "<img src='https://rjgrooming.up.railway.app/assets/logo.png' alt='R&amp;J Grooming' style='height:48px;margin-bottom:14px;display:block'>"
                     f"<p style='color:#cfc9ba'>Здравствуйте, {m.get('client_name','')}!</p>"
                     f"<p style='color:#cfc9ba'>Ваш абонемент <b>{m.get('plan_name','')}</b> для {m.get('pet_name','')} готов. "
                     "Откройте карточку по кнопке ниже — там всегда видно, сколько посещений использовано и сколько осталось.</p>"
