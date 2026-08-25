@@ -2119,6 +2119,8 @@ def cron_review_request():
         if not (twilio_sid and twilio_token):
             return "TWILIO not configured", 500
         sms_to = test_sms if test_sms.startswith("+") else "+" + test_sms
+        if sms_to.startswith("+7"):
+            return "Twilio не доставляет SMS в РФ (+7) с января 2023 — тест на этот номер невозможен.", 200
         sms_text = f"[ТЕСТ] Спасибо, что были у нас в R&J Grooming! 🐾 Будем рады короткому отзыву: {review_link}"
         try:
             sr = requests.post(
@@ -2224,20 +2226,22 @@ def cron_review_request():
             email_skipped.append(email or phone or "no email/key")
 
         # ── SMS через Twilio ─────────────────────────────────
-        if phone and twilio_sid and twilio_token:
-            sms_phone = phone if phone.startswith("+") else "+" + phone
+        sms_phone_norm = phone if phone.startswith("+") else "+" + phone
+        if sms_phone_norm.startswith("+7"):
+            sms_skipped.append(f"{sms_phone_norm}: Twilio не доставляет SMS в РФ с 2023")
+        elif phone and twilio_sid and twilio_token:
             sms_text = t["sms"].format(link=review_link)
             try:
                 sr = requests.post(
                     f"https://api.twilio.com/2010-04-01/Accounts/{twilio_sid}/Messages.json",
                     auth=(twilio_sid, twilio_token),
-                    data={"From": twilio_from, "To": sms_phone, "Body": sms_text},
+                    data={"From": twilio_from, "To": sms_phone_norm, "Body": sms_text},
                     timeout=10,
                 )
                 if sr.status_code == 201:
-                    sms_sent.append(sms_phone)
+                    sms_sent.append(sms_phone_norm)
                 else:
-                    sms_failed.append(f"{sms_phone}: {sr.status_code} {sr.text[:80]}")
+                    sms_failed.append(f"{sms_phone_norm}: {sr.status_code} {sr.text[:80]}")
             except Exception as e:
                 sms_failed.append(f"{phone}: {e}")
         else:
