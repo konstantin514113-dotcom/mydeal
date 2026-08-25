@@ -4678,6 +4678,37 @@ def api_breed_prices():
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 
+@app.route("/admin/debug-wallet-test")
+def admin_debug_wallet_test():
+    """Диагностика: пробует создать тестовый Wallet-пасс и показывает точный ответ WalletWallet API."""
+    key_present = bool(WALLETWALLET_API_KEY)
+    key_preview = (WALLETWALLET_API_KEY[:12] + "...") if WALLETWALLET_API_KEY else "(не задан)"
+    fake_m = {
+        "id": "TEST-DEBUG", "client_name": "Тест Тестов", "pet_name": "Тест",
+        "total_visits": 5, "used_visits": 1, "expiry_date": "01.01.2027",
+        "plan_name": "Тестовый абонемент", "purchase_date": "01.01.2026",
+    }
+    payload = _wallet_pass_payload(fake_m)
+    result = {"WALLETWALLET_API_KEY_present": key_present, "key_preview": key_preview, "payload_sent": payload}
+    if not key_present:
+        result["error"] = "WALLETWALLET_API_KEY не установлена в Railway Variables"
+    else:
+        try:
+            r = requests.post(
+                "https://api.walletwallet.dev/api/passes",
+                headers={"Authorization": f"Bearer {WALLETWALLET_API_KEY}", "Content-Type": "application/json"},
+                json=payload,
+                timeout=15,
+            )
+            result["status_code"] = r.status_code
+            try:
+                result["response_json"] = r.json()
+            except Exception:
+                result["response_text"] = r.text[:1000]
+        except Exception as e:
+            result["exception"] = str(e)
+    return jsonify(result)
+
 @app.route("/admin/debug-memberships")
 def admin_debug_memberships():
     import base64 as _b64_mod
