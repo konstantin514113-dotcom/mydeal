@@ -2128,10 +2128,38 @@ def cron_review_request():
     sms_sent, sms_failed, sms_skipped = [], [], []
     wa_sent, wa_failed, wa_skipped = [], [], []
 
+    _REVIEW_MSG = {
+        "ru": {
+            "subject": "Спасибо, что были у нас! 🐾",
+            "greet": "Здравствуйте, {name}! Спасибо, что доверили нам уход за питомцем.",
+            "ask": "Будем очень благодарны, если оставите короткий отзыв — это помогает другим владельцам питомцев нас найти.",
+            "btn": "Оставить отзыв",
+            "sms": "Спасибо, что были у нас в R&J Grooming! 🐾 Будем рады короткому отзыву: {link}",
+        },
+        "en": {
+            "subject": "Thank you for visiting us! 🐾",
+            "greet": "Hi {name}! Thank you for trusting us with your pet's grooming.",
+            "ask": "We'd really appreciate a short review — it helps other pet owners find us.",
+            "btn": "Leave a review",
+            "sms": "Thank you for visiting R&J Grooming! 🐾 We'd love a quick review: {link}",
+        },
+        "et": {
+            "subject": "Aitäh, et meid külastasite! 🐾",
+            "greet": "Tere, {name}! Aitäh, et usaldasite oma lemmiklooma hoolduse meile.",
+            "ask": "Oleksime väga tänulikud lühikese arvustuse eest — see aitab teistel lemmikloomaomanikel meid leida.",
+            "btn": "Jäta arvustus",
+            "sms": "Aitäh, et külastasite R&J Grooming'ut! 🐾 Ootame lühikest arvustust: {link}",
+        },
+    }
+
     for b in bookings:
         name = b.get("clientName") or b.get("name") or ""
         phone = re.sub(r'[\s\-()]', '', str(b.get("phone", "")).strip())
         email = (b.get("clientEmail") or b.get("email") or "").strip()
+        lang = (b.get("lang") or "ru").strip().lower()
+        if lang not in _REVIEW_MSG:
+            lang = "ru"
+        t = _REVIEW_MSG[lang]
 
         if not review_link:
             email_skipped.append("GOOGLE_REVIEW_LINK not set")
@@ -2148,13 +2176,13 @@ def cron_review_request():
                     json={
                         "from": "R&J Grooming <booking@rjgrooming.salon>",
                         "to": [email],
-                        "subject": "Спасибо, что были у нас! 🐾",
+                        "subject": t["subject"],
                         "html": (
                             "<div style='background:#0a0a09;padding:32px 24px;font-family:Arial,sans-serif;color:#f2ede2'>"
                             "<img src='https://rjgrooming.up.railway.app/assets/logo.png' alt='R&amp;J Grooming' style='height:48px;margin-bottom:14px;display:block'>"
-                            f"<p style='color:#cfc9ba'>Здравствуйте, {name}! Спасибо, что доверили нам уход за питомцем.</p>"
-                            "<p style='color:#cfc9ba'>Будем очень благодарны, если оставите короткий отзыв — это помогает другим владельцам питомцев нас найти.</p>"
-                            f"<p style='margin:24px 0'><a href='{review_link}' style='background:#e6e1d5;color:#0a0a09;text-decoration:none;padding:12px 22px;border-radius:8px;font-weight:bold;display:inline-block'>Оставить отзыв</a></p>"
+                            f"<p style='color:#cfc9ba'>{t['greet'].format(name=name)}</p>"
+                            f"<p style='color:#cfc9ba'>{t['ask']}</p>"
+                            f"<p style='margin:24px 0'><a href='{review_link}' style='background:#e6e1d5;color:#0a0a09;text-decoration:none;padding:12px 22px;border-radius:8px;font-weight:bold;display:inline-block'>{t['btn']}</a></p>"
                             "</div>"
                         )
                     },
@@ -2172,8 +2200,7 @@ def cron_review_request():
         # ── SMS через Twilio ─────────────────────────────────
         if phone and twilio_sid and twilio_token:
             sms_phone = phone if phone.startswith("+") else "+" + phone
-            sms_text = (f"Спасибо, что были у нас в R&J Grooming! 🐾 "
-                        f"Будем рады короткому отзыву: {review_link}")
+            sms_text = t["sms"].format(link=review_link)
             try:
                 sr = requests.post(
                     f"https://api.twilio.com/2010-04-01/Accounts/{twilio_sid}/Messages.json",
