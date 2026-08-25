@@ -1206,11 +1206,59 @@ def asset_logo_png():
 
 @app.route("/assets/wallet-strip.png")
 def asset_wallet_strip_png():
-    """Баннер-полоса для Apple/Google Wallet пасса — реальное фото фирменной визитки R&J."""
+    """Баннер-полоса для Apple/Google Wallet пасса — фирменная визитка R&J с кличкой
+    питомца и счётчиком посещений конкретного абонемента (?id=RJ-00X)."""
     import base64 as _b64_mod
-    img_bytes = _b64_mod.b64decode(WALLET_STRIP_B64)
-    resp = app.response_class(img_bytes, mimetype="image/jpeg")
-    resp.headers["Cache-Control"] = "public, max-age=86400"
+    import io
+    from PIL import Image, ImageDraw, ImageFont
+
+    base_bytes = _b64_mod.b64decode(WALLET_STRIP_B64)
+    img = Image.open(io.BytesIO(base_bytes)).convert("RGBA")
+
+    mid = request.args.get("id", "").strip()
+    if mid:
+        memberships = _load_memberships()
+        m = memberships.get(mid)
+        if m:
+            W, H = img.size
+            draw = ImageDraw.Draw(img)
+            try:
+                serif = ImageFont.truetype("assets/fonts/IBMPlexSerif-Bold.ttf", 40)
+                sans = ImageFont.truetype("assets/fonts/Jura-Medium.ttf", 22)
+
+                card_left = (W - 1212) // 2
+                card_right = card_left + 1212
+                inset = 60
+                bottom_y = H - 56
+                label_color = (205, 199, 181, 150)
+                value_color = (238, 233, 220, 255)
+
+                pet_label = "ПИТОМЕЦ"
+                pet_value = m.get("pet_name", "") or "—"
+                lb = draw.textbbox((0, 0), pet_label, font=sans)
+                vb = draw.textbbox((0, 0), pet_value, font=serif)
+                label_h = lb[3] - lb[1]
+                value_h = vb[3] - vb[1]
+                draw.text((card_left + inset, bottom_y - value_h - label_h - 8), pet_label, font=sans, fill=label_color)
+                draw.text((card_left + inset, bottom_y - value_h), pet_value, font=serif, fill=value_color)
+
+                used = m.get("used_visits", 0)
+                total = m.get("total_visits", 0)
+                vis_label = "ПОСЕЩЕНИЯ"
+                vis_value = f"{used} из {total}"
+                lb2 = draw.textbbox((0, 0), vis_label, font=sans)
+                vb2 = draw.textbbox((0, 0), vis_value, font=serif)
+                lw2 = lb2[2] - lb2[0]
+                vw2 = vb2[2] - vb2[0]
+                draw.text((card_right - inset - lw2, bottom_y - value_h - label_h - 8), vis_label, font=sans, fill=label_color)
+                draw.text((card_right - inset - vw2, bottom_y - value_h), vis_value, font=serif, fill=value_color)
+            except Exception as e:
+                print(f"[wallet-strip] render error: {e}", flush=True)
+
+    buf = io.BytesIO()
+    img.convert("RGB").save(buf, format="JPEG", quality=90)
+    resp = app.response_class(buf.getvalue(), mimetype="image/jpeg")
+    resp.headers["Cache-Control"] = "no-cache"
     return resp
 
 WALLETWALLET_API_KEY = os.environ.get("WALLETWALLET_API_KEY", "")
@@ -1223,7 +1271,7 @@ def _wallet_pass_payload(m):
     return {
         "passStyle": "storeCard",
         "title": "R&J Grooming",
-        "stripURL": "https://rjgrooming.up.railway.app/assets/wallet-strip.png",
+        "stripURL": f"https://rjgrooming.up.railway.app/assets/wallet-strip.png?id={mid}",
         "organizationName": "R&J Grooming",
         "description": f"Абонемент {mid}",
         "headerFields": [
