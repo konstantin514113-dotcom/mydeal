@@ -2118,7 +2118,10 @@ def cron_review_request():
             email_skipped.append(email or phone or "no email/key")
 
         # ── WhatsApp через Meta Business API ────────────────
-        if phone and WHATSAPP_TOKEN and WHATSAPP_PHONE_ID:
+        # Временно отключено: свободный текст на след. день после визита требует
+        # одобренного message template в Meta Business Manager (freeform вне 24ч
+        # окна будет отклонён). Включим, когда шаблон review_request_ru одобрят.
+        if False and phone and WHATSAPP_TOKEN and WHATSAPP_PHONE_ID:
             if not phone.startswith("+"):
                 phone = "+" + phone
             wa_text = (f"Здравствуйте, {name}! Спасибо, что были у нас в R&J Grooming 🐾 "
@@ -2137,7 +2140,7 @@ def cron_review_request():
             except Exception as e:
                 wa_failed.append(f"{phone}: {e}")
         else:
-            wa_skipped.append(phone or "no phone/token")
+            wa_skipped.append("WhatsApp отключён (ждём одобрения шаблона)")
 
     summary = (f"Review requests {date_gs}: {len(bookings)} bookings | "
                f"email sent={len(email_sent)} failed={len(email_failed)} skipped={len(email_skipped)} | "
