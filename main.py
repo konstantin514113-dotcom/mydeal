@@ -2091,7 +2091,7 @@ def cron_review_request():
                     "subject": "[ТЕСТ] Спасибо, что были у нас! 🐾",
                     "html": (
                         "<div style='background:#0a0a09;padding:32px 24px;font-family:Arial,sans-serif;color:#f2ede2'>"
-                        "<img src='https://rjgrooming.up.railway.app/assets/logo.png' alt='R&amp;J Grooming' style='height:48px;margin-bottom:14px;display:block'>"
+                        "<img src='https://rjgrooming.up.railway.app/assets/logo.png' alt='R&amp;J Grooming' style='height:60px;margin-bottom:14px;display:block'>"
                         "<p style='color:#cfc9ba'>Здравствуйте, Константин! Спасибо, что доверили нам уход за питомцем.</p>"
                         "<p style='color:#cfc9ba'>Будем очень благодарны, если оставите короткий отзыв — это помогает другим владельцам питомцев нас найти.</p>"
                         f"<p style='margin:24px 0'><a href='{review_link}' style='background:#e6e1d5;color:#0a0a09;text-decoration:none;padding:12px 22px;border-radius:8px;font-weight:bold;display:inline-block'>Оставить отзыв</a></p>"
@@ -2207,7 +2207,7 @@ def cron_review_request():
                         "subject": t["subject"],
                         "html": (
                             "<div style='background:#0a0a09;padding:32px 24px;font-family:Arial,sans-serif;color:#f2ede2'>"
-                            "<img src='https://rjgrooming.up.railway.app/assets/logo.png' alt='R&amp;J Grooming' style='height:48px;margin-bottom:14px;display:block'>"
+                            "<img src='https://rjgrooming.up.railway.app/assets/logo.png' alt='R&amp;J Grooming' style='height:60px;margin-bottom:14px;display:block'>"
                             f"<p style='color:#cfc9ba'>{t['greet'].format(name=name)}</p>"
                             f"<p style='color:#cfc9ba'>{t['ask']}</p>"
                             f"<p style='margin:24px 0'><a href='{review_link}' style='background:#e6e1d5;color:#0a0a09;text-decoration:none;padding:12px 22px;border-radius:8px;font-weight:bold;display:inline-block'>{t['btn']}</a></p>"
@@ -4326,7 +4326,7 @@ def api_membership_send_email():
                 "subject": f"Ваш абонемент {mid} — R&J Grooming",
                 "html": (
                     "<div style='background:#0a0a09;padding:32px 24px;font-family:Arial,sans-serif;color:#f2ede2'>"
-                    "<img src='https://rjgrooming.up.railway.app/assets/logo.png' alt='R&amp;J Grooming' style='height:48px;margin-bottom:14px;display:block'>"
+                    "<img src='https://rjgrooming.up.railway.app/assets/logo.png' alt='R&amp;J Grooming' style='height:60px;margin-bottom:14px;display:block'>"
                     f"<p style='color:#cfc9ba'>Здравствуйте, {m.get('client_name','')}!</p>"
                     f"<p style='color:#cfc9ba'>Ваш абонемент <b>{m.get('plan_name','')}</b> для {m.get('pet_name','')} готов. "
                     "Откройте карточку по кнопке ниже — там всегда видно, сколько посещений использовано и сколько осталось.</p>"
