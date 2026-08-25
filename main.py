@@ -1210,18 +1210,23 @@ def _wallet_pass_payload(m):
     used = m.get("used_visits", 0)
     total = m.get("total_visits", 0)
     return {
+        "passStyle": "storeCard",
         "title": "R&J Grooming — Абонемент",
         "logoText": "R&J Grooming",
+        "logoURL": "https://rjgrooming.up.railway.app/assets/logo.png",
         "organizationName": "R&J Grooming",
         "description": f"Абонемент {mid}",
+        "headerFields": [
+            {"label": "ПОСЕЩЕНИЯ", "value": f"{used}/{total}"},
+        ],
         "primaryFields": [{"label": "АБОНЕМЕНТ", "value": mid}],
         "secondaryFields": [
             {"label": "ВЛАДЕЛЕЦ", "value": m.get("client_name", "")},
             {"label": "ПИТОМЕЦ", "value": m.get("pet_name", "")},
         ],
         "auxiliaryFields": [
-            {"label": "ПОСЕЩЕНИЯ", "value": f"{used}/{total}"},
-            {"label": "ДЕЙСТВ. ДО", "value": m.get("expiry_date", "")},
+            {"label": "ДЕЙСТВИТЕЛЕН ДО", "value": m.get("expiry_date", "")},
+            {"label": "ТИП АБОНЕМЕНТА", "value": m.get("plan_name", "")},
         ],
         "backFields": [
             {"label": "Тип абонемента", "value": m.get("plan_name", "")},
