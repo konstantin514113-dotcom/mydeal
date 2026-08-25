@@ -1235,9 +1235,9 @@ def _wallet_pass_payload(m):
     }
 
 def _wallet_create_pass(m):
-    """Создаёт Apple/Google Wallet пасс для абонемента. Возвращает (serial, shareUrl) или (None, None)."""
+    """Создаёт Apple/Google Wallet пасс для абонемента. Возвращает (serial, shareUrl, googleSaveUrl) или (None, None, None)."""
     if not WALLETWALLET_API_KEY:
-        return None, None
+        return None, None, None
     try:
         r = requests.post(
             "https://api.walletwallet.dev/api/passes",
@@ -1247,12 +1247,12 @@ def _wallet_create_pass(m):
         )
         if r.status_code == 200:
             data = r.json()
-            return data.get("serialNumber"), data.get("shareUrl")
+            return data.get("serialNumber"), data.get("shareUrl"), data.get("googleSaveUrl")
         else:
             print(f"[wallet] create failed {r.status_code}: {r.text[:200]}", flush=True)
     except Exception as e:
         print(f"[wallet] create error: {e}", flush=True)
-    return None, None
+    return None, None, None
 
 def _wallet_update_pass(m):
     """Обновляет уже созданный пасс (пуш на устройство) — вызывать при изменении счётчика визитов."""
@@ -4320,10 +4320,11 @@ def api_membership_create():
         "status": "active",
         "created_at": datetime.now(_REMINDER_TZ).isoformat() if _REMINDER_TZ else datetime.utcnow().isoformat()
     }
-    wallet_serial, wallet_share_url = _wallet_create_pass(memberships[mid])
+    wallet_serial, wallet_share_url, wallet_google_url = _wallet_create_pass(memberships[mid])
     if wallet_serial:
         memberships[mid]["wallet_serial"] = wallet_serial
         memberships[mid]["wallet_share_url"] = wallet_share_url
+        memberships[mid]["wallet_google_url"] = wallet_google_url
     ok = _save_memberships(memberships)
     return jsonify({"success": ok, "id": mid, "wallet_share_url": wallet_share_url})
 
@@ -4469,7 +4470,7 @@ def _render_membership_card(mid):
 
     wallet_button_html = ""
     if m.get("wallet_share_url"):
-        wallet_button_html = f'<a class="wallet-btn" href="{m["wallet_share_url"]}" target="_blank" rel="noopener">\U0001F4F1 Добавить в Apple Wallet</a>'
+        wallet_button_html = f'<a class="wallet-btn" href="{m["wallet_share_url"]}" target="_blank" rel="noopener">\U0001F4F1 Добавить в Wallet</a>'
 
     icon_person = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="4" stroke="rgba(230,225,215,.55)" stroke-width="1.5"/><path d="M4 20c0-4.4 3.6-7 8-7s8 2.6 8 7" stroke="rgba(230,225,215,.55)" stroke-width="1.5" stroke-linecap="round"/></svg>'
     icon_paw = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none"><ellipse cx="12" cy="16" rx="5.5" ry="4.5" stroke="rgba(230,225,215,.55)" stroke-width="1.5"/><circle cx="5.5" cy="9" r="2.1" stroke="rgba(230,225,215,.55)" stroke-width="1.5"/><circle cx="10" cy="5.5" r="2.1" stroke="rgba(230,225,215,.55)" stroke-width="1.5"/><circle cx="14.5" cy="5.5" r="2.1" stroke="rgba(230,225,215,.55)" stroke-width="1.5"/><circle cx="18.5" cy="9" r="2.1" stroke="rgba(230,225,215,.55)" stroke-width="1.5"/></svg>'
