@@ -3329,6 +3329,9 @@ def api_find_duplicates():
 @app.route("/admin/memberships")
 def admin_memberships_page():
     import urllib.parse as _urlp
+    from datetime import datetime, timedelta
+    default_purchase = datetime.now().strftime("%d.%m.%Y")
+    default_expiry = (datetime.now() + timedelta(days=182)).strftime("%d.%m.%Y")
     prefill_name = request.args.get("client_name", "")
     prefill_phone = request.args.get("client_phone", "")
     prefill_pet = request.args.get("pet_name", "")
@@ -3520,8 +3523,8 @@ def admin_memberships_page():
       <input type="number" id="fDiscountPercent" min="0" max="100" step="1" placeholder="0" oninput="updateSavingsPreview()">
     </div>
     <div class="form-row">
-      <div class="form-field"><label>Дата покупки</label><input type="text" id="fPurchaseDate" placeholder="24.08.2026"></div>
-      <div class="form-field"><label>Действителен до</label><input type="text" id="fExpiryDate" placeholder="24.02.2027"></div>
+      <div class="form-field"><label>Дата покупки</label><input type="text" id="fPurchaseDate" placeholder="24.08.2026" value="{default_purchase}"></div>
+      <div class="form-field"><label>Действителен до</label><input type="text" id="fExpiryDate" placeholder="24.02.2027" value="{default_expiry}"></div>
     </div>
     <div class="savings-preview" id="savingsPreview" style="display:none">
       <div class="savings-row"><span>Цена за визит по абонементу</span><span id="spPerVisit">—</span></div>
