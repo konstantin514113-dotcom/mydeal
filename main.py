@@ -2059,6 +2059,41 @@ def cron_review_request():
         return "GOOGLE_SCRIPT not configured", 500
 
     review_link = os.environ.get("GOOGLE_REVIEW_LINK", "")
+    resend_key = os.environ.get("RESEND_API_KEY")
+
+    # ── Тестовый режим: ?test_email=you@example.com шлёт одно письмо сразу ──
+    test_email = request.args.get("test_email", "").strip()
+    if test_email:
+        if not review_link:
+            return "GOOGLE_REVIEW_LINK not set", 500
+        if not resend_key:
+            return "RESEND_API_KEY not set", 500
+        try:
+            rr = requests.post(
+                "https://api.resend.com/emails",
+                headers={"Authorization": f"Bearer {resend_key}", "Content-Type": "application/json"},
+                json={
+                    "from": "R&J Grooming <booking@rjgrooming.salon>",
+                    "to": [test_email],
+                    "subject": "[ТЕСТ] Спасибо, что были у нас! 🐾",
+                    "html": (
+                        "<div style='background:#0a0a09;padding:32px 24px;font-family:Arial,sans-serif;color:#f2ede2'>"
+                        "<h2 style='margin:0 0 6px'>R&amp;J Grooming</h2>"
+                        "<p style='color:#cfc9ba'>Здравствуйте, Константин! Спасибо, что доверили нам уход за питомцем.</p>"
+                        "<p style='color:#cfc9ba'>Будем очень благодарны, если оставите короткий отзыв — это помогает другим владельцам питомцев нас найти.</p>"
+                        f"<p style='margin:24px 0'><a href='{review_link}' style='background:#e6e1d5;color:#0a0a09;text-decoration:none;padding:12px 22px;border-radius:8px;font-weight:bold;display:inline-block'>Оставить отзыв</a></p>"
+                        "<p style='color:#8a8578;font-size:12px'>Это тестовое письмо, отправлено вручную для проверки.</p>"
+                        "</div>"
+                    )
+                },
+                timeout=10
+            )
+            if rr.status_code < 300:
+                return f"Test email sent to {test_email}", 200
+            else:
+                return f"Resend error {rr.status_code}: {rr.text[:300]}", 500
+        except Exception as e:
+            return f"Error: {e}", 500
 
     yesterday = _dt.date.today() - _dt.timedelta(days=1)
     date_gs = yesterday.strftime("%d.%m.%Y")
@@ -2073,7 +2108,6 @@ def cron_review_request():
     bookings = data.get("bookings", [])
     print(f"[cron/review-request] {date_gs}: {len(bookings)} bookings", flush=True)
 
-    resend_key = os.environ.get("RESEND_API_KEY")
     twilio_sid = os.environ.get("TWILIO_ACCOUNT_SID")
     twilio_token = os.environ.get("TWILIO_AUTH_TOKEN")
     twilio_from = os.environ.get("TWILIO_PHONE", "+37266922128")
