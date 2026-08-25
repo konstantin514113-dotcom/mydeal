@@ -2074,7 +2074,11 @@ def cron_review_request():
     print(f"[cron/review-request] {date_gs}: {len(bookings)} bookings", flush=True)
 
     resend_key = os.environ.get("RESEND_API_KEY")
+    twilio_sid = os.environ.get("TWILIO_ACCOUNT_SID")
+    twilio_token = os.environ.get("TWILIO_AUTH_TOKEN")
+    twilio_from = os.environ.get("TWILIO_PHONE", "+37266922128")
     email_sent, email_failed, email_skipped = [], [], []
+    sms_sent, sms_failed, sms_skipped = [], [], []
     wa_sent, wa_failed, wa_skipped = [], [], []
 
     for b in bookings:
@@ -2084,6 +2088,7 @@ def cron_review_request():
 
         if not review_link:
             email_skipped.append("GOOGLE_REVIEW_LINK not set")
+            sms_skipped.append("GOOGLE_REVIEW_LINK not set")
             wa_skipped.append("GOOGLE_REVIEW_LINK not set")
             continue
 
@@ -2117,6 +2122,27 @@ def cron_review_request():
         else:
             email_skipped.append(email or phone or "no email/key")
 
+        # ── SMS через Twilio ─────────────────────────────────
+        if phone and twilio_sid and twilio_token:
+            sms_phone = phone if phone.startswith("+") else "+" + phone
+            sms_text = (f"Спасибо, что были у нас в R&J Grooming! 🐾 "
+                        f"Будем рады короткому отзыву: {review_link}")
+            try:
+                sr = requests.post(
+                    f"https://api.twilio.com/2010-04-01/Accounts/{twilio_sid}/Messages.json",
+                    auth=(twilio_sid, twilio_token),
+                    data={"From": twilio_from, "To": sms_phone, "Body": sms_text},
+                    timeout=10,
+                )
+                if sr.status_code == 201:
+                    sms_sent.append(sms_phone)
+                else:
+                    sms_failed.append(f"{sms_phone}: {sr.status_code} {sr.text[:80]}")
+            except Exception as e:
+                sms_failed.append(f"{phone}: {e}")
+        else:
+            sms_skipped.append(phone or "no phone/twilio")
+
         # ── WhatsApp через Meta Business API ────────────────
         # Временно отключено: свободный текст на след. день после визита требует
         # одобренного message template в Meta Business Manager (freeform вне 24ч
@@ -2144,11 +2170,14 @@ def cron_review_request():
 
     summary = (f"Review requests {date_gs}: {len(bookings)} bookings | "
                f"email sent={len(email_sent)} failed={len(email_failed)} skipped={len(email_skipped)} | "
+               f"sms sent={len(sms_sent)} failed={len(sms_failed)} skipped={len(sms_skipped)} | "
                f"wa sent={len(wa_sent)} failed={len(wa_failed)} skipped={len(wa_skipped)}")
     print(f"[cron/review-request] {summary}", flush=True)
     lines = ([summary]
              + [f"✓ email {e}" for e in email_sent]
              + [f"✗ email {e}" for e in email_failed]
+             + [f"✓ sms {p}" for p in sms_sent]
+             + [f"✗ sms {p}" for p in sms_failed]
              + [f"✓ wa {p}" for p in wa_sent]
              + [f"✗ wa {p}" for p in wa_failed])
     return "\n".join(lines), 200
