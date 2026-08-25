@@ -4170,7 +4170,7 @@ def _render_membership_card(mid):
   .brand-frame{{position:absolute;inset:14px;border:1px solid rgba(200,195,180,.4);border-radius:12px}}
   .brand-inner{{position:absolute;inset:26px;border:1px solid rgba(200,195,180,.22);border-radius:6px;display:flex;flex-direction:column;align-items:center;justify-content:center}}
   .brand-logo-img{{width:58%;max-width:230px;height:auto;display:block;filter:drop-shadow(0 0 18px rgba(255,255,255,.06))}}
-  .tap-hint{{position:absolute;bottom:22px;left:0;right:0;text-align:center;font-size:0.62rem;letter-spacing:.18em;text-transform:uppercase;color:rgba(205,199,181,.35)}}
+  .tap-hint{{position:absolute;bottom:52px;left:0;right:0;text-align:center;font-size:0.62rem;letter-spacing:.18em;text-transform:uppercase;color:rgba(205,199,181,.35)}}
 
   .face-back{{transform:rotateY(180deg);padding:24px 22px;overflow-y:auto;display:flex;flex-direction:column}}
   .back-head{{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}}
