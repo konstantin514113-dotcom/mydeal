@@ -1270,7 +1270,6 @@ def _wallet_pass_payload(m):
     total = m.get("total_visits", 0)
     return {
         "passStyle": "storeCard",
-        "title": "R&J Grooming",
         "stripURL": f"https://rjgrooming.up.railway.app/assets/wallet-strip.png?id={mid}",
         "organizationName": "R&J Grooming",
         "description": f"Абонемент {mid}",
