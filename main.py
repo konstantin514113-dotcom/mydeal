@@ -1232,8 +1232,6 @@ def _wallet_pass_payload(m):
             {"label": "Тип абонемента", "value": m.get("plan_name", "")},
             {"label": "Дата покупки", "value": m.get("purchase_date", "")},
         ],
-        "barcodeValue": f"https://rjgrooming.up.railway.app/membership/{mid}",
-        "barcodeFormat": "QR",
         "backgroundColor": "rgb(10,10,9)",
         "foregroundColor": "rgb(242,237,226)",
         "labelColor": "rgb(201,160,90)",
