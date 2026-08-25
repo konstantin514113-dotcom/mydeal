@@ -3369,6 +3369,16 @@ def admin_memberships_page():
         wa_msg = _urlp.quote(f"Здравствуйте, {m.get('client_name','')}! Ваш абонемент {m['id']} ({m.get('plan_name','')}) готов: https://rjgrooming.up.railway.app/membership/{m['id']}")
         has_email = bool((m.get("client_email") or "").strip())
 
+        history = m.get("visit_history") or []
+        if history:
+            hist_rows = "".join(
+                f'<div class="mem-hist-row"><span class="mem-hist-date">{h.get("date","")}</span><span class="mem-hist-note">{h.get("note","уход")}</span></div>'
+                for h in reversed(history)
+            )
+            history_block = f'<div class="mem-hist"><div class="mem-hist-label">История посещений</div>{hist_rows}</div>'
+        else:
+            history_block = ''
+
         return f"""
         <div class="mem-card" id="card-{m['id']}">
           <div class="mem-top">
@@ -3384,6 +3394,7 @@ def admin_memberships_page():
           </div>
           <div class="mem-meta">{m.get('plan_name','')} · до {m.get('expiry_date','—')}</div>
           {pricing_html}
+          {history_block}
           <div class="mem-actions">
             {actions}
             <a class="mem-btn mem-btn-link" href="/membership/{m['id']}" target="_blank">Открыть карточку</a>
@@ -3447,6 +3458,10 @@ def admin_memberships_page():
   .mem-pricing{{background:rgba(74,222,128,.05);border:1px solid rgba(74,222,128,.2);border-radius:8px;padding:8px 12px;margin-bottom:12px}}
   .mem-pricing-row{{font-size:0.72rem;color:rgba(242,237,226,.6)}}
   .mem-pricing-highlight{{color:#4ade80;font-weight:600;margin-top:2px}}
+  .mem-hist{{margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,.06)}}
+  .mem-hist-label{{font-size:0.6rem;letter-spacing:.1em;text-transform:uppercase;color:rgba(242,237,226,.4);margin-bottom:6px}}
+  .mem-hist-row{{display:flex;justify-content:space-between;font-size:0.75rem;padding:4px 0;color:rgba(242,237,226,.75)}}
+  .mem-hist-date{{color:rgba(242,237,226,.5)}}
   .mem-actions{{display:flex;gap:8px;flex-wrap:wrap}}
   .mem-btn{{font-size:0.72rem;padding:8px 12px;border-radius:8px;border:1px solid;cursor:pointer;text-decoration:none;font-family:'Montserrat',sans-serif}}
   .mem-btn-mark{{background:rgba(74,222,128,.1);border-color:rgba(74,222,128,.4);color:#4ade80}}
@@ -3502,7 +3517,7 @@ def admin_memberships_page():
     </div>
     <div class="form-field">
       <label>Выгода в процентах от обычного посещения, %</label>
-      <input type="number" id="fDiscountPercent" min="0" max="100" step="1" placeholder="20" oninput="updateSavingsPreview()">
+      <input type="number" id="fDiscountPercent" min="0" max="100" step="1" placeholder="0" oninput="updateSavingsPreview()">
     </div>
     <div class="form-row">
       <div class="form-field"><label>Дата покупки</label><input type="text" id="fPurchaseDate" placeholder="24.08.2026"></div>
