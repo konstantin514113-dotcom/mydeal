@@ -4062,9 +4062,6 @@ def _render_membership_card(mid):
           <a class="new-membership-btn" href="/app">Приобрести новый абонемент</a>
         </div>"""
 
-    page_url = f"https://rjgrooming.up.railway.app/membership/{mid}"
-    qr_url = f"https://api.qrserver.com/v1/create-qr-code/?size=180x180&bgcolor=0a0a09&color=ffffff&qzone=1&data={_urlp_q.quote(page_url)}"
-
     icon_person = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="4" stroke="rgba(230,225,215,.55)" stroke-width="1.5"/><path d="M4 20c0-4.4 3.6-7 8-7s8 2.6 8 7" stroke="rgba(230,225,215,.55)" stroke-width="1.5" stroke-linecap="round"/></svg>'
     icon_paw = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none"><ellipse cx="12" cy="16" rx="5.5" ry="4.5" stroke="rgba(230,225,215,.55)" stroke-width="1.5"/><circle cx="5.5" cy="9" r="2.1" stroke="rgba(230,225,215,.55)" stroke-width="1.5"/><circle cx="10" cy="5.5" r="2.1" stroke="rgba(230,225,215,.55)" stroke-width="1.5"/><circle cx="14.5" cy="5.5" r="2.1" stroke="rgba(230,225,215,.55)" stroke-width="1.5"/><circle cx="18.5" cy="9" r="2.1" stroke="rgba(230,225,215,.55)" stroke-width="1.5"/></svg>'
     icon_tag = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M11 3H5a2 2 0 00-2 2v6l10.6 10.6a2 2 0 002.8 0l5.2-5.2a2 2 0 000-2.8L11 3z" stroke="rgba(230,225,215,.55)" stroke-width="1.5" stroke-linejoin="round"/><circle cx="7.5" cy="7.5" r="1.4" stroke="rgba(230,225,215,.55)" stroke-width="1.3"/></svg>'
@@ -4180,7 +4177,6 @@ def _render_membership_card(mid):
         {history_html}
 
         <div class="qr-section">
-          <img src="{qr_url}" width="120" height="120" alt="QR">
           <div class="qr-caption">{m.get('id','')} · rjgrooming.salon</div>
         </div>
       </div>
