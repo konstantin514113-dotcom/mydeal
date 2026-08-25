@@ -2043,6 +2043,113 @@ def cron_reminders():
              + [f"- {s}" for s in skipped])
     return "\n".join(lines), 200
 
+@app.route("/cron/review-request")
+def cron_review_request():
+    """Отправляет клиентам, посетившим салон ВЧЕРА, письмо + WhatsApp со ссылкой на отзыв.
+    Railway cron: 0 11 * * *
+    Command:      curl https://rjgrooming.up.railway.app/cron/review-request
+    """
+    import datetime as _dt
+
+    secret = os.environ.get("CRON_SECRET", "")
+    if secret and request.args.get("secret") != secret:
+        return "Unauthorized", 401
+
+    if not GOOGLE_SCRIPT:
+        return "GOOGLE_SCRIPT not configured", 500
+
+    review_link = os.environ.get("GOOGLE_REVIEW_LINK", "")
+
+    yesterday = _dt.date.today() - _dt.timedelta(days=1)
+    date_gs = yesterday.strftime("%d.%m.%Y")
+
+    try:
+        r = requests.get(GOOGLE_SCRIPT, params={"action": "bookings", "date": date_gs}, timeout=30)
+        data = r.json()
+    except Exception as e:
+        print(f"[cron/review-request] GAS error: {e}", flush=True)
+        return f"GAS error: {e}", 500
+
+    bookings = data.get("bookings", [])
+    print(f"[cron/review-request] {date_gs}: {len(bookings)} bookings", flush=True)
+
+    resend_key = os.environ.get("RESEND_API_KEY")
+    email_sent, email_failed, email_skipped = [], [], []
+    wa_sent, wa_failed, wa_skipped = [], [], []
+
+    for b in bookings:
+        name = b.get("clientName") or b.get("name") or ""
+        phone = re.sub(r'[\s\-()]', '', str(b.get("phone", "")).strip())
+        email = (b.get("clientEmail") or b.get("email") or "").strip()
+
+        if not review_link:
+            email_skipped.append("GOOGLE_REVIEW_LINK not set")
+            wa_skipped.append("GOOGLE_REVIEW_LINK not set")
+            continue
+
+        # ── Email через Resend ──────────────────────────────
+        if email and "@" in email and resend_key:
+            try:
+                rr = requests.post(
+                    "https://api.resend.com/emails",
+                    headers={"Authorization": f"Bearer {resend_key}", "Content-Type": "application/json"},
+                    json={
+                        "from": "R&J Grooming <booking@rjgrooming.salon>",
+                        "to": [email],
+                        "subject": "Спасибо, что были у нас! 🐾",
+                        "html": (
+                            "<div style='background:#0a0a09;padding:32px 24px;font-family:Arial,sans-serif;color:#f2ede2'>"
+                            "<h2 style='margin:0 0 6px'>R&amp;J Grooming</h2>"
+                            f"<p style='color:#cfc9ba'>Здравствуйте, {name}! Спасибо, что доверили нам уход за питомцем.</p>"
+                            "<p style='color:#cfc9ba'>Будем очень благодарны, если оставите короткий отзыв — это помогает другим владельцам питомцев нас найти.</p>"
+                            f"<p style='margin:24px 0'><a href='{review_link}' style='background:#e6e1d5;color:#0a0a09;text-decoration:none;padding:12px 22px;border-radius:8px;font-weight:bold;display:inline-block'>Оставить отзыв</a></p>"
+                            "</div>"
+                        )
+                    },
+                    timeout=10
+                )
+                if rr.status_code < 300:
+                    email_sent.append(email)
+                else:
+                    email_failed.append(f"{email}: {rr.status_code} {rr.text[:80]}")
+            except Exception as e:
+                email_failed.append(f"{email}: {e}")
+        else:
+            email_skipped.append(email or phone or "no email/key")
+
+        # ── WhatsApp через Meta Business API ────────────────
+        if phone and WHATSAPP_TOKEN and WHATSAPP_PHONE_ID:
+            if not phone.startswith("+"):
+                phone = "+" + phone
+            wa_text = (f"Здравствуйте, {name}! Спасибо, что были у нас в R&J Grooming 🐾 "
+                       f"Будем рады короткому отзыву: {review_link}")
+            try:
+                wr = requests.post(
+                    f"https://graph.facebook.com/v18.0/{WHATSAPP_PHONE_ID}/messages",
+                    headers={"Authorization": f"Bearer {WHATSAPP_TOKEN}", "Content-Type": "application/json"},
+                    json={"messaging_product": "whatsapp", "to": phone.lstrip("+"), "type": "text", "text": {"body": wa_text}},
+                    timeout=10
+                )
+                if wr.status_code < 300:
+                    wa_sent.append(phone)
+                else:
+                    wa_failed.append(f"{phone}: {wr.status_code} {wr.text[:150]}")
+            except Exception as e:
+                wa_failed.append(f"{phone}: {e}")
+        else:
+            wa_skipped.append(phone or "no phone/token")
+
+    summary = (f"Review requests {date_gs}: {len(bookings)} bookings | "
+               f"email sent={len(email_sent)} failed={len(email_failed)} skipped={len(email_skipped)} | "
+               f"wa sent={len(wa_sent)} failed={len(wa_failed)} skipped={len(wa_skipped)}")
+    print(f"[cron/review-request] {summary}", flush=True)
+    lines = ([summary]
+             + [f"✓ email {e}" for e in email_sent]
+             + [f"✗ email {e}" for e in email_failed]
+             + [f"✓ wa {p}" for p in wa_sent]
+             + [f"✗ wa {p}" for p in wa_failed])
+    return "\n".join(lines), 200
+
 @app.route("/admin/whatsapp")
 def admin_whatsapp():
     global jarvis_enabled, instagram_enabled
