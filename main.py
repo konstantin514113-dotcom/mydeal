@@ -3328,6 +3328,7 @@ def api_find_duplicates():
 
 @app.route("/admin/memberships")
 def admin_memberships_page():
+    import urllib.parse as _urlp
     prefill_name = request.args.get("client_name", "")
     prefill_phone = request.args.get("client_phone", "")
     prefill_pet = request.args.get("pet_name", "")
@@ -3364,6 +3365,10 @@ def admin_memberships_page():
             <div class="mem-pricing-row mem-pricing-highlight">Выгода клиента: {total_saving:.0f}€</div>
           </div>"""
 
+        wa_digits = _normalize_phone(m.get("client_phone", "")).lstrip("+")
+        wa_msg = _urlp.quote(f"Здравствуйте, {m.get('client_name','')}! Ваш абонемент {m['id']} ({m.get('plan_name','')}) готов: https://rjgrooming.up.railway.app/membership/{m['id']}")
+        has_email = bool((m.get("client_email") or "").strip())
+
         return f"""
         <div class="mem-card" id="card-{m['id']}">
           <div class="mem-top">
@@ -3382,6 +3387,8 @@ def admin_memberships_page():
           <div class="mem-actions">
             {actions}
             <a class="mem-btn mem-btn-link" href="/membership/{m['id']}" target="_blank">Открыть карточку</a>
+            <a class="mem-btn mem-btn-wa" href="https://wa.me/{wa_digits}?text={wa_msg}" target="_blank" rel="noopener">WhatsApp</a>
+            <button class="mem-btn mem-btn-mail" onclick="sendMembershipEmail('{m['id']}')" {'disabled title="У клиента нет email"' if not has_email else ''}>Отправить на почту</button>
             <button class="mem-btn mem-btn-delete" onclick="deleteMembership('{m['id']}')">Удалить</button>
           </div>
         </div>"""
@@ -3445,6 +3452,9 @@ def admin_memberships_page():
   .mem-btn-mark{{background:rgba(74,222,128,.1);border-color:rgba(74,222,128,.4);color:#4ade80}}
   .mem-btn-undo{{background:none;border-color:rgba(224,82,74,.4);color:#e0524a}}
   .mem-btn-link{{background:rgba(201,160,90,.1);border-color:rgba(201,160,90,.4);color:#c9a05a}}
+  .mem-btn-wa{{background:rgba(74,222,128,.08);border-color:rgba(74,222,128,.3);color:#4ade80}}
+  .mem-btn-mail{{background:rgba(120,170,230,.1);border-color:rgba(120,170,230,.35);color:#78aae6}}
+  .mem-btn-mail:disabled{{opacity:.35;cursor:not-allowed}}
   .mem-btn-delete{{background:none;border-color:rgba(224,82,74,.25);color:rgba(224,82,74,.6)}}
   .empty{{text-align:center;padding:40px 0;color:rgba(242,237,226,.4);font-size:0.85rem}}
   .toast{{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);background:#151310;border:1px solid rgba(201,160,90,.4);color:#f2ede2;padding:10px 20px;border-radius:20px;font-size:0.8rem;opacity:0;pointer-events:none;transition:all .25s;z-index:999}}
@@ -3661,6 +3671,21 @@ function undoVisit(id){{
     if(res.success){{ showToast('Отметка отменена'); setTimeout(function(){{location.reload();}}, 600); }}
     else{{ showToast('Ошибка: ' + (res.error||'')); }}
   }}).catch(function(){{ showToast('Ошибка сети'); }});
+}}
+
+function sendMembershipEmail(id){{
+  var btn = event && event.target;
+  if(btn){{ btn.disabled = true; var oldText = btn.textContent; btn.textContent = 'Отправка...'; }}
+  fetch('/api/membership/send-email', {{
+    method:'POST', headers:{{'Content-Type':'application/json'}}, body: JSON.stringify({{id:id}})
+  }}).then(function(r){{return r.json();}}).then(function(res){{
+    if(res.success){{ showToast('Письмо отправлено'); }}
+    else {{ showToast('Ошибка: ' + (res.error||'')); }}
+  }}).catch(function(){{
+    showToast('Ошибка сети');
+  }}).finally(function(){{
+    if(btn){{ btn.disabled = false; btn.textContent = oldText; }}
+  }});
 }}
 
 function deleteMembership(id){{
@@ -4014,6 +4039,48 @@ def api_membership_delete():
     del memberships[mid]
     ok = _save_memberships(memberships)
     return jsonify({"success": ok})
+
+@app.route("/api/membership/send-email", methods=["POST"])
+def api_membership_send_email():
+    body = request.get_json(force=True) or {}
+    mid = (body.get("id") or "").strip()
+    memberships = _load_memberships()
+    m = memberships.get(mid)
+    if not m:
+        return jsonify({"success": False, "error": "Абонемент не найден"}), 404
+    to_email = (body.get("email") or m.get("client_email") or "").strip()
+    if not to_email or "@" not in to_email:
+        return jsonify({"success": False, "error": "У клиента не указан email"}), 400
+    resend_key = os.environ.get("RESEND_API_KEY")
+    if not resend_key:
+        return jsonify({"success": False, "error": "RESEND_API_KEY не настроен"}), 500
+    card_url = f"https://rjgrooming.up.railway.app/membership/{mid}"
+    try:
+        r = requests.post(
+            "https://api.resend.com/emails",
+            headers={"Authorization": f"Bearer {resend_key}", "Content-Type": "application/json"},
+            json={
+                "from": "R&J Grooming <booking@rjgrooming.salon>",
+                "to": [to_email],
+                "subject": f"Ваш абонемент {mid} — R&J Grooming",
+                "html": (
+                    "<div style='background:#0a0a09;padding:32px 24px;font-family:Arial,sans-serif;color:#f2ede2'>"
+                    "<h2 style='margin:0 0 6px'>R&amp;J Grooming</h2>"
+                    f"<p style='color:#cfc9ba'>Здравствуйте, {m.get('client_name','')}!</p>"
+                    f"<p style='color:#cfc9ba'>Ваш абонемент <b>{m.get('plan_name','')}</b> для {m.get('pet_name','')} готов. "
+                    "Откройте карточку по кнопке ниже — там всегда видно, сколько посещений использовано и сколько осталось.</p>"
+                    f"<p style='margin:24px 0'><a href='{card_url}' style='background:#e6e1d5;color:#0a0a09;text-decoration:none;padding:12px 22px;border-radius:8px;font-weight:bold;display:inline-block'>Открыть абонемент</a></p>"
+                    f"<p style='color:#8a8578;font-size:13px'>{card_url}</p>"
+                    "</div>"
+                )
+            },
+            timeout=10
+        )
+        if r.status_code >= 300:
+            return jsonify({"success": False, "error": f"Resend error {r.status_code}: {r.text[:200]}"}), 500
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+    return jsonify({"success": True})
 
 @app.route("/membership/<mid>")
 def public_membership_card(mid):
