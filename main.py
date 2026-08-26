@@ -2188,6 +2188,300 @@ def cron_reminders():
              + [f"- {s}" for s in skipped])
     return "\n".join(lines), 200
 
+_REVIEW_MSG = {
+    "ru": {
+        "subject": "Спасибо, что были у нас! 🐾",
+        "greet": "Здравствуйте, {name}! Спасибо, что доверили нам уход за питомцем.",
+        "ask": "Будем очень благодарны, если оставите короткий отзыв — это помогает другим владельцам питомцев нас найти.",
+        "btn": "Оставить отзыв",
+        "sms": "Спасибо, что были у нас в R&J Grooming! 🐾 Будем рады короткому отзыву: {link}",
+    },
+    "en": {
+        "subject": "Thank you for visiting us! 🐾",
+        "greet": "Hi {name}! Thank you for trusting us with your pet's grooming.",
+        "ask": "We'd really appreciate a short review — it helps other pet owners find us.",
+        "btn": "Leave a review",
+        "sms": "Thank you for visiting R&J Grooming! 🐾 We'd love a quick review: {link}",
+    },
+    "et": {
+        "subject": "Aitäh, et meid külastasite! 🐾",
+        "greet": "Tere, {name}! Aitäh, et usaldasite oma lemmiklooma hoolduse meile.",
+        "ask": "Oleksime väga tänulikud lühikese arvustuse eest — see aitab teistel lemmikloomaomanikel meid leida.",
+        "btn": "Jäta arvustus",
+        "sms": "Aitäh, et külastasite R&J Grooming'ut! 🐾 Ootame lühikest arvustust: {link}",
+    },
+}
+
+def _send_review_request(name, phone, email, lang="ru"):
+    """Отправляет письмо (Resend) + SMS (Twilio, кроме +7) с просьбой оставить отзыв.
+    Используется и cron'ом, и ручной кнопкой в карточке клиента."""
+    review_link = os.environ.get("GOOGLE_REVIEW_LINK", "")
+    resend_key = os.environ.get("RESEND_API_KEY")
+    twilio_sid = os.environ.get("TWILIO_ACCOUNT_SID")
+    twilio_token = os.environ.get("TWILIO_AUTH_TOKEN")
+    twilio_from = os.environ.get("TWILIO_PHONE", "+37266922128")
+
+    result = {"email_sent": [], "email_failed": [], "email_skipped": [],
+              "sms_sent": [], "sms_failed": [], "sms_skipped": []}
+
+    if lang not in _REVIEW_MSG:
+        lang = "ru"
+    t = _REVIEW_MSG[lang]
+    phone = re.sub(r'[\s\-()]', '', str(phone or "").strip())
+    email = (email or "").strip()
+
+    if not review_link:
+        result["email_skipped"].append("GOOGLE_REVIEW_LINK not set")
+        result["sms_skipped"].append("GOOGLE_REVIEW_LINK not set")
+        return result
+
+    # ── Email через Resend ──────────────────────────────
+    if email and "@" in email and resend_key:
+        try:
+            rr = requests.post(
+                "https://api.resend.com/emails",
+                headers={"Authorization": f"Bearer {resend_key}", "Content-Type": "application/json"},
+                json={
+                    "from": "R&J Grooming <booking@rjgrooming.salon>",
+                    "to": [email],
+                    "subject": t["subject"],
+                    "html": (
+                        "<div style='background:#0a0a09;padding:32px 24px;font-family:Arial,sans-serif;color:#f2ede2'>"
+                        "<img src='https://rjgrooming.up.railway.app/assets/logo.png' alt='R&amp;J Grooming' style='height:60px;margin-bottom:14px;display:block'>"
+                        f"<p style='color:#cfc9ba'>{t['greet'].format(name=name)}</p>"
+                        f"<p style='color:#cfc9ba'>{t['ask']}</p>"
+                        f"<p style='margin:24px 0'><a href='{review_link}' style='background:#e6e1d5;color:#0a0a09;text-decoration:none;padding:12px 22px;border-radius:8px;font-weight:bold;display:inline-block'>{t['btn']}</a></p>"
+                        "</div>"
+                    )
+                },
+                timeout=10
+            )
+            if rr.status_code < 300:
+                result["email_sent"].append(email)
+            else:
+                result["email_failed"].append(f"{email}: {rr.status_code} {rr.text[:80]}")
+        except Exception as e:
+            result["email_failed"].append(f"{email}: {e}")
+    else:
+        result["email_skipped"].append(email or phone or "no email/key")
+
+    # ── SMS через Twilio ─────────────────────────────────
+    sms_phone_norm = phone if phone.startswith("+") else "+" + phone
+    if sms_phone_norm.startswith("+7"):
+        result["sms_skipped"].append(f"{sms_phone_norm}: Twilio не доставляет SMS в РФ с 2023")
+    elif phone and twilio_sid and twilio_token:
+        sms_text = t["sms"].format(link=review_link)
+        try:
+            sr = requests.post(
+                f"https://api.twilio.com/2010-04-01/Accounts/{twilio_sid}/Messages.json",
+                auth=(twilio_sid, twilio_token),
+                data={"From": twilio_from, "To": sms_phone_norm, "Body": sms_text},
+                timeout=10,
+            )
+            if sr.status_code == 201:
+                result["sms_sent"].append(sms_phone_norm)
+            else:
+                result["sms_failed"].append(f"{sms_phone_norm}: {sr.status_code} {sr.text[:80]}")
+        except Exception as e:
+            result["sms_failed"].append(f"{phone}: {e}")
+    else:
+        result["sms_skipped"].append(phone or "no phone/twilio")
+
+    return result
+
+_ANNA_SHARED_PHONE = "+37255521155"  # общий/резервный номер администратора, не реальный клиент
+
+@app.route("/admin/bulk-review-request")
+def admin_bulk_review_request_page():
+    """Страница подготовки разовой рассылки отзывов по накопленной базе клиентов."""
+    import urllib.parse as _urlp
+
+    error = None
+    clients = []
+    try:
+        bookings = _fetch_full_history_bookings()
+        by_phone = {}
+        for b in bookings:
+            phone_raw = (b.get("clientPhone") or b.get("phone") or "").strip()
+            if not phone_raw:
+                continue
+            phone = _normalize_phone(phone_raw)
+            entry = by_phone.setdefault(phone, {
+                "name": "", "phone": phone, "email": "", "pets": set(),
+                "visits": 0, "lang": "ru"
+            })
+            if b.get("clientName"):
+                entry["name"] = b.get("clientName")
+            if b.get("clientEmail"):
+                entry["email"] = b.get("clientEmail")
+            pet = b.get("petName", "")
+            if pet:
+                entry["pets"].add(pet)
+            if b.get("lang"):
+                entry["lang"] = b.get("lang")
+            entry["visits"] += 1
+
+        all_client_data = _load_all_client_data()
+        for phone, entry in by_phone.items():
+            saved = all_client_data.get(_client_data_key(phone), {})
+            if saved.get("name"):
+                entry["name"] = saved["name"]
+            if saved.get("email"):
+                entry["email"] = saved["email"]
+
+        clients = sorted(by_phone.values(), key=lambda c: c["visits"], reverse=True)
+    except Exception as e:
+        error = str(e)
+
+    def row_html(c):
+        pets_str = ", ".join(c["pets"]) or "—"
+        is_anna = c["phone"] == _ANNA_SHARED_PHONE
+        checked = "" if is_anna else "checked"
+        warn = ' <span style="color:#e0824a">⚠ общий номер, не клиент</span>' if is_anna else ""
+        email_str = c["email"] or '<span style="opacity:.4">нет email</span>'
+        return f"""
+        <label class="crow">
+          <input type="checkbox" class="crow-check" value="{c['phone']}" data-name="{_urlp.quote(c['name'])}" {checked}>
+          <div class="crow-body">
+            <div class="crow-top"><span class="crow-name">{c['name'] or '—'}</span><span class="crow-visits">{c['visits']} визит(ов)</span></div>
+            <div class="crow-sub">{c['phone']} · {email_str}{warn}</div>
+            <div class="crow-pets">{pets_str}</div>
+          </div>
+        </label>"""
+
+    rows_html = "".join(row_html(c) for c in clients) if clients else '<div class="empty">Клиентов не найдено</div>'
+    error_html = f'<div class="empty" style="color:#e0824a">Ошибка: {error}</div>' if error else ""
+
+    html = f"""<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>R&J — Рассылка отзывов</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,600;0,700&family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  *{{box-sizing:border-box;margin:0;padding:0}}
+  body{{background:#0a0a09;color:#f2ede2;font-family:'Montserrat',sans-serif;padding:28px 16px 100px}}
+  .wrap{{max-width:640px;margin:0 auto}}
+  h1{{font-family:'Playfair Display',serif;font-size:1.6rem;margin-bottom:6px}}
+  .sub{{font-size:0.8rem;color:rgba(242,237,226,.5);margin-bottom:20px}}
+  .toolbar{{display:flex;gap:10px;margin-bottom:16px}}
+  .toolbar button{{flex:1;background:#131210;border:1px solid rgba(255,255,255,.12);color:#f2ede2;padding:10px;border-radius:8px;font-size:0.78rem;font-family:'Montserrat',sans-serif}}
+  .count{{font-size:0.78rem;color:rgba(201,160,90,.9);margin-bottom:14px}}
+  .crow{{display:flex;gap:12px;align-items:flex-start;padding:12px 0;border-bottom:1px solid rgba(255,255,255,.07);cursor:pointer}}
+  .crow-check{{margin-top:4px;width:18px;height:18px;flex-shrink:0}}
+  .crow-body{{flex:1}}
+  .crow-top{{display:flex;justify-content:space-between;font-size:0.9rem}}
+  .crow-name{{font-weight:600}}
+  .crow-visits{{color:rgba(201,160,90,.85);font-size:0.75rem}}
+  .crow-sub{{font-size:0.75rem;color:rgba(242,237,226,.55);margin-top:2px}}
+  .crow-pets{{font-size:0.75rem;color:rgba(242,237,226,.4);margin-top:2px}}
+  .empty{{text-align:center;padding:30px 0;color:rgba(242,237,226,.4)}}
+  .send-bar{{position:fixed;bottom:0;left:0;right:0;background:#131210;border-top:1px solid rgba(255,255,255,.12);padding:14px 16px;display:flex;gap:10px;align-items:center}}
+  .send-bar button{{flex:1;background:#e6e1d5;color:#0a0a09;border:none;padding:14px;border-radius:10px;font-weight:700;font-size:0.9rem;font-family:'Montserrat',sans-serif}}
+  .send-bar button:disabled{{opacity:.5}}
+  #result{{white-space:pre-wrap;font-size:0.72rem;background:#131210;border-radius:8px;padding:12px;margin-top:16px;max-height:300px;overflow-y:auto}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Рассылка отзывов</h1>
+  <div class="sub">Разовая отправка по накопленной базе клиентов (не входит в ежедневную автоматику). Отметь нужных и нажми «Отправить».</div>
+  <div class="toolbar">
+    <button onclick="selectAll(true)">Выбрать всех</button>
+    <button onclick="selectAll(false)">Снять всё</button>
+  </div>
+  <div class="count" id="countLabel"></div>
+  {error_html}
+  {rows_html}
+</div>
+<div class="send-bar">
+  <button id="sendBtn" onclick="sendReviews()">Отправить выбранным</button>
+</div>
+<div class="wrap"><div id="result"></div></div>
+<script>
+function updateCount(){{
+  var n = document.querySelectorAll('.crow-check:checked').length;
+  document.getElementById('countLabel').textContent = 'Выбрано: ' + n;
+}}
+document.querySelectorAll('.crow-check').forEach(function(cb){{ cb.addEventListener('change', updateCount); }});
+updateCount();
+
+function selectAll(v){{
+  document.querySelectorAll('.crow-check').forEach(function(cb){{ cb.checked = v; }});
+  updateCount();
+}}
+
+function sendReviews(){{
+  var checked = Array.from(document.querySelectorAll('.crow-check:checked'));
+  if(checked.length === 0){{ alert('Ничего не выбрано'); return; }}
+  if(!confirm('Отправить письма/SMS ' + checked.length + ' клиентам?')) return;
+  var btn = document.getElementById('sendBtn');
+  btn.disabled = true; btn.textContent = 'Отправка...';
+  var phones = checked.map(function(cb){{ return cb.value; }});
+  fetch('/api/bulk-review-request', {{
+    method: 'POST', headers: {{'Content-Type':'application/json'}}, body: JSON.stringify({{phones: phones}})
+  }}).then(function(r){{ return r.json(); }}).then(function(res){{
+    document.getElementById('result').textContent = JSON.stringify(res, null, 2);
+    btn.disabled = false; btn.textContent = 'Отправить выбранным';
+  }}).catch(function(e){{
+    document.getElementById('result').textContent = 'Ошибка: ' + e;
+    btn.disabled = false; btn.textContent = 'Отправить выбранным';
+  }});
+}}
+</script>
+</body>
+</html>"""
+    return html, 200, {"Content-Type": "text/html; charset=utf-8"}
+
+@app.route("/api/bulk-review-request", methods=["POST"])
+def api_bulk_review_request():
+    """Отправляет запрос на отзыв (email+SMS) по выбранному списку телефонов."""
+    body = request.get_json(force=True) or {}
+    phones = body.get("phones") or []
+    if not isinstance(phones, list) or not phones:
+        return jsonify({"error": "phones list required"}), 400
+
+    bookings = _fetch_full_history_bookings()
+    all_client_data = _load_all_client_data()
+
+    by_phone = {}
+    for b in bookings:
+        phone_raw = (b.get("clientPhone") or b.get("phone") or "").strip()
+        if not phone_raw:
+            continue
+        phone = _normalize_phone(phone_raw)
+        entry = by_phone.setdefault(phone, {"name": "", "email": "", "lang": "ru"})
+        if b.get("clientName"):
+            entry["name"] = b.get("clientName")
+        if b.get("clientEmail"):
+            entry["email"] = b.get("clientEmail")
+        if b.get("lang"):
+            entry["lang"] = b.get("lang")
+
+    results = {}
+    for phone in phones:
+        phone = _normalize_phone(phone)
+        entry = by_phone.get(phone, {"name": "", "email": "", "lang": "ru"})
+        saved = all_client_data.get(_client_data_key(phone), {})
+        name = saved.get("name") or entry["name"]
+        email = saved.get("email") or entry["email"]
+        lang = entry.get("lang", "ru")
+        r = _send_review_request(name, phone, email, lang=lang)
+        results[phone] = {
+            "name": name,
+            "email_sent": len(r["email_sent"]) > 0,
+            "email_skip_reason": r["email_skipped"][0] if r["email_skipped"] else None,
+            "sms_sent": len(r["sms_sent"]) > 0,
+            "sms_skip_reason": r["sms_skipped"][0] if r["sms_skipped"] else None,
+            "email_error": r["email_failed"][0] if r["email_failed"] else None,
+            "sms_error": r["sms_failed"][0] if r["sms_failed"] else None,
+        }
+
+    total_email = sum(1 for v in results.values() if v["email_sent"])
+    total_sms = sum(1 for v in results.values() if v["sms_sent"])
+    return jsonify({"total_requested": len(phones), "email_sent": total_email, "sms_sent": total_sms, "details": results})
+
 @app.route("/cron/review-request")
 def cron_review_request():
     """Отправляет клиентам, посетившим салон ВЧЕРА, письмо + WhatsApp со ссылкой на отзыв.
@@ -2282,141 +2576,28 @@ def cron_review_request():
     bookings = data.get("bookings", [])
     print(f"[cron/review-request] {date_gs}: {len(bookings)} bookings", flush=True)
 
-    twilio_sid = os.environ.get("TWILIO_ACCOUNT_SID")
-    twilio_token = os.environ.get("TWILIO_AUTH_TOKEN")
-    twilio_from = os.environ.get("TWILIO_PHONE", "+37266922128")
     email_sent, email_failed, email_skipped = [], [], []
     sms_sent, sms_failed, sms_skipped = [], [], []
-    wa_sent, wa_failed, wa_skipped = [], [], []
-
-    _REVIEW_MSG = {
-        "ru": {
-            "subject": "Спасибо, что были у нас! 🐾",
-            "greet": "Здравствуйте, {name}! Спасибо, что доверили нам уход за питомцем.",
-            "ask": "Будем очень благодарны, если оставите короткий отзыв — это помогает другим владельцам питомцев нас найти.",
-            "btn": "Оставить отзыв",
-            "sms": "Спасибо, что были у нас в R&J Grooming! 🐾 Будем рады короткому отзыву: {link}",
-        },
-        "en": {
-            "subject": "Thank you for visiting us! 🐾",
-            "greet": "Hi {name}! Thank you for trusting us with your pet's grooming.",
-            "ask": "We'd really appreciate a short review — it helps other pet owners find us.",
-            "btn": "Leave a review",
-            "sms": "Thank you for visiting R&J Grooming! 🐾 We'd love a quick review: {link}",
-        },
-        "et": {
-            "subject": "Aitäh, et meid külastasite! 🐾",
-            "greet": "Tere, {name}! Aitäh, et usaldasite oma lemmiklooma hoolduse meile.",
-            "ask": "Oleksime väga tänulikud lühikese arvustuse eest — see aitab teistel lemmikloomaomanikel meid leida.",
-            "btn": "Jäta arvustus",
-            "sms": "Aitäh, et külastasite R&J Grooming'ut! 🐾 Ootame lühikest arvustust: {link}",
-        },
-    }
 
     for b in bookings:
         name = b.get("clientName") or b.get("name") or ""
-        phone = re.sub(r'[\s\-()]', '', str(b.get("phone", "")).strip())
-        email = (b.get("clientEmail") or b.get("email") or "").strip()
+        phone = b.get("phone", "")
+        email = b.get("clientEmail") or b.get("email") or ""
         lang = (b.get("lang") or "ru").strip().lower()
-        if lang not in _REVIEW_MSG:
-            lang = "ru"
-        t = _REVIEW_MSG[lang]
 
-        if not review_link:
-            email_skipped.append("GOOGLE_REVIEW_LINK not set")
-            sms_skipped.append("GOOGLE_REVIEW_LINK not set")
-            wa_skipped.append("GOOGLE_REVIEW_LINK not set")
-            continue
-
-        # ── Email через Resend ──────────────────────────────
-        if email and "@" in email and resend_key:
-            try:
-                rr = requests.post(
-                    "https://api.resend.com/emails",
-                    headers={"Authorization": f"Bearer {resend_key}", "Content-Type": "application/json"},
-                    json={
-                        "from": "R&J Grooming <booking@rjgrooming.salon>",
-                        "to": [email],
-                        "subject": t["subject"],
-                        "html": (
-                            "<div style='background:#0a0a09;padding:32px 24px;font-family:Arial,sans-serif;color:#f2ede2'>"
-                            "<img src='https://rjgrooming.up.railway.app/assets/logo.png' alt='R&amp;J Grooming' style='height:60px;margin-bottom:14px;display:block'>"
-                            f"<p style='color:#cfc9ba'>{t['greet'].format(name=name)}</p>"
-                            f"<p style='color:#cfc9ba'>{t['ask']}</p>"
-                            f"<p style='margin:24px 0'><a href='{review_link}' style='background:#e6e1d5;color:#0a0a09;text-decoration:none;padding:12px 22px;border-radius:8px;font-weight:bold;display:inline-block'>{t['btn']}</a></p>"
-                            "</div>"
-                        )
-                    },
-                    timeout=10
-                )
-                if rr.status_code < 300:
-                    email_sent.append(email)
-                else:
-                    email_failed.append(f"{email}: {rr.status_code} {rr.text[:80]}")
-            except Exception as e:
-                email_failed.append(f"{email}: {e}")
-        else:
-            email_skipped.append(email or phone or "no email/key")
-
-        # ── SMS через Twilio ─────────────────────────────────
-        sms_phone_norm = phone if phone.startswith("+") else "+" + phone
-        if sms_phone_norm.startswith("+7"):
-            sms_skipped.append(f"{sms_phone_norm}: Twilio не доставляет SMS в РФ с 2023")
-        elif phone and twilio_sid and twilio_token:
-            sms_text = t["sms"].format(link=review_link)
-            try:
-                sr = requests.post(
-                    f"https://api.twilio.com/2010-04-01/Accounts/{twilio_sid}/Messages.json",
-                    auth=(twilio_sid, twilio_token),
-                    data={"From": twilio_from, "To": sms_phone_norm, "Body": sms_text},
-                    timeout=10,
-                )
-                if sr.status_code == 201:
-                    sms_sent.append(sms_phone_norm)
-                else:
-                    sms_failed.append(f"{sms_phone_norm}: {sr.status_code} {sr.text[:80]}")
-            except Exception as e:
-                sms_failed.append(f"{phone}: {e}")
-        else:
-            sms_skipped.append(phone or "no phone/twilio")
-
-        # ── WhatsApp через Meta Business API ────────────────
-        # Временно отключено: свободный текст на след. день после визита требует
-        # одобренного message template в Meta Business Manager (freeform вне 24ч
-        # окна будет отклонён). Включим, когда шаблон review_request_ru одобрят.
-        if False and phone and WHATSAPP_TOKEN and WHATSAPP_PHONE_ID:
-            if not phone.startswith("+"):
-                phone = "+" + phone
-            wa_text = (f"Здравствуйте, {name}! Спасибо, что были у нас в R&J Grooming 🐾 "
-                       f"Будем рады короткому отзыву: {review_link}")
-            try:
-                wr = requests.post(
-                    f"https://graph.facebook.com/v18.0/{WHATSAPP_PHONE_ID}/messages",
-                    headers={"Authorization": f"Bearer {WHATSAPP_TOKEN}", "Content-Type": "application/json"},
-                    json={"messaging_product": "whatsapp", "to": phone.lstrip("+"), "type": "text", "text": {"body": wa_text}},
-                    timeout=10
-                )
-                if wr.status_code < 300:
-                    wa_sent.append(phone)
-                else:
-                    wa_failed.append(f"{phone}: {wr.status_code} {wr.text[:150]}")
-            except Exception as e:
-                wa_failed.append(f"{phone}: {e}")
-        else:
-            wa_skipped.append("WhatsApp отключён (ждём одобрения шаблона)")
+        r = _send_review_request(name, phone, email, lang=lang)
+        email_sent += r["email_sent"]; email_failed += r["email_failed"]; email_skipped += r["email_skipped"]
+        sms_sent += r["sms_sent"]; sms_failed += r["sms_failed"]; sms_skipped += r["sms_skipped"]
 
     summary = (f"Review requests {date_gs}: {len(bookings)} bookings | "
                f"email sent={len(email_sent)} failed={len(email_failed)} skipped={len(email_skipped)} | "
-               f"sms sent={len(sms_sent)} failed={len(sms_failed)} skipped={len(sms_skipped)} | "
-               f"wa sent={len(wa_sent)} failed={len(wa_failed)} skipped={len(wa_skipped)}")
+               f"sms sent={len(sms_sent)} failed={len(sms_failed)} skipped={len(sms_skipped)}")
     print(f"[cron/review-request] {summary}", flush=True)
     lines = ([summary]
              + [f"✓ email {e}" for e in email_sent]
              + [f"✗ email {e}" for e in email_failed]
              + [f"✓ sms {p}" for p in sms_sent]
-             + [f"✗ sms {p}" for p in sms_failed]
-             + [f"✓ wa {p}" for p in wa_sent]
-             + [f"✗ wa {p}" for p in wa_failed])
+             + [f"✗ sms {p}" for p in sms_failed])
     return "\n".join(lines), 200
 
 @app.route("/admin/whatsapp")
