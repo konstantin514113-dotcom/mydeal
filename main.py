@@ -1191,6 +1191,15 @@ def _get_logo_b64():
         print(f"LOGO EXTRACT ERROR: {e}", flush=True)
     return ""
 
+@app.route("/r")
+def short_review_redirect():
+    """Короткий редирект на страницу отзыва — чтобы SMS помещалось в 1 сегмент."""
+    from flask import redirect
+    link = os.environ.get("GOOGLE_REVIEW_LINK", "")
+    if not link:
+        return "GOOGLE_REVIEW_LINK not set", 500
+    return redirect(link, code=302)
+
 @app.route("/assets/logo.png")
 def asset_logo_png():
     """Отдаёт логотип R&J как обычную картинку по стабильной ссылке — для email-рассылок
@@ -2194,21 +2203,21 @@ _REVIEW_MSG = {
         "greet": "Здравствуйте, {name}! Спасибо, что доверили нам уход за питомцем.",
         "ask": "Будем очень благодарны, если оставите короткий отзыв — это помогает другим владельцам питомцев нас найти.",
         "btn": "Оставить отзыв",
-        "sms": "Здравствуйте! Мы совсем молодой салон R&J Grooming и сейчас собираем отзывы наших первых клиентов. Если вам понравился наш уход и вы остались довольны, будем очень благодарны за небольшой отзыв о нас в Google: {link} Спасибо, что выбираете R&J Grooming!",
+        "sms": "Спасибо за визит в R&J Grooming! Отзыв: {link}",
     },
     "en": {
         "subject": "Thank you for visiting us! 🐾",
         "greet": "Hi {name}! Thank you for trusting us with your pet's grooming.",
         "ask": "We'd really appreciate a short review — it helps other pet owners find us.",
         "btn": "Leave a review",
-        "sms": "Thank you for visiting R&J Grooming! 🐾 We'd love a quick review: {link}",
+        "sms": "Thanks for visiting R&J Grooming! Review: {link}",
     },
     "et": {
         "subject": "Aitäh, et meid külastasite! 🐾",
         "greet": "Tere, {name}! Aitäh, et usaldasite oma lemmiklooma hoolduse meile.",
         "ask": "Oleksime väga tänulikud lühikese arvustuse eest — see aitab teistel lemmikloomaomanikel meid leida.",
         "btn": "Jäta arvustus",
-        "sms": "Aitäh, et külastasite R&J Grooming'ut! 🐾 Ootame lühikest arvustust: {link}",
+        "sms": "Aitäh külastuse eest R&J-s! Arvustus: {link}",
     },
 }
 
@@ -2270,7 +2279,7 @@ def _send_review_request(name, phone, email, lang="ru"):
     if sms_phone_norm.startswith("+7"):
         result["sms_skipped"].append(f"{sms_phone_norm}: Twilio не доставляет SMS в РФ с 2023")
     elif phone and twilio_sid and twilio_token:
-        sms_text = t["sms"].format(link=review_link)
+        sms_text = t["sms"].format(link="https://rjgrooming.salon/r")
         try:
             sr = requests.post(
                 f"https://api.twilio.com/2010-04-01/Accounts/{twilio_sid}/Messages.json",
@@ -2547,10 +2556,7 @@ def cron_review_request():
         sms_to = test_sms if test_sms.startswith("+") else "+" + test_sms
         if sms_to.startswith("+7"):
             return "Twilio не доставляет SMS в РФ (+7) с января 2023 — тест на этот номер невозможен.", 200
-        sms_text = (f"[ТЕСТ] Здравствуйте! Мы совсем молодой салон R&J Grooming и сейчас собираем отзывы "
-                    f"наших первых клиентов. Если вам понравился наш уход и вы остались довольны, будем "
-                    f"очень благодарны за небольшой отзыв о нас в Google: {review_link} "
-                    f"Спасибо, что выбираете R&J Grooming!")
+        sms_text = "[ТЕСТ] Спасибо за визит в R&J Grooming! Отзыв: https://rjgrooming.salon/r"
         try:
             sr = requests.post(
                 f"https://api.twilio.com/2010-04-01/Accounts/{twilio_sid}/Messages.json",
