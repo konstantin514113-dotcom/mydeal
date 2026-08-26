@@ -2268,7 +2268,8 @@ def cron_review_request():
         except Exception as e:
             return f"Error: {e}", 500
 
-    yesterday = _dt.date.today() - _dt.timedelta(days=1)
+    today_local = datetime.now(_REMINDER_TZ).date() if _REMINDER_TZ else _dt.date.today()
+    yesterday = today_local - _dt.timedelta(days=1)
     date_gs = yesterday.strftime("%d.%m.%Y")
 
     try:
