@@ -2279,7 +2279,7 @@ def _send_review_request(name, phone, email, lang="ru"):
     if sms_phone_norm.startswith("+7"):
         result["sms_skipped"].append(f"{sms_phone_norm}: Twilio не доставляет SMS в РФ с 2023")
     elif phone and twilio_sid and twilio_token:
-        sms_text = t["sms"].format(link="https://rjgrooming.salon/r")
+        sms_text = t["sms"].format(link="https://g.page/r/CcfOXTfgXUpQEBE/review")
         try:
             sr = requests.post(
                 f"https://api.twilio.com/2010-04-01/Accounts/{twilio_sid}/Messages.json",
@@ -2558,7 +2558,7 @@ def cron_review_request():
             return "Twilio не доставляет SMS в РФ (+7) с января 2023 — тест на этот номер невозможен.", 200
         sms_text = ("[ТЕСТ] Здравствуйте!\n\nМы молодой салон R&J Grooming и сейчас собираем отзывы наших первых клиентов\n\n"
                     "Если вам понравился наш уход и вы остались довольны, будем очень благодарны, если вы оставите отзыв о нас в Google.\n\n"
-                    "Спасибо за доверие! https://rjgrooming.salon/r")
+                    "Спасибо за доверие! https://g.page/r/CcfOXTfgXUpQEBE/review")
         try:
             sr = requests.post(
                 f"https://api.twilio.com/2010-04-01/Accounts/{twilio_sid}/Messages.json",
