@@ -4980,6 +4980,44 @@ def admin_debug_wallet_update():
         result["exception"] = str(e)
     return jsonify(result)
 
+@app.route("/admin/debug-sms-log")
+def admin_debug_sms_log():
+    """Показывает последние отправленные SMS через Twilio с их статусом (доставлено/ошибка/в пути)."""
+    twilio_sid = os.environ.get("TWILIO_ACCOUNT_SID")
+    twilio_token = os.environ.get("TWILIO_AUTH_TOKEN")
+    if not (twilio_sid and twilio_token):
+        return "TWILIO не настроен", 500
+
+    limit = request.args.get("limit", "30")
+    try:
+        r = requests.get(
+            f"https://api.twilio.com/2010-04-01/Accounts/{twilio_sid}/Messages.json",
+            auth=(twilio_sid, twilio_token),
+            params={"PageSize": limit},
+            timeout=15,
+        )
+    except Exception as e:
+        return f"Ошибка запроса к Twilio: {e}", 500
+
+    if r.status_code != 200:
+        return f"Twilio error {r.status_code}: {r.text[:500]}", 500
+
+    data = r.json()
+    messages = data.get("messages", [])
+
+    rows = []
+    for msg in messages:
+        rows.append({
+            "to": msg.get("to"),
+            "status": msg.get("status"),
+            "date_sent": msg.get("date_sent") or msg.get("date_created"),
+            "error_code": msg.get("error_code"),
+            "error_message": msg.get("error_message"),
+            "body_preview": (msg.get("body") or "")[:50],
+        })
+
+    return jsonify({"count": len(rows), "messages": rows})
+
 @app.route("/admin/debug-wallet-test")
 def admin_debug_wallet_test():
     """Диагностика: пробует создать тестовый Wallet-пасс и показывает точный ответ WalletWallet API."""
