@@ -2300,6 +2300,14 @@ def _send_review_request(name, phone, email, lang="ru"):
 
 _ANNA_SHARED_PHONE = "+37255521155"  # общий/резервный номер администратора, не реальный клиент
 
+_PRESELECTED_PHONES = {
+    "+3725260523", "+37254940869", "+37257870208", "+37255516968",
+    "+37256674411", "+37258376996", "+37256772884", "+37255610443",
+    "+37253483490", "+37258417473", "+3725139319", "+34600761485",
+    "+37258088880", "+37257869145", "+37255607937", "+37256904818",
+    "+37259137921",
+}
+
 @app.route("/admin/bulk-review-request")
 def admin_bulk_review_request_page():
     """Страница подготовки разовой рассылки отзывов по накопленной базе клиентов."""
@@ -2338,14 +2346,14 @@ def admin_bulk_review_request_page():
             if saved.get("email"):
                 entry["email"] = saved["email"]
 
-        clients = sorted(by_phone.values(), key=lambda c: c["visits"], reverse=True)
+        clients = sorted(by_phone.values(), key=lambda c: (c["phone"] not in _PRESELECTED_PHONES, -c["visits"]))
     except Exception as e:
         error = str(e)
 
     def row_html(c):
         pets_str = ", ".join(c["pets"]) or "—"
         is_anna = c["phone"] == _ANNA_SHARED_PHONE
-        checked = "" if is_anna else "checked"
+        checked = "checked" if c["phone"] in _PRESELECTED_PHONES else ""
         warn = ' <span style="color:#e0824a">⚠ общий номер, не клиент</span>' if is_anna else ""
         email_str = c["email"] or '<span style="opacity:.4">нет email</span>'
         return f"""
