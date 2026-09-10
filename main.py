@@ -4062,6 +4062,7 @@ def admin_memberships_page():
   .breed-drop-empty{{padding:12px;font-size:0.78rem;color:rgba(242,237,226,.4);text-align:center}}
   .form-field select:focus{{outline:none;border-color:#c9a05a}}
   .savings-preview{{background:rgba(74,222,128,.06);border:1px solid rgba(74,222,128,.25);border-radius:10px;padding:12px 14px;margin-bottom:14px}}
+  .rounding-note{{font-size:0.7rem;color:rgba(242,237,226,.45);margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,.08);line-height:1.4}}
   .visit-row{{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:14px;margin-bottom:12px}}
   .visit-row-title{{font-size:0.62rem;letter-spacing:.12em;text-transform:uppercase;color:#c9a05a;margin-bottom:10px}}
   .savings-row{{display:flex;justify-content:space-between;font-size:0.78rem;color:rgba(242,237,226,.7);padding:4px 0}}
@@ -4140,6 +4141,7 @@ def admin_memberships_page():
       <div class="savings-row"><span>Стоимость абонемента</span><span id="spTotalPrice">—</span></div>
       <div class="savings-row"><span>Без абонемента за визиты</span><span id="spWithoutTotal">—</span></div>
       <div class="savings-row savings-total"><span>Общая выгода клиента</span><span id="spTotalSaving">—</span></div>
+      <div class="rounding-note">Итоговая стоимость округляется до ближайших 5€: остаток менее 2.5€ — вниз, 2.5€ и больше — вверх.</div>
     </div>
     <button class="create-btn" onclick="createMembership()">Создать абонемент</button>
   </div>
