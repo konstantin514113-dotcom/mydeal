@@ -3927,20 +3927,23 @@ def admin_memberships_page():
             actions += f'<button class="mem-btn mem-btn-undo" onclick="undoVisit(\'{m["id"]}\')">Отменить отметку</button>'
 
         pricing_html = ""
-        single_price = m.get("single_visit_price") or 0
+        m_visits = m.get("visits") or []
         total_price = m.get("total_price") or 0
-        total_visits = m.get("total_visits") or 0
-        discount_pct = m.get("discount_percent") or 0
-        if single_price and total_price and total_visits:
-            per_visit = m.get("per_visit_price") or (total_price / total_visits)
-            without_total = single_price * total_visits
-            total_saving = without_total - total_price
-            service_line = f'{m.get("service_type","")} · ' if m.get("service_type") else ""
-            discount_line = f' · скидка {discount_pct:.0f}%' if discount_pct else ""
+        total_without_discount = m.get("total_without_discount") or 0
+        if m_visits and total_price:
+            total_saving = total_without_discount - total_price
+            visit_lines = ""
+            for i, v in enumerate(m_visits):
+                sp = v.get("single_visit_price") or 0
+                dp = v.get("discount_percent") or 0
+                pv = v.get("per_visit_price") or sp
+                svc = v.get("service_type", "")
+                discount_line = f' · скидка {dp:.0f}%' if dp else ""
+                visit_lines += f'<div class="mem-pricing-row">Визит {i+1}: {svc} · разово {sp:.0f}€ → {pv:.1f}€{discount_line}</div>'
             pricing_html = f"""
           <div class="mem-pricing">
-            <div class="mem-pricing-row">{service_line}разово {single_price:.0f}€ → по абонементу {per_visit:.1f}€/визит{discount_line}</div>
-            <div class="mem-pricing-row">Без абонемента: {without_total:.0f}€ · С абонементом: {total_price:.0f}€</div>
+            {visit_lines}
+            <div class="mem-pricing-row">Без абонемента: {total_without_discount:.0f}€ · С абонементом: {total_price:.0f}€</div>
             <div class="mem-pricing-row mem-pricing-highlight">Выгода клиента: {total_saving:.0f}€</div>
           </div>"""
 
@@ -4018,6 +4021,8 @@ def admin_memberships_page():
   .breed-drop-empty{{padding:12px;font-size:0.78rem;color:rgba(242,237,226,.4);text-align:center}}
   .form-field select:focus{{outline:none;border-color:#c9a05a}}
   .savings-preview{{background:rgba(74,222,128,.06);border:1px solid rgba(74,222,128,.25);border-radius:10px;padding:12px 14px;margin-bottom:14px}}
+  .visit-row{{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:14px;margin-bottom:12px}}
+  .visit-row-title{{font-size:0.62rem;letter-spacing:.12em;text-transform:uppercase;color:#c9a05a;margin-bottom:10px}}
   .savings-row{{display:flex;justify-content:space-between;font-size:0.78rem;color:rgba(242,237,226,.7);padding:4px 0}}
   .savings-row span:last-child{{font-weight:600;color:#4ade80}}
   .savings-total{{border-top:1px solid rgba(74,222,128,.2);margin-top:4px;padding-top:8px}}
@@ -4079,25 +4084,12 @@ def admin_memberships_page():
           <div class="breed-drop" id="breedDrop"></div>
         </div>
       </div>
-      <div class="form-field">
-        <label>Тип услуги</label>
-        <select id="fServiceType" onchange="onServiceChange()">
-          <option value="">— сначала выбери породу —</option>
-        </select>
-      </div>
+      <div class="form-field"><label>Кол-во посещений</label><input type="number" id="fTotalVisits" min="1" value="5" oninput="renderVisitRows()"></div>
     </div>
-    <div class="form-row">
-      <div class="form-field"><label>Разовая цена, €</label><input type="number" id="fSingleVisitPrice" min="0" step="0.5" placeholder="—" oninput="updateSavingsPreview()"></div>
-      <div class="form-field"></div>
-    </div>
-    <div class="form-row">
-      <div class="form-field"><label>Название абонемента</label><input type="text" id="fPlanName" placeholder="сформируется автоматически" readonly></div>
-      <div class="form-field"><label>Кол-во посещений</label><input type="number" id="fTotalVisits" min="1" value="5" oninput="updatePlanName();updateSavingsPreview()"></div>
-    </div>
-    <div class="form-field">
-      <label>Выгода в процентах от обычного посещения, %</label>
-      <input type="number" id="fDiscountPercent" min="0" max="100" step="1" placeholder="0" oninput="updateSavingsPreview()">
-    </div>
+    <div class="form-field"><label>Название абонемента</label><input type="text" id="fPlanName" placeholder="сформируется автоматически" readonly></div>
+
+    <div id="visitsContainer"></div>
+
     <div class="form-row">
       <div class="form-field"><label>Дата покупки</label><input type="text" id="fPurchaseDate" placeholder="24.08.2026" value="{default_purchase}"></div>
       <div class="form-field"><label>Действителен до</label><input type="text" id="fExpiryDate" placeholder="24.02.2027" value="{default_expiry}"></div>
@@ -4171,34 +4163,79 @@ function pickBreed(b){{
   document.getElementById('fBreedSearch').value = b.breed;
   document.getElementById('breedDrop').classList.remove('open');
   document.getElementById('breedDrop').innerHTML = '';
-
-  var serviceSel = document.getElementById('fServiceType');
-  serviceSel.innerHTML = '<option value="">— выбрать услугу —</option>' +
-    Object.keys(b.services).map(function(s){{ return '<option value="' + s + '">' + s + ' — ' + b.services[s] + '€</option>'; }}).join('');
-  document.getElementById('fSingleVisitPrice').value = '';
-  updateSavingsPreview();
+  renderVisitRows();
 }}
 
 document.addEventListener('click', function(e){{
   if(!e.target.closest('.breed-search-wrap')) document.getElementById('breedDrop').classList.remove('open');
 }});
 
-function onServiceChange(){{
-  var serviceName = document.getElementById('fServiceType').value;
-  if(selectedBreed && selectedBreed.services[serviceName] !== undefined){{
-    document.getElementById('fSingleVisitPrice').value = selectedBreed.services[serviceName];
+var visitState = [];
+
+function ensureVisitStateLength(n){{
+  while(visitState.length < n) visitState.push({{service:'', price:'', discount:''}});
+  visitState.length = n;
+}}
+
+function renderVisitRows(){{
+  var n = parseInt(document.getElementById('fTotalVisits').value) || 0;
+  ensureVisitStateLength(n);
+  var container = document.getElementById('visitsContainer');
+  var html = '';
+  for(var i=0;i<n;i++){{
+    var st = visitState[i];
+    var options = '<option value="">— выбрать услугу —</option>';
+    if(selectedBreed){{
+      options += Object.keys(selectedBreed.services).map(function(s){{
+        var sel = (s === st.service) ? ' selected' : '';
+        return '<option value="'+s+'"'+sel+'>'+s+' — '+selectedBreed.services[s]+'€</option>';
+      }}).join('');
+    }}
+    html += '<div class="visit-row">' +
+      '<div class="visit-row-title">Посещение '+(i+1)+'</div>' +
+      '<div class="form-row">' +
+        '<div class="form-field"><label>Тип услуги</label><select onchange="onVisitServiceChange('+i+', this)">'+options+'</select></div>' +
+        '<div class="form-field"><label>Цена, €</label><input type="number" class="visit-price-input" min="0" step="0.5" value="'+st.price+'" oninput="onVisitPriceInput('+i+', this)"></div>' +
+      '</div>' +
+      '<div class="form-field"><label>Скидка, %</label><input type="number" class="visit-discount-input" min="0" max="100" step="1" placeholder="0" value="'+st.discount+'" oninput="onVisitDiscountInput('+i+', this)"></div>' +
+    '</div>';
+  }}
+  container.innerHTML = html;
+  updatePlanName();
+  updateSavingsPreview();
+}}
+renderVisitRows();
+
+function onVisitServiceChange(i, el){{
+  visitState[i].service = el.value;
+  if(selectedBreed && selectedBreed.services[el.value] !== undefined){{
+    visitState[i].price = selectedBreed.services[el.value];
+    var row = el.closest('.visit-row');
+    row.querySelector('.visit-price-input').value = visitState[i].price;
   }}
   updatePlanName();
   updateSavingsPreview();
 }}
 
+function onVisitPriceInput(i, el){{ visitState[i].price = el.value; updateSavingsPreview(); }}
+function onVisitDiscountInput(i, el){{ visitState[i].discount = el.value; updateSavingsPreview(); }}
+
 function updatePlanName(){{
-  var visits = document.getElementById('fTotalVisits').value;
-  var service = document.getElementById('fServiceType').value;
-  document.getElementById('fPlanName').value = (visits && service) ? (visits + ' посещений — ' + service) : '';
+  var n = visitState.length;
+  var services = visitState.map(function(s){{ return s.service; }}).filter(Boolean);
+  var uniq = services.filter(function(v,i,a){{ return a.indexOf(v)===i; }});
+  var label = uniq.length === 1 ? uniq[0] : uniq.join(', ');
+  document.getElementById('fPlanName').value = (n && label) ? (n + ' посещений — ' + label) : '';
 }}
 
 function createMembership(){{
+  var visits = visitState.map(function(st){{
+    return {{
+      service_type: st.service,
+      single_visit_price: st.price,
+      discount_percent: st.discount || 0
+    }};
+  }});
   var data = {{
     client_name: document.getElementById('fClientName').value.trim(),
     client_phone: document.getElementById('fClientPhone').value.trim(),
@@ -4206,15 +4243,13 @@ function createMembership(){{
     pet_name: document.getElementById('fPetName').value.trim(),
     pet_type: selectedBreed ? selectedBreed.breed : document.getElementById('fBreedSearch').value.trim(),
     plan_name: document.getElementById('fPlanName').value.trim(),
-    total_visits: document.getElementById('fTotalVisits').value,
+    total_visits: visits.length,
     purchase_date: document.getElementById('fPurchaseDate').value.trim(),
     expiry_date: document.getElementById('fExpiryDate').value.trim(),
-    service_type: document.getElementById('fServiceType').value,
-    single_visit_price: document.getElementById('fSingleVisitPrice').value,
-    discount_percent: document.getElementById('fDiscountPercent').value
+    visits: visits
   }};
-  if(!data.client_name || !data.pet_name || !data.total_visits){{
-    showToast('Заполни имя клиента, кличку и число посещений');
+  if(!data.client_name || !data.pet_name || !visits.length || visits.some(function(v){{return !v.service_type;}})){{
+    showToast('Заполни имя, кличку и услугу для каждого посещения');
     return;
   }}
   fetch('/api/membership/create', {{
@@ -4230,21 +4265,21 @@ function createMembership(){{
 }}
 
 function updateSavingsPreview(){{
-  var totalVisits = parseFloat(document.getElementById('fTotalVisits').value) || 0;
-  var singlePrice = parseFloat(document.getElementById('fSingleVisitPrice').value) || 0;
-  var discountPct = parseFloat(document.getElementById('fDiscountPercent').value) || 0;
   var block = document.getElementById('savingsPreview');
-  if(!totalVisits || !singlePrice){{
-    block.style.display = 'none';
-    return;
-  }}
-  var perVisit = singlePrice * (1 - discountPct / 100);
-  var totalPrice = perVisit * totalVisits;
-  var withoutTotal = singlePrice * totalVisits;
+  if(!visitState.length){{ block.style.display = 'none'; return; }}
+  var totalPrice = 0, withoutTotal = 0, anyPrice = false;
+  visitState.forEach(function(st){{
+    var price = parseFloat(st.price) || 0;
+    var discount = parseFloat(st.discount) || 0;
+    if(price) anyPrice = true;
+    totalPrice += price * (1 - discount / 100);
+    withoutTotal += price;
+  }});
+  if(!anyPrice){{ block.style.display = 'none'; return; }}
   var totalSaving = withoutTotal - totalPrice;
-  document.getElementById('spPerVisit').textContent = perVisit.toFixed(2) + ' €';
+  document.getElementById('spPerVisit').textContent = (totalPrice / visitState.length).toFixed(2) + ' € в среднем';
   document.getElementById('spTotalPrice').textContent = totalPrice.toFixed(2) + ' €';
-  document.getElementById('spWithoutTotal').textContent = totalVisits + ' × ' + singlePrice.toFixed(2) + ' € = ' + withoutTotal.toFixed(2) + ' €';
+  document.getElementById('spWithoutTotal').textContent = withoutTotal.toFixed(2) + ' €';
   document.getElementById('spTotalSaving').textContent = totalSaving.toFixed(2) + ' €';
   block.style.display = 'block';
 }}
@@ -4532,32 +4567,36 @@ def api_membership_create():
     pet_name = (body.get("pet_name") or "").strip()
     pet_type = (body.get("pet_type") or "").strip()
     plan_name = (body.get("plan_name") or "").strip()
-    total_visits = body.get("total_visits")
     purchase_date = (body.get("purchase_date") or "").strip()
     expiry_date = (body.get("expiry_date") or "").strip()
-    service_type = (body.get("service_type") or "").strip()
-    single_visit_price = body.get("single_visit_price")
-    discount_percent = body.get("discount_percent")
+    raw_visits = body.get("visits")
 
-    if not client_name or not pet_name or not total_visits:
-        return jsonify({"success": False, "error": "client_name, pet_name и total_visits обязательны"}), 400
-    try:
-        total_visits = int(total_visits)
-    except Exception:
-        return jsonify({"success": False, "error": "total_visits должно быть числом"}), 400
+    if not client_name or not pet_name or not raw_visits or not isinstance(raw_visits, list):
+        return jsonify({"success": False, "error": "client_name, pet_name и visits (список) обязательны"}), 400
 
-    try:
-        single_visit_price = float(single_visit_price) if single_visit_price not in (None, "") else 0.0
-    except Exception:
-        single_visit_price = 0.0
-    try:
-        discount_percent = float(discount_percent) if discount_percent not in (None, "") else 0.0
-    except Exception:
-        discount_percent = 0.0
-    discount_percent = max(0.0, min(100.0, discount_percent))
+    visits = []
+    for v in raw_visits:
+        service_type = (v.get("service_type") or "").strip()
+        try:
+            single_visit_price = float(v.get("single_visit_price")) if v.get("single_visit_price") not in (None, "") else 0.0
+        except Exception:
+            single_visit_price = 0.0
+        try:
+            discount_percent = float(v.get("discount_percent")) if v.get("discount_percent") not in (None, "") else 0.0
+        except Exception:
+            discount_percent = 0.0
+        discount_percent = max(0.0, min(100.0, discount_percent))
+        per_visit_price = round(single_visit_price * (1 - discount_percent / 100), 2)
+        visits.append({
+            "service_type": service_type,
+            "single_visit_price": single_visit_price,
+            "discount_percent": discount_percent,
+            "per_visit_price": per_visit_price,
+        })
 
-    per_visit_price = round(single_visit_price * (1 - discount_percent / 100), 2)
-    total_price = round(per_visit_price * total_visits, 2)
+    total_visits = len(visits)
+    total_price = round(sum(v["per_visit_price"] for v in visits), 2)
+    total_without_discount = round(sum(v["single_visit_price"] for v in visits), 2)
 
     memberships = _load_memberships()
     mid = _next_membership_id(memberships)
@@ -4569,15 +4608,13 @@ def api_membership_create():
         "pet_name": pet_name,
         "pet_type": pet_type,
         "plan_name": plan_name or f"{total_visits} посещений",
-        "service_type": service_type,
+        "visits": visits,
         "total_visits": total_visits,
         "used_visits": 0,
         "purchase_date": purchase_date,
         "expiry_date": expiry_date,
-        "single_visit_price": single_visit_price,
-        "discount_percent": discount_percent,
-        "per_visit_price": per_visit_price,
         "total_price": total_price,
+        "total_without_discount": total_without_discount,
         "visit_history": [],
         "status": "active",
         "created_at": datetime.now(_REMINDER_TZ).isoformat() if _REMINDER_TZ else datetime.utcnow().isoformat()
@@ -4594,13 +4631,16 @@ def api_membership_create():
 def api_membership_mark_visit():
     body = request.get_json(force=True) or {}
     mid = (body.get("id") or "").strip()
-    note = (body.get("note") or "уход").strip()
     memberships = _load_memberships()
     m = memberships.get(mid)
     if not m:
         return jsonify({"success": False, "error": "Абонемент не найден"}), 404
     if m["used_visits"] >= m["total_visits"]:
         return jsonify({"success": False, "error": "Все посещения уже использованы"}), 400
+
+    m_visits = m.get("visits") or []
+    default_note = m_visits[m["used_visits"]].get("service_type", "уход") if m["used_visits"] < len(m_visits) else "уход"
+    note = (body.get("note") or default_note or "уход").strip()
 
     today = datetime.now(_REMINDER_TZ).date() if _REMINDER_TZ else datetime.utcnow().date()
     m["used_visits"] += 1
