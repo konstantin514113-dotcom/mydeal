@@ -4308,17 +4308,17 @@ function createMembership(){{
 function updateSavingsPreview(){{
   var block = document.getElementById('savingsPreview');
   if(!visitState.length){{ block.style.display = 'none'; return; }}
-  var totalPrice = 0, withoutTotal = 0, anyPrice = false;
+  var rawTotal = 0, withoutTotal = 0, anyPrice = false;
   visitState.forEach(function(st){{
     var price = parseFloat(st.price) || 0;
     var discount = parseFloat(st.discount) || 0;
     if(price) anyPrice = true;
-    var raw = price * (1 - discount / 100);
-    var rounded = raw > 0 ? Math.floor(raw / 5) * 5 : 0;  // округление вниз до 5€ в пользу клиента
-    totalPrice += rounded;
+    rawTotal += price * (1 - discount / 100);
     withoutTotal += price;
   }});
   if(!anyPrice){{ block.style.display = 'none'; return; }}
+  // округление ИТОГА к ближайшим 5€: остаток >=2.5 — вверх, <2.5 — вниз
+  var totalPrice = rawTotal > 0 ? Math.floor(rawTotal / 5 + 0.5) * 5 : 0;
   var totalSaving = withoutTotal - totalPrice;
   document.getElementById('spPerVisit').textContent = (totalPrice / visitState.length).toFixed(2) + ' € в среднем';
   document.getElementById('spTotalPrice').textContent = totalPrice.toFixed(2) + ' €';
@@ -4629,8 +4629,7 @@ def api_membership_create():
         except Exception:
             discount_percent = 0.0
         discount_percent = max(0.0, min(100.0, discount_percent))
-        raw_price = single_visit_price * (1 - discount_percent / 100)
-        per_visit_price = math.floor(raw_price / 5) * 5 if raw_price > 0 else 0  # округление вниз до 5€ в пользу клиента
+        per_visit_price = round(single_visit_price * (1 - discount_percent / 100), 2)  # без округления до 5 — это для построчного показа
         visits.append({
             "service_type": service_type,
             "single_visit_price": single_visit_price,
@@ -4639,7 +4638,8 @@ def api_membership_create():
         })
 
     total_visits = len(visits)
-    total_price = round(sum(v["per_visit_price"] for v in visits), 2)
+    raw_total = sum(v["per_visit_price"] for v in visits)
+    total_price = math.floor(raw_total / 5 + 0.5) * 5 if raw_total > 0 else 0  # округление ИТОГА к ближайшим 5€ (>=2.5 вверх, <2.5 вниз)
     total_without_discount = round(sum(v["single_visit_price"] for v in visits), 2)
 
     memberships = _load_memberships()
