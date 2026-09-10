@@ -1,4 +1,4 @@
-﻿from flask import Flask, request, jsonify, session
+﻿from flask import Flask, request, jsonify, session, redirect
 import anthropic
 import os
 import requests
@@ -2854,11 +2854,55 @@ STATS_HTML_B64 = "PCFET0NUWVBFIGh0bWw+CjxodG1sIGxhbmc9InJ1Ij4KPGhlYWQ+CjxtZXRhIG
 @app.route("/stats")
 def stats_page():
     import base64
+    if not session.get("stats_authed"):
+        return _stats_password_gate()
     html = base64.b64decode(STATS_HTML_B64).decode("utf-8")
+    return html, 200, {"Content-Type": "text/html; charset=utf-8"}
+
+@app.route("/stats/auth", methods=["POST"])
+def stats_auth():
+    password = (request.form.get("password") or "").strip()
+    if password == "210722":
+        session["stats_authed"] = True
+        return redirect("/stats")
+    return _stats_password_gate(error=True)
+
+def _stats_password_gate(error=False):
+    error_html = '<div class="err">Неверный пароль</div>' if error else ''
+    html = f"""<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Статистика — вход</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=Montserrat:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  *{{box-sizing:border-box;margin:0;padding:0}}
+  body{{background:#0a0a09;color:#f2ede2;font-family:'Montserrat',sans-serif;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}}
+  .box{{max-width:340px;width:100%;background:#141310;border:1px solid rgba(201,160,90,.25);border-radius:14px;padding:28px 24px;text-align:center}}
+  h1{{font-family:'Playfair Display',serif;font-size:1.3rem;margin-bottom:18px}}
+  input{{width:100%;background:#0e0d0b;border:1px solid rgba(255,255,255,.15);border-radius:8px;padding:12px;color:#f2ede2;font-size:1rem;text-align:center;letter-spacing:.2em;margin-bottom:14px}}
+  button{{width:100%;background:#e6e1d5;color:#0a0a09;border:none;padding:12px;border-radius:8px;font-weight:700;font-size:0.9rem;font-family:'Montserrat',sans-serif}}
+  .err{{color:#e0824a;font-size:0.82rem;margin-bottom:12px}}
+</style>
+</head>
+<body>
+  <div class="box">
+    <h1>Статистика R&amp;J</h1>
+    {error_html}
+    <form method="POST" action="/stats/auth">
+      <input type="password" name="password" placeholder="Пароль" autofocus inputmode="numeric">
+      <button type="submit">Войти</button>
+    </form>
+  </div>
+</body>
+</html>"""
     return html, 200, {"Content-Type": "text/html; charset=utf-8"}
 
 @app.route("/api/stats")
 def api_stats():
+    if not session.get("stats_authed"):
+        return jsonify({"error": "unauthorized"}), 401
     from_date = request.args.get("from", "")
     to_date   = request.args.get("to", "")
     try:
