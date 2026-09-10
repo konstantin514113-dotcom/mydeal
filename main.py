@@ -4,7 +4,7 @@ import os
 import requests
 from datetime import datetime, timedelta
 from functools import wraps
-import json, re, uuid, time as _time, threading
+import json, re, uuid, time as _time, threading, math
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
@@ -4272,7 +4272,9 @@ function updateSavingsPreview(){{
     var price = parseFloat(st.price) || 0;
     var discount = parseFloat(st.discount) || 0;
     if(price) anyPrice = true;
-    totalPrice += price * (1 - discount / 100);
+    var raw = price * (1 - discount / 100);
+    var rounded = raw > 0 ? Math.ceil(raw / 5) * 5 : 0;  // округление вверх до 5€ в пользу салона
+    totalPrice += rounded;
     withoutTotal += price;
   }});
   if(!anyPrice){{ block.style.display = 'none'; return; }}
@@ -4586,7 +4588,8 @@ def api_membership_create():
         except Exception:
             discount_percent = 0.0
         discount_percent = max(0.0, min(100.0, discount_percent))
-        per_visit_price = round(single_visit_price * (1 - discount_percent / 100), 2)
+        raw_price = single_visit_price * (1 - discount_percent / 100)
+        per_visit_price = math.ceil(raw_price / 5) * 5 if raw_price > 0 else 0  # округление вверх до 5€ в пользу салона
         visits.append({
             "service_type": service_type,
             "single_visit_price": single_visit_price,
