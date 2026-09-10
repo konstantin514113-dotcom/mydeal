@@ -4317,7 +4317,7 @@ function updateSavingsPreview(){{
     var discount = parseFloat(st.discount) || 0;
     if(price) anyPrice = true;
     var raw = price * (1 - discount / 100);
-    var rounded = raw > 0 ? Math.ceil(raw / 5) * 5 : 0;  // округление вверх до 5€ в пользу салона
+    var rounded = raw > 0 ? Math.floor(raw / 5) * 5 : 0;  // округление вниз до 5€ в пользу клиента
     totalPrice += rounded;
     withoutTotal += price;
   }});
@@ -4633,7 +4633,7 @@ def api_membership_create():
             discount_percent = 0.0
         discount_percent = max(0.0, min(100.0, discount_percent))
         raw_price = single_visit_price * (1 - discount_percent / 100)
-        per_visit_price = math.ceil(raw_price / 5) * 5 if raw_price > 0 else 0  # округление вверх до 5€ в пользу салона
+        per_visit_price = math.floor(raw_price / 5) * 5 if raw_price > 0 else 0  # округление вниз до 5€ в пользу клиента
         visits.append({
             "service_type": service_type,
             "single_visit_price": single_visit_price,
