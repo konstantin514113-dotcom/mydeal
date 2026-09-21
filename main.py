@@ -1450,9 +1450,30 @@ def _client_data_index_url():
     return f"https://res.cloudinary.com/{CLOUDINARY_CLOUD_NAME}/raw/upload/{_CLIENT_DATA_INDEX_PUBLIC_ID}"
 
 def _load_all_client_data():
-    """Один запрос — все сохранённые правки клиентов разом (ключ = хэш телефона)."""
+    """Один запрос — все сохранённые правки клиентов разом (ключ = хэш телефона).
+    Обходит кэш CDN Cloudinary через версионированный URL (Admin API) — иначе
+    после сохранения можно увидеть устаревшую закэшированную копию."""
     try:
-        r = requests.get(_client_data_index_url(), timeout=8)
+        import base64 as _b64_mod
+        auth = _b64_mod.b64encode(f"{CLOUDINARY_API_KEY}:{CLOUDINARY_API_SECRET}".encode()).decode()
+        meta_r = requests.get(
+            f"https://api.cloudinary.com/v1_1/{CLOUDINARY_CLOUD_NAME}/resources/raw/upload/{_CLIENT_DATA_INDEX_PUBLIC_ID}",
+            headers={"Authorization": f"Basic {auth}"},
+            timeout=8
+        )
+        if meta_r.status_code == 200:
+            version = meta_r.json().get("version")
+            if version:
+                versioned_url = f"https://res.cloudinary.com/{CLOUDINARY_CLOUD_NAME}/raw/upload/v{version}/{_CLIENT_DATA_INDEX_PUBLIC_ID}"
+                r = requests.get(versioned_url, timeout=8)
+                if r.status_code == 200:
+                    return r.json()
+    except Exception as e:
+        print(f"CLIENT DATA LOAD (versioned) ERROR: {e}", flush=True)
+
+    # запасной вариант — обычный запрос с cache-busting параметром
+    try:
+        r = requests.get(_client_data_index_url(), params={"_": int(_time.time() * 1000)}, timeout=8)
         if r.status_code == 200:
             return r.json()
     except Exception:
@@ -1462,7 +1483,7 @@ def _load_all_client_data():
 def _save_all_client_data(data):
     import hashlib as _hashlib
     timestamp = int(_time.time())
-    params_to_sign = {"overwrite": "true", "public_id": _CLIENT_DATA_INDEX_PUBLIC_ID, "timestamp": timestamp}
+    params_to_sign = {"invalidate": "true", "overwrite": "true", "public_id": _CLIENT_DATA_INDEX_PUBLIC_ID, "timestamp": timestamp}
     to_sign = "&".join(f"{k}={v}" for k, v in sorted(params_to_sign.items()))
     signature = _hashlib.sha1((to_sign + CLOUDINARY_API_SECRET).encode("utf-8")).hexdigest()
     payload = json.dumps(data, ensure_ascii=False)
@@ -1474,6 +1495,7 @@ def _save_all_client_data(data):
                 "timestamp": timestamp,
                 "public_id": _CLIENT_DATA_INDEX_PUBLIC_ID,
                 "overwrite": "true",
+                "invalidate": "true",
                 "signature": signature,
             },
             files={"file": ("data.json", payload, "application/json")},
