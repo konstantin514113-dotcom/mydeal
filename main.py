@@ -3799,12 +3799,12 @@ def admin_client_detail():
 <div class="wrap">
   <a href="/admin/clients?pass=anza1985" class="back-link">← Все клиенты</a>
   <div class="eyebrow">R&J Grooming · Клиент</div>
-  <h1>{name or '—'}</h1>
+  <h1 id="pageTitleName">{name or '—'}</h1>
   <div class="pets-sub">{pets_str}</div>
 
   <div class="actions">
-    <a class="abtn call" href="tel:{display_phone}">📞 Позвонить</a>
-    <a class="abtn wa" href="https://wa.me/{wa_digits}" target="_blank" rel="noopener">💬 WhatsApp</a>
+    <a class="abtn call" id="callBtn" href="tel:{display_phone}">📞 Позвонить</a>
+    <a class="abtn wa" id="waBtn" href="https://wa.me/{wa_digits}" target="_blank" rel="noopener">💬 WhatsApp</a>
   </div>
 
   <div class="stats-mini">
@@ -3819,14 +3819,14 @@ def admin_client_detail():
       <button class="edit-btn" onclick="toggleEditContacts()" id="editBtnLabel">✏️ Изменить</button>
     </div>
     <div id="contactsView">
-      <div class="contact-line"><span class="contact-label">Имя</span><span class="contact-val">{name or '—'}</span></div>
-      <div class="contact-line"><span class="contact-label">Телефон</span><a class="contact-val link" href="tel:{display_phone}">{display_phone}</a></div>
-      <div class="contact-line"><span class="contact-label">Email</span>{email_html}</div>
-      <div class="contact-line"><span class="contact-label">Instagram</span>{ig_html}</div>
+      <div class="contact-line"><span class="contact-label">Имя</span><span class="contact-val" id="viewName">{name or '—'}</span></div>
+      <div class="contact-line"><span class="contact-label">Телефон</span><a class="contact-val link" id="viewPhone" href="tel:{display_phone}">{display_phone}</a></div>
+      <div class="contact-line"><span class="contact-label">Email</span><span id="viewEmailWrap">{email_html}</span></div>
+      <div class="contact-line"><span class="contact-label">Instagram</span><span id="viewIgWrap">{ig_html}</span></div>
       <div class="contact-line"><span class="contact-label">Первый визит</span><span class="contact-val">{first_visit_str}</span></div>
       <div class="contact-line" style="border-bottom:none;flex-direction:column;align-items:flex-start;gap:4px">
         <span class="contact-label">Комментарий</span>
-        <span class="contact-val" style="white-space:pre-wrap">{comment or 'нет комментария'}</span>
+        <span class="contact-val" id="viewComment" style="white-space:pre-wrap">{comment or 'нет комментария'}</span>
       </div>
     </div>
     <div id="contactsEdit" style="display:none">
@@ -3881,7 +3881,7 @@ function saveContacts(phoneEncoded){{
   var name = document.getElementById('editName').value.trim();
   var phoneOverride = document.getElementById('editPhone').value.trim();
   var email = document.getElementById('editEmail').value.trim();
-  var instagram = document.getElementById('editInstagram').value.trim();
+  var instagram = document.getElementById('editInstagram').value.trim().replace(/^@/, '');
   var comment = document.getElementById('editComment').value.trim();
   var toast = document.getElementById('uploadToast');
   toast.textContent = 'Сохраняю...';
@@ -3899,7 +3899,33 @@ function saveContacts(phoneEncoded){{
   .then(function(data){{
     if(data.success){{
       toast.textContent = 'Сохранено ✓';
-      setTimeout(function(){{ location.reload(); }}, 600);
+      setTimeout(function(){{ toast.classList.remove('show'); }}, 1500);
+
+      // Обновляем экран просмотра прямо на месте, без перезагрузки страницы
+      var displayName = name || '—';
+      document.getElementById('pageTitleName').textContent = displayName;
+      document.getElementById('viewName').textContent = displayName;
+      document.getElementById('viewComment').textContent = comment || 'нет комментария';
+
+      var displayPhone = phoneOverride || decodeURIComponent(phoneEncoded);
+      var waDigits = displayPhone.replace(/[^\d]/g, '');
+      var phoneEl = document.getElementById('viewPhone');
+      phoneEl.textContent = displayPhone;
+      phoneEl.href = 'tel:' + displayPhone;
+      document.getElementById('callBtn').href = 'tel:' + displayPhone;
+      document.getElementById('waBtn').href = 'https://wa.me/' + waDigits;
+
+      var emailWrap = document.getElementById('viewEmailWrap');
+      emailWrap.innerHTML = email
+        ? '<a class="contact-val link" href="mailto:' + email + '">' + email + '</a>'
+        : '<span class="contact-val empty">не указан</span>';
+
+      var igWrap = document.getElementById('viewIgWrap');
+      igWrap.innerHTML = instagram
+        ? '<a class="contact-val link" href="https://instagram.com/' + instagram + '" target="_blank" rel="noopener">@' + instagram + '</a>'
+        : '<span class="contact-val empty">не указан</span>';
+
+      toggleEditContacts();
     }} else {{
       toast.textContent = 'Ошибка: ' + (data.error || 'не удалось сохранить');
       setTimeout(function(){{ toast.classList.remove('show'); }}, 2500);
