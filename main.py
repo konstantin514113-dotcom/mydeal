@@ -1766,6 +1766,7 @@ def api_available_days():
         print(f"[api/available_days] error: {e}", flush=True)
         resp = jsonify({"available": [], "error": str(e)})
     resp.headers["Access-Control-Allow-Origin"] = "*"
+    resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
     return resp
 
 @app.route("/api/slots")
@@ -1787,6 +1788,7 @@ def api_slots():
         print(f"[api/slots] error: {e}", flush=True)
         resp = jsonify({"slots": [], "error": str(e)})
     resp.headers["Access-Control-Allow-Origin"] = "*"
+    resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
     return resp
 @app.route("/app")
 def booking_app():
