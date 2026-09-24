@@ -766,7 +766,7 @@ def confirm():
 
     if booking_id:
         try:
-            r = req_lib.get(GOOGLE_SCRIPT, params={"action": "get", "id": booking_id}, timeout=10, allow_redirects=True)
+            r = req_lib.get(GOOGLE_SCRIPT, params={"action": "get", "id": booking_id}, timeout=25, allow_redirects=True)
             print(f"DEBUG confirm id={booking_id} status={r.status_code} body={r.text[:200]}", flush=True)
             data = r.json()
             email   = data.get("email", "")
@@ -1677,7 +1677,7 @@ def book():
     data = request.get_json()
     try:
         print(f"BOOK DATA: {data}", flush=True)
-        r = requests.get(GOOGLE_SCRIPT, params=data, timeout=10)
+        r = requests.get(GOOGLE_SCRIPT, params=data, timeout=25)
         print(f"GOOGLE SCRIPT RESPONSE: {r.text[:500]}", flush=True)
         resp = jsonify({"success": True})
 
