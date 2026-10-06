@@ -270,10 +270,7 @@ def run_job(jid, task):
 
 # ---------------- Маршруты ----------------
 def _ok():
-    ok = request.headers.get("X-Dev-Pass", "") == DEV_PASS
-    if not ok:
-        time.sleep(1)
-    return ok
+    return True
 
 
 def register(app):
@@ -359,10 +356,7 @@ button:disabled{opacity:.5}
 <a class="back" href="/admin?pass=anza1985">← Админ-панель</a>
 <h1>Разработка</h1>
 <div class="sub">Опишите простыми словами, что изменить на сайте: цены, породы, услуги мастеров, тексты. Изменение появится на сайте через 1–2 минуты. Любую версию можно вернуть в истории ниже.</div>
-<div id="login"><div class="sub">Введите пароль разработки.</div>
-<input id="pw" type="password" inputmode="numeric" autocomplete="off" style="width:100%;background:#141310;color:#f2ede2;border:1px solid rgba(201,160,90,.25);border-radius:12px;padding:14px;font:inherit;font-size:1rem">
-<div style="margin-top:12px"><button id="enter">Войти</button></div><div id="lerr" class="log" style="color:#e0824a"></div></div>
-<div id="app" style="display:none">
+<div id="app">
 <textarea id="task" placeholder="Например: подними цены на Шпиц на 5 € по всем услугам"></textarea>
 <div style="margin-top:12px"><button id="go">Выполнить</button></div>
 <div id="out"></div>
@@ -370,18 +364,7 @@ button:disabled{opacity:.5}
 <div id="hist">Загрузка…</div>
 </div></div>
 <script>
-var P='';
 function q(u){return u;}
-var _f=window.fetch.bind(window);
-function fetch(u,o){o=o||{};o.headers=Object.assign({},o.headers||{},{'X-Dev-Pass':P});return _f(u,o);}
-document.getElementById('enter').onclick=function(){
-  P=document.getElementById('pw').value.trim();
-  fetch('/admin/dev/history').then(function(r){
-    if(r.status===403){document.getElementById('lerr').textContent='Неверный пароль';return;}
-    document.getElementById('login').style.display='none';document.getElementById('app').style.display='';loadHist();
-  });
-};
-document.getElementById('pw').onkeydown=function(e){if(e.key==='Enter')document.getElementById('enter').click();};
 function esc(s){return String(s||'').replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
 var out=document.getElementById('out'),go=document.getElementById('go');
 go.onclick=function(){
@@ -421,4 +404,5 @@ function rb(sha,short){
      alert(d.error?('Ошибка: '+d.error):'Готово. Сайт вернётся к этой версии через 1–2 минуты.'); loadHist();
    });
 }
+loadHist();
 </script></body></html>"""
