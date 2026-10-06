@@ -9,6 +9,7 @@ import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 app = Flask(__name__)
+import dev_console as _dev_console; _dev_console.register(app)  # вкладка «Разработка», не удалять
 app.secret_key = os.environ.get("SECRET_KEY", "rjgrooming-secret-2024")
 client_ai = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
 
@@ -5353,6 +5354,14 @@ def admin_hub():
       <div class="card-txt">
         <div class="card-name">Абонементы</div>
         <div class="card-desc">Цифровые карты посещений</div>
+      </div>
+      <div class="card-arrow">→</div>
+    </a>
+    <a class="card" href="/admin/dev{P}">
+      <div class="card-icon">🛠️</div>
+      <div class="card-txt">
+        <div class="card-name">Разработка</div>
+        <div class="card-desc">Изменения сайта текстом + история и откат</div>
       </div>
       <div class="card-arrow">→</div>
     </a>
