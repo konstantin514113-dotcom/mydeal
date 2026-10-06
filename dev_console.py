@@ -9,7 +9,7 @@ REPO = os.environ.get("DEV_REPO", "konstantin514113-dotcom/mydeal")
 BRANCH = os.environ.get("DEV_BRANCH", "main")
 FILE = "main.py"
 GH = "https://api.github.com"
-DEV_PASS = os.environ.get("DEV_PASS", "anza1985")
+DEV_PASS = os.environ.get("DEV_PASS", "210722")
 MODEL = os.environ.get("DEV_MODEL", "claude-sonnet-4-6")
 JOBS_DIR = os.path.join(tempfile.gettempdir(), "rj_dev_jobs")
 os.makedirs(JOBS_DIR, exist_ok=True)
@@ -270,16 +270,16 @@ def run_job(jid, task):
 
 # ---------------- Маршруты ----------------
 def _ok():
-    p = request.args.get("pass") or (request.get_json(silent=True) or {}).get("pass") or request.form.get("pass")
-    return p == DEV_PASS
+    ok = request.headers.get("X-Dev-Pass", "") == DEV_PASS
+    if not ok:
+        time.sleep(1)
+    return ok
 
 
 def register(app):
     @app.route("/admin/dev")
     def dev_page():
-        if not _ok():
-            return Response("Нет доступа", 403)
-        return Response(PAGE.replace("__PASS__", DEV_PASS), mimetype="text/html")
+        return Response(PAGE, mimetype="text/html", headers={"Cache-Control": "no-store"})
 
     @app.route("/admin/dev/run", methods=["POST"])
     def dev_run():
@@ -356,24 +356,38 @@ button:disabled{opacity:.5}
 .item .t{flex:1;font-size:.85rem}.item .m{font-size:.7rem;color:rgba(242,237,226,.45);margin-top:3px}
 .dev{color:#c9a05a}
 </style></head><body><div class="wrap">
-<a class="back" href="/admin?pass=__PASS__">← Админ-панель</a>
+<a class="back" href="/admin?pass=anza1985">← Админ-панель</a>
 <h1>Разработка</h1>
 <div class="sub">Опишите простыми словами, что изменить на сайте: цены, породы, услуги мастеров, тексты. Изменение появится на сайте через 1–2 минуты. Любую версию можно вернуть в истории ниже.</div>
+<div id="login"><div class="sub">Введите пароль разработки.</div>
+<input id="pw" type="password" inputmode="numeric" autocomplete="off" style="width:100%;background:#141310;color:#f2ede2;border:1px solid rgba(201,160,90,.25);border-radius:12px;padding:14px;font:inherit;font-size:1rem">
+<div style="margin-top:12px"><button id="enter">Войти</button></div><div id="lerr" class="log" style="color:#e0824a"></div></div>
+<div id="app" style="display:none">
 <textarea id="task" placeholder="Например: подними цены на Шпиц на 5 € по всем услугам"></textarea>
 <div style="margin-top:12px"><button id="go">Выполнить</button></div>
 <div id="out"></div>
 <div class="lbl">История изменений</div>
 <div id="hist">Загрузка…</div>
-</div>
+</div></div>
 <script>
-var P='__PASS__';
-function q(u){return u+(u.indexOf('?')<0?'?':'&')+'pass='+encodeURIComponent(P);}
+var P='';
+function q(u){return u;}
+var _f=window.fetch.bind(window);
+function fetch(u,o){o=o||{};o.headers=Object.assign({},o.headers||{},{'X-Dev-Pass':P});return _f(u,o);}
+document.getElementById('enter').onclick=function(){
+  P=document.getElementById('pw').value.trim();
+  fetch('/admin/dev/history').then(function(r){
+    if(r.status===403){document.getElementById('lerr').textContent='Неверный пароль';return;}
+    document.getElementById('login').style.display='none';document.getElementById('app').style.display='';loadHist();
+  });
+};
+document.getElementById('pw').onkeydown=function(e){if(e.key==='Enter')document.getElementById('enter').click();};
 function esc(s){return String(s||'').replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
 var out=document.getElementById('out'),go=document.getElementById('go');
 go.onclick=function(){
   var t=document.getElementById('task').value.trim(); if(!t) return;
   go.disabled=true; out.innerHTML='<div class="box">Работаю…<div class="log" id="lg"></div></div>';
-  fetch(q('/admin/dev/run'),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({task:t,pass:P})})
+  fetch(q('/admin/dev/run'),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({task:t})})
    .then(function(r){return r.json();}).then(function(d){
      if(d.error){out.innerHTML='<div class="box err">'+esc(d.error)+'</div>';go.disabled=false;return;}
      poll(d.id,0);
@@ -402,10 +416,9 @@ function loadHist(){
 }
 function rb(sha,short){
   if(!confirm('Вернуть сайт к версии '+short+'? Все изменения, сделанные после неё, будут отменены.')) return;
-  fetch(q('/admin/dev/rollback'),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sha:sha,pass:P})})
+  fetch(q('/admin/dev/rollback'),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sha:sha})})
    .then(function(r){return r.json();}).then(function(d){
      alert(d.error?('Ошибка: '+d.error):'Готово. Сайт вернётся к этой версии через 1–2 минуты.'); loadHist();
    });
 }
-loadHist();
 </script></body></html>"""

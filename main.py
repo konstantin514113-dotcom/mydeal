@@ -5357,7 +5357,7 @@ def admin_hub():
       </div>
       <div class="card-arrow">→</div>
     </a>
-    <a class="card" href="/admin/dev{P}">
+    <a class="card" href="/admin/dev">
       <div class="card-icon">🛠️</div>
       <div class="card-txt">
         <div class="card-name">Разработка</div>
